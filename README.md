@@ -80,7 +80,7 @@ bash scripts/quality_gate.sh .
 
 The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for public pull requests and pushes.
 
-ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must cite real thread receipts separately.
+ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must also cite a fresh Agency-flow receipt in [validation/AGENCY_FLOW_PILOT.md](validation/AGENCY_FLOW_PILOT.md). Council or release-review receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
 
 Run a lighter release smoke check:
 
@@ -102,6 +102,7 @@ This skill is release-ready only when:
 - The installed skill copy matches the source bundle.
 - Scripts have useful `--help`, bounded output, and JSON modes where useful.
 - Real Codex Thread work records thread ids, receipts, and cleanup.
+- A full Agency-flow pilot has converged SKS, AGS, DEV, and REV receipts in `validation/AGENCY_FLOW_PILOT.md`.
 - If real Codex Thread tooling is unavailable, the correct result is `TOOL_BLOCKED`, not simulated worker evidence.
 - Stuck workers are marked `thread_not_converged` and rescued instead of silently treated as success.
 - Light tasks stay T0/T1 and do not generate management ceremony.

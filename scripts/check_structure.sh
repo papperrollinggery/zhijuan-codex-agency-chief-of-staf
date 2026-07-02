@@ -34,6 +34,7 @@ check_file "Makefile"
 check_file "agents/openai.yaml"
 check_file "validation/THREADOPS_VALIDATION.md"
 check_file "validation/COUNCIL_ROUNDS.md"
+check_file "validation/AGENCY_FLOW_PILOT.md"
 check_file "validation/receipts/ROUND1_RELEASE_ENGINEERING.md"
 check_file "validation/receipts/ROUND2_BEHAVIOR.md"
 check_file "validation/receipts/ROUND3_RELEASE_GO_NO_GO.md"
@@ -128,6 +129,7 @@ for f in \
   validate_thread_name.py \
   append_event.py \
   validate_task_graph.py \
+  validate_agency_flow_receipt.py \
   propose_skill_patch.py \
   release_smoke.sh \
   pilot_harness.py \

@@ -298,6 +298,7 @@ Codex Threads 不是 subagent；不能用 subagent、角色扮演或同线程模
 可写任务必须进入 isolated worktree；只读审查可以使用 read-only thread。
 worker 完成后必须输出 receipt；幕僚长必须记录 adoption/rejection。
 worker 完成或判定无效后必须归档，或显式记录 cleanup 未完成及原因。
+release council、普通 review、同线程复盘不能替代完整 Agency flow；发布放行证据必须能区分 SKS、AGS、DEV、REV 四类 worker receipt。
 如果当前环境没有真实 Codex Thread 工具，或不能创建所需 isolated worktree，停止并报告 TOOL_BLOCKED；不得 fallback 到 subagent。
 默认不允许无限递归。
 子线程要继续派发时，输出 Delegation Packet，由调度层执行。

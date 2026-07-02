@@ -11,7 +11,7 @@ for f in README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md Makefile; do
   fi
 done
 
-for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/COUNCIL_ROUNDS.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
+for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/COUNCIL_ROUNDS.md validation/AGENCY_FLOW_PILOT.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
   if [ ! -f "$f" ]; then
     echo "MISSING: $f" >&2
     exit 1
@@ -19,6 +19,7 @@ for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THRE
 done
 
 bash scripts/release_smoke.sh .
+python3 scripts/validate_agency_flow_receipt.py validation/AGENCY_FLOW_PILOT.md
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agency-quality.XXXXXX")"
 trap 'rm -rf "$TMP_ROOT"' EXIT
@@ -56,6 +57,8 @@ grep -q "TOOL_BLOCKED" SKILL.md
 grep -q "COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "FORWARD_TEST_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "skipped_by_local_harness" validation/THREADOPS_VALIDATION.md
+grep -q "AGENCY_FLOW_PILOT_RECEIPT" validation/AGENCY_FLOW_PILOT.md
+grep -q "verdict: \"flow-pass\"" validation/AGENCY_FLOW_PILOT.md
 grep -q "ROUND1_COUNCIL_RECEIPT" validation/receipts/ROUND1_RELEASE_ENGINEERING.md
 grep -q "ROUND2_COUNCIL_RECEIPT" validation/receipts/ROUND2_BEHAVIOR.md
 grep -q "ROUND3_COUNCIL_RECEIPT" validation/receipts/ROUND3_RELEASE_GO_NO_GO.md
