@@ -4,6 +4,7 @@
 
 - Added a required Agency-flow pilot receipt and validator so release/council receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
 - Added a live bounded-rescue Agency pilot receipt covering SKS, AGS, DEV, REV, rejected non-converged DEV, adoption/rejection, and cleanup.
+- Corrected the Agency pilot receipt to adopt a post-fix REV2 PASS receipt and record the earlier pre-fix REV FAIL as rejected evidence.
 - Added `scripts/install_skill.py` for reproducible user-skill installation.
 - Added `scripts/quality_gate.sh` as the open-source release gate.
 - Added `scripts/release_smoke.sh` and `scripts/pilot_harness.py`.

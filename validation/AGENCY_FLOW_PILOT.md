@@ -44,12 +44,12 @@ child_threads:
     receipt_status: "received"
     cleanup_status: "archived"
     status: "done"
-  - thread_id: "019f23c1-6222-7711-bbb0-b9ee9c55a214"
+  - thread_id: "019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0"
     thread_class: "REV"
     role: "REV"
-    read_scope: "current working tree diff and worker evidence"
+    read_scope: "final Agency-flow receipt gate, quality gate, git status, recent commits"
     write_scope: "none"
-    commands_run: "git diff -- README.md SKILL.md scripts/check_structure.sh scripts/release_smoke.sh scripts/quality_gate.sh scripts/validate_agency_flow_receipt.py; python3 -m py_compile scripts/validate_agency_flow_receipt.py; git status --short"
+    commands_run: "python3 scripts/validate_agency_flow_receipt.py validation/AGENCY_FLOW_PILOT.md; bash scripts/quality_gate.sh .; git status --short --branch; git log --oneline -3"
     artifacts: []
     verdict: "PASS"
     receipt_status: "received"
@@ -64,6 +64,14 @@ rejected_threads:
     cleanup_status: "archived"
     adoption: "rejected"
     reason: "No receipt after one convergence reminder; replaced by DEV-RESCUE."
+  - thread_id: "019f23c1-6222-7711-bbb0-b9ee9c55a214"
+    thread_class: "REV"
+    role: "REV"
+    status: "done"
+    verdict: "FAIL"
+    cleanup_status: "archived"
+    adoption: "rejected_after_fix"
+    reason: "Pre-fix review correctly found validator and missing-receipt issues; replaced by post-fix REV2 after fixes."
 
 commands_run:
   - "python3 -m py_compile scripts/validate_agency_flow_receipt.py"
@@ -79,14 +87,16 @@ adoption_rejection:
   - "Adopted AGS receipt 019f23be-a3a0-7a60-9849-419ec1424b46."
   - "Rejected original DEV receipt attempt 019f23be-a739-7bc0-8f6c-ab27e6328666 because it did not converge."
   - "Adopted DEV-RESCUE receipt 019f23bf-ed5b-7c61-9f44-b3fc2c41825a."
-  - "Adopted REV receipt 019f23c1-6222-7711-bbb0-b9ee9c55a214 after fixing its blocking findings."
+  - "Rejected pre-fix REV receipt 019f23c1-6222-7711-bbb0-b9ee9c55a214 after applying its required fixes."
+  - "Adopted post-fix REV2 receipt 019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0."
 
 cleanup_status:
   - "SKS archived."
   - "AGS archived."
   - "Original DEV archived."
   - "DEV-RESCUE archived."
-  - "REV archived."
+  - "Pre-fix REV archived."
+  - "Post-fix REV2 archived."
 
 blocking_findings: []
 
