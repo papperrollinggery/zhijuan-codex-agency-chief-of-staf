@@ -8,8 +8,11 @@ bash scripts/check_structure.sh .
 
 python3 - <<'PY'
 import ast
-import tomllib
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path("scripts").resolve()))
+from toml_compat import loads as toml_loads
 
 for path in sorted(Path("scripts").glob("*.py")):
     ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -25,7 +28,7 @@ for root in agent_roots:
     if len(files) != 16:
         raise SystemExit(f"EXPECTED 16 agents in {root}, found {len(files)}")
     for path in files:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = toml_loads(path.read_text(encoding="utf-8"))
         missing = [
             key
             for key in ("name", "description", "developer_instructions")
@@ -70,7 +73,14 @@ INSTALLED="$HOME/.agents/skills/zhijuan-codex-agency-chief-of-staf"
 CURRENT="$(pwd -P)"
 INSTALLED_REAL="$(cd "$INSTALLED" 2>/dev/null && pwd -P || true)"
 if [ -d "$INSTALLED" ] && [ "$CURRENT" != "$INSTALLED_REAL" ]; then
-  diff -qr -x .git -x .codex "$INSTALLED" . >/dev/null
+  diff -qr \
+    -x .git \
+    -x .codex \
+    -x __pycache__ \
+    -x .pytest_cache \
+    -x agency-thread-pilot \
+    -x .DS_Store \
+    "$INSTALLED" . >/dev/null
 fi
 
 echo "Release smoke check passed."

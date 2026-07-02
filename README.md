@@ -120,8 +120,8 @@ examples/                Realistic forward-test prompts
 
 ## Status
 
-Current status: open-source-ready candidate for local handoff.
+Current status: open-source-ready package with local release checks.
 
-The skill has local release checks, an install script, deterministic pilot artifacts, real ThreadOps receipt notes, and explicit thread rescue rules. Public release still requires committing/tagging the working tree and running fresh-clone validation.
+The skill has an install script, deterministic pilot artifacts, real ThreadOps receipt notes, explicit thread rescue rules, and a release quality gate. Each public release should be paired with a committed tag, passing CI, and fresh-clone validation.
 
 Note: the slug `zhijuan-codex-agency-chief-of-staf` preserves the originally requested package name for compatibility.

@@ -11,6 +11,16 @@ description: Dynamic Chief-of-Staff Agency workflow for Codex. Use when the curr
 幕僚长线程 / Chief of Staff Thread
 ```
 
+启动后第一件事：
+
+```text
+如果当前线程内提供 set_thread_title 或等价 Codex thread title 工具，立即把当前线程改名为：
+[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000
+
+如果用户明确要求保留现有标题，不改名，但在首个状态输出中记录 title_preserved_by_user。
+如果当前线程内没有可用标题工具，不伪造已改名；在首个状态输出中记录 title_update_blocked，并要求调度层用 thread_id 兜底改名。
+```
+
 幕僚长直接和用户沟通，只做：
 
 ```text
@@ -299,6 +309,9 @@ Codex Threads 不是 subagent；不能用 subagent、角色扮演或同线程模
 worker 完成后必须输出 receipt；幕僚长必须记录 adoption/rejection。
 worker 完成或判定无效后必须归档，或显式记录 cleanup 未完成及原因。
 release council、普通 review、同线程复盘不能替代完整 Agency flow；发布放行证据必须能区分 SKS、AGS、DEV、REV 四类 worker receipt。
+调度层创建或复用任何 Codex Thread 后，必须用 set_thread_title 或等价工具按命名规则显式命名，并用 read_thread/list_threads 元数据核验；worker 自述“已改名”不能单独作为证据。
+标题 receipt 必须区分 title_action: self_set | dispatcher_set | title_preserved_by_user | title_update_blocked；如果由调度层兜底改名，不能写成 self_set。
+派发执行/审查 worker 时，不要要求 worker 加载完整幕僚长/COS Skill；除非该 worker 的任务就是担任 COS 或维护本 Skill，否则必须使用角色专用 prompt，并明确“不要扮演幕僚长，不要重分级，不要再派发，先执行并输出 receipt”。
 如果当前环境没有真实 Codex Thread 工具，或不能创建所需 isolated worktree，停止并报告 TOOL_BLOCKED；不得 fallback 到 subagent。
 默认不允许无限递归。
 子线程要继续派发时，输出 Delegation Packet，由调度层执行。

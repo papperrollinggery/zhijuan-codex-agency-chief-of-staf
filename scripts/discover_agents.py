@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
 import json
-import tomllib
 from pathlib import Path
+
+from toml_compat import loads as toml_loads
 
 DEFAULT_PATHS = [
     Path.cwd() / ".codex" / "agents",
@@ -12,7 +13,7 @@ DEFAULT_PATHS = [
 
 def parse_agent(path: Path, root: Path) -> dict:
     text = path.read_text(encoding="utf-8", errors="ignore")
-    data = tomllib.loads(text)
+    data = toml_loads(text)
     return {
         "path": str(path),
         "root": str(root),

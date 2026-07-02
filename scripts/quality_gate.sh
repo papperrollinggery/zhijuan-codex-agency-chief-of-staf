@@ -54,7 +54,20 @@ grep -q "bounded rescue" SKILL.md
 grep -q "thread_not_converged" SKILL.md
 grep -q "Codex Threads 不是 subagent" SKILL.md
 grep -q "TOOL_BLOCKED" SKILL.md
+grep -q "set_thread_title" SKILL.md
+grep -q "dispatcher_set" SKILL.md
+grep -q "worker 自述.*不能单独作为证据" SKILL.md
+grep -q "不要要求 worker 加载完整幕僚长/COS Skill" SKILL.md
+grep -q "title_update_blocked" references/THREAD_NAMING.md
+grep -q "read_thread/list_threads" references/THREAD_NAMING.md
+grep -q "dispatcher_set" references/THREAD_NAMING.md
+grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/EXECUTOR_PROMPT.md
+grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/REVIEWER_PROMPT.md
 grep -q "COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "TITLE_SMOKE_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "POST_TITLE_DELTA_COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "FINAL_CRITIC_RELEASE_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "rejected evidence" validation/THREADOPS_VALIDATION.md
 grep -q "FORWARD_TEST_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "skipped_by_local_harness" validation/THREADOPS_VALIDATION.md
 grep -q "AGENCY_FLOW_PILOT_RECEIPT" validation/AGENCY_FLOW_PILOT.md

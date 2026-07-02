@@ -24,5 +24,6 @@
 - Memories：偏好和经验
 - Skills：可复用能力
 - Codex Threads：真实 worker thread、隔离 worktree、receipt、cleanup
+- Codex thread title tools：`set_thread_title` 或等价能力；COS 启动时用于当前线程自命名，调度层创建或复用 thread 后必须用它兜底落实派发标题，并通过 `read_thread` / `list_threads` 元数据核验
 - Subagents：仅在用户未要求真实 Codex Threads、且任务不需要 thread id/receipt/cleanup 证明时作为轻量专职代理
 - MCP/Plugins：外部工具

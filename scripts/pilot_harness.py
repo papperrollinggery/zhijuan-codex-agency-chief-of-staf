@@ -2,9 +2,10 @@
 import argparse
 import json
 import subprocess
-import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
+
+from toml_compat import loads as toml_loads
 
 VALID_THREAD = "[P01-TH07-R01] 开发执行-DEV｜补测执行｜TASK-007｜OUT-007"
 REVIEW_THREAD = "[P01-TH09-R01] 审查官-REV｜补测审查｜TASK-007｜OUT-REV"
@@ -36,7 +37,7 @@ def parse_agents(root: Path) -> dict:
     files = sorted(agent_root.glob("*.toml"))
     parsed = []
     for path in files:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = toml_loads(path.read_text(encoding="utf-8"))
         parsed.append(
             {
                 "path": str(path.relative_to(root)),

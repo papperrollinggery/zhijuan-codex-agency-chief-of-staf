@@ -3,8 +3,9 @@ import argparse
 import json
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+from toml_compat import TOMLDecodeError, loads as toml_loads
 
 TOKEN = re.compile(r"[\w:-]+", re.UNICODE)
 FRONTMATTER = re.compile(r"^---\n(.*?)\n---", re.S)
@@ -99,8 +100,8 @@ def generated_inventory() -> str:
                 continue
             seen.add(real)
             try:
-                data = tomllib.loads(path.read_text(encoding="utf-8"))
-            except tomllib.TOMLDecodeError:
+                data = toml_loads(path.read_text(encoding="utf-8"))
+            except TOMLDecodeError:
                 continue
             blocks.append(
                 "\n".join(
