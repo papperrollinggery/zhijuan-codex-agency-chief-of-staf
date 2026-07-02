@@ -25,12 +25,25 @@ check_dir() {
 }
 
 check_file "SKILL.md"
+check_file "README.md"
+check_file "LICENSE"
+check_file "CHANGELOG.md"
+check_file "CONTRIBUTING.md"
+check_file "SECURITY.md"
+check_file "Makefile"
 check_file "agents/openai.yaml"
+check_file "validation/THREADOPS_VALIDATION.md"
+check_file "validation/COUNCIL_ROUNDS.md"
+check_file "validation/receipts/ROUND1_RELEASE_ENGINEERING.md"
+check_file "validation/receipts/ROUND2_BEHAVIOR.md"
+check_file "validation/receipts/ROUND3_RELEASE_GO_NO_GO.md"
 
 check_dir "assets"
 check_dir "assets/codex_agents"
 check_dir "references"
 check_dir "scripts"
+check_dir "validation"
+check_dir "validation/receipts"
 
 for f in \
   PROJECT_BRIEF_TEMPLATE.md \
@@ -116,6 +129,10 @@ for f in \
   append_event.py \
   validate_task_graph.py \
   propose_skill_patch.py \
+  release_smoke.sh \
+  pilot_harness.py \
+  install_skill.py \
+  quality_gate.sh \
   install_codex_agents.sh
 do
   check_file "scripts/$f"

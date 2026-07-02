@@ -47,3 +47,15 @@
 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat。
 检查 Goal 遗忘、职责污染、线程卡死、任务不收敛、重复错误、Skill 匹配失败，并建议 Rescue 或 Skill 自我优化。
 ```
+
+## 发布验证
+
+```bash
+bash scripts/release_smoke.sh .
+```
+
+需要生成本地 pilot 证据时：
+
+```bash
+python3 scripts/pilot_harness.py --root . --out /tmp/agency-thread-pilot
+```

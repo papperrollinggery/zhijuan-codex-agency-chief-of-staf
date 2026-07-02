@@ -8,7 +8,7 @@
 - /skills：Skill 选择
 - /mcp：工具连接
 - /mention：指定文件/文件夹
-- /agent：查看或切换子线程
+- /agent：查看或切换线程/agent 上下文
 - /fork：分支探索
 - /side：临时旁路问题
 - /compact：压缩上下文
@@ -23,5 +23,6 @@
 - AGENTS.md：项目长期规则
 - Memories：偏好和经验
 - Skills：可复用能力
-- Subagents：专职子线程
+- Codex Threads：真实 worker thread、隔离 worktree、receipt、cleanup
+- Subagents：仅在用户未要求真实 Codex Threads、且任务不需要 thread id/receipt/cleanup 证明时作为轻量专职代理
 - MCP/Plugins：外部工具

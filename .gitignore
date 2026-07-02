@@ -1,0 +1,8 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+agency-thread-pilot/
+PATCH_PROPOSALS/
+dist/
+build/

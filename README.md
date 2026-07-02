@@ -1,0 +1,126 @@
+# Zhijuan Codex Agency Chief of Staff
+
+Dynamic Chief-of-Staff Agency workflow for Codex.
+
+This skill helps Codex decide whether a request should be handled directly, planned first, tracked as a long-running goal, delegated to real Codex Threads, reviewed independently, rescued, or turned into a reusable improvement. It is designed for users who want a high-autonomy Codex workflow without losing evidence, receipts, or cleanup discipline.
+
+## Why Use It
+
+- Classifies tasks from T0 to T5 instead of forcing every request into the same process.
+- Keeps light tasks light: no unnecessary Task Graphs, teams, or packets.
+- Uses Plan and Goal mode only when the task benefits from them.
+- Routes work to Skills, Agents, or Codex Threads with explicit scope and receipts.
+- Treats Codex Threads as a real execution surface, not a synonym for subagents.
+- Treats stuck threads as recoverable failures through bounded rescue.
+- Ships with local validation, pilot harness, and release smoke checks.
+
+## Install
+
+From this repository:
+
+```bash
+python3 scripts/install_skill.py
+```
+
+The default target is:
+
+```text
+~/.agents/skills/zhijuan-codex-agency-chief-of-staf
+```
+
+To overwrite an existing different install:
+
+```bash
+python3 scripts/install_skill.py --force
+```
+
+To install project-local Codex agents:
+
+```bash
+bash scripts/install_codex_agents.sh project
+```
+
+Do not install user-scope agents unless you intentionally want them in `~/.codex/agents`:
+
+```bash
+bash scripts/install_codex_agents.sh user
+```
+
+## Use
+
+Minimal prompt:
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf
+```
+
+Realistic prompts:
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。这个项目我想正式用起来，但不知道差什么，你帮我判断并只做必要修复。
+```
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。我要长期推进一个代码迁移项目，请建立目标、线程分工、验证和救援机制。
+```
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。这个 worker thread 一直没有 receipt，请接管，保留已验证证据，只补失败项。
+```
+
+More prompts are in [examples/real-world-prompts.md](examples/real-world-prompts.md).
+
+## Quality Gate
+
+Run the full package quality gate:
+
+```bash
+bash scripts/quality_gate.sh .
+```
+
+The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for public pull requests and pushes.
+
+ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must cite real thread receipts separately.
+
+Run a lighter release smoke check:
+
+```bash
+bash scripts/release_smoke.sh .
+```
+
+Generate deterministic local pilot artifacts:
+
+```bash
+python3 scripts/pilot_harness.py --root . --out /tmp/agency-thread-pilot
+```
+
+## What Good Looks Like
+
+This skill is release-ready only when:
+
+- `bash scripts/quality_gate.sh .` passes.
+- The installed skill copy matches the source bundle.
+- Scripts have useful `--help`, bounded output, and JSON modes where useful.
+- Real Codex Thread work records thread ids, receipts, and cleanup.
+- If real Codex Thread tooling is unavailable, the correct result is `TOOL_BLOCKED`, not simulated worker evidence.
+- Stuck workers are marked `thread_not_converged` and rescued instead of silently treated as success.
+- Light tasks stay T0/T1 and do not generate management ceremony.
+
+## Repository Layout
+
+```text
+SKILL.md                 Core skill instructions and trigger metadata
+agents/openai.yaml       Codex UI metadata
+assets/                  Templates and role prompts
+references/              Progressive-disclosure operating rules
+scripts/                 Install, discovery, scoring, validation, pilot, quality gate
+examples/                Realistic forward-test prompts
+```
+
+## Status
+
+Current status: open-source-ready candidate for local handoff.
+
+The skill has local release checks, an install script, deterministic pilot artifacts, real ThreadOps receipt notes, and explicit thread rescue rules. Public release still requires committing/tagging the working tree and running fresh-clone validation.
+
+Note: the slug `zhijuan-codex-agency-chief-of-staf` preserves the originally requested package name for compatibility.
