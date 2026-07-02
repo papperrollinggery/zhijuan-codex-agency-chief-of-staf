@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+cd "$ROOT"
+
+for f in README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md Makefile; do
+  if [ ! -f "$f" ]; then
+    echo "MISSING: $f" >&2
+    exit 1
+  fi
+done
+
+for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/COUNCIL_ROUNDS.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
+  if [ ! -f "$f" ]; then
+    echo "MISSING: $f" >&2
+    exit 1
+  fi
+done
+
+bash scripts/release_smoke.sh .
+
+TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agency-quality.XXXXXX")"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >/dev/null
+bash "$TMP_ROOT/skills/zhijuan-codex-agency-chief-of-staf/scripts/release_smoke.sh" \
+  "$TMP_ROOT/skills/zhijuan-codex-agency-chief-of-staf"
+
+python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >/dev/null
+python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --dry-run --json >/dev/null
+
+tmp_pilot="$TMP_ROOT/pilot"
+python3 scripts/pilot_harness.py --root . --out "$tmp_pilot" --json >/dev/null
+test -f "$tmp_pilot/PILOT_HARNESS_RECEIPT.json"
+test -f "$tmp_pilot/case-07/RESULT_PACKET.yaml"
+test -f "$tmp_pilot/case-09/RESCUE_PACKET.yaml"
+test -f "$tmp_pilot/case-10/PATCH_PROPOSAL_LIGHT_TASK_OVER_ORG.md"
+python3 - "$tmp_pilot/PILOT_HARNESS_RECEIPT.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if receipt.get("cases", {}).get("case_08") != "skipped_by_local_harness":
+    raise SystemExit("pilot harness case_08 expectation changed; update real ThreadOps validation")
+PY
+
+grep -q "zhijuan-codex-agency-chief-of-staf" README.md
+grep -q "bash scripts/quality_gate.sh" README.md
+grep -q "examples/real-world-prompts.md" README.md
+grep -q "bounded rescue" SKILL.md
+grep -q "thread_not_converged" SKILL.md
+grep -q "Codex Threads 不是 subagent" SKILL.md
+grep -q "TOOL_BLOCKED" SKILL.md
+grep -q "COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "FORWARD_TEST_RECEIPT" validation/THREADOPS_VALIDATION.md
+grep -q "skipped_by_local_harness" validation/THREADOPS_VALIDATION.md
+grep -q "ROUND1_COUNCIL_RECEIPT" validation/receipts/ROUND1_RELEASE_ENGINEERING.md
+grep -q "ROUND2_COUNCIL_RECEIPT" validation/receipts/ROUND2_BEHAVIOR.md
+grep -q "ROUND3_COUNCIL_RECEIPT" validation/receipts/ROUND3_RELEASE_GO_NO_GO.md
+grep -q "Round 1" validation/COUNCIL_ROUNDS.md
+grep -q "Round 2" validation/COUNCIL_ROUNDS.md
+grep -q "Round 3" validation/COUNCIL_ROUNDS.md
+grep -q "bash scripts/quality_gate.sh ." .github/workflows/ci.yml
+
+if grep -R -nE '^(Pending\.|.*status: `pending`)' validation/COUNCIL_ROUNDS.md validation/receipts >/dev/null; then
+  echo "PENDING council or receipt evidence remains." >&2
+  exit 1
+fi
+
+echo "Open-source package quality gate passed with documented ThreadOps evidence."
