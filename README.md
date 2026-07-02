@@ -22,6 +22,8 @@ From this repository:
 python3 scripts/install_skill.py
 ```
 
+Requires Python 3.10 or newer. CI currently runs the quality gate on Python 3.10, 3.11, and 3.12.
+
 The default target is:
 
 ```text
@@ -78,7 +80,7 @@ Run the full package quality gate:
 bash scripts/quality_gate.sh .
 ```
 
-The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for public pull requests and pushes.
+The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for public pull requests and pushes across Python 3.10, 3.11, and 3.12.
 
 ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must also cite a fresh Agency-flow receipt in [validation/AGENCY_FLOW_PILOT.md](validation/AGENCY_FLOW_PILOT.md). Council or release-review receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
 

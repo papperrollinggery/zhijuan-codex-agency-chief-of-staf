@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## v0.1.5 - 2026-07-03
+
+- Clarified post-release validation evidence so historical release-candidate receipts are not confused with current release status.
+- Added quality-gate checks that block stale "public release still required" wording after a release is complete.
+- Expanded CI coverage to Python 3.10, 3.11, and 3.12 to exercise the TOML compatibility path.
+
+## v0.1.4 - 2026-07-03
+
 - Added a required Agency-flow pilot receipt and validator so release/council receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
 - Added a live bounded-rescue Agency pilot receipt covering SKS, AGS, DEV, REV, rejected non-converged DEV, adoption/rejection, and cleanup.
 - Corrected the Agency pilot receipt to adopt a post-fix REV2 PASS receipt and record the earlier pre-fix REV FAIL as rejected evidence.

@@ -2,7 +2,14 @@
 
 Date: 2026-07-03
 
-This file records live Codex Thread validation for the Skill release candidate. The deterministic local harness deliberately marks case 08 as `skipped_by_local_harness` because a shell script cannot create real Codex Threads. A release claim must therefore cite real thread receipts, not only the local harness.
+This file records live Codex Thread validation for the Skill release line. Some older receipts were collected during release-candidate phases and are retained as historical evidence. The deterministic local harness deliberately marks case 08 as `skipped_by_local_harness` because a shell script cannot create real Codex Threads. A release claim must therefore cite real thread receipts, not only the local harness.
+
+Current verified release baseline:
+
+- release: `v0.1.4`
+- commit: `f059a5330d50be9e24fcaf93e17777e730241bbb`
+- CI: GitHub Actions quality run `28608717443` completed with success.
+- fresh_clone_validation: completed after push; `bash scripts/quality_gate.sh .`, temporary install, and installed-copy `release_smoke.sh` all exited 0.
 
 ## Receipts Reviewed
 
@@ -95,8 +102,9 @@ This file records live Codex Thread validation for the Skill release candidate. 
   - `diff -qr -x .git -x .codex /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf .` exit_code=0
   - `python3 scripts/pilot_harness.py --root . --out <tmp> --json` exit_code=0
   - `git status --short` exit_code=0
-- verdict: open-source-ready candidate
-- limitation adopted: fresh-clone install and real external user use remain unvalidated
+- verdict: pre-release ready-to-ship finding
+- limitation adopted: real external user use remained unvalidated at receipt time.
+- superseded_by: `v0.1.4` fresh-clone validation.
 
 ## Post-Fix Re-Review
 
@@ -110,7 +118,7 @@ After adopting the first council findings, the same live Codex Threads rechecked
   - `bash scripts/quality_gate.sh .` exit_code=0
   - `python3 scripts/install_skill.py --dry-run --json` exit_code=0
   - `diff -qr -x .git -x .codex /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf .` exit_code=0
-- verdict: open-source-ready candidate
+- verdict: pre-release ready-to-ship finding
 - blocking_findings: none
 
 - thread_id: `019f2391-29e5-7bb3-b494-c508391f6c7a`
@@ -121,7 +129,7 @@ After adopting the first council findings, the same live Codex Threads rechecked
   - `bash scripts/quality_gate.sh .` exit_code=0
   - `python3 scripts/install_skill.py --dry-run --json` exit_code=0
   - `diff -qr -x .git -x .codex /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf .` exit_code=0
-- verdict: open-source-ready candidate
+- verdict: pre-release ready-to-ship finding
 - blocking_findings: none
 
 - thread_id: `019f2391-2bc4-7021-887b-d4993ffeb5f4`
@@ -132,8 +140,9 @@ After adopting the first council findings, the same live Codex Threads rechecked
   - `bash scripts/quality_gate.sh .` exit_code=0
   - `python3 scripts/install_skill.py --dry-run --json` exit_code=0
   - `diff -qr -x .git -x .codex /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf .` exit_code=0
-- verdict: open-source-ready candidate
-- blocking_findings: public release still requires commit/tag and fresh-clone validation
+- verdict: pre-release ready-to-ship finding
+- blocking_findings: release required commit/tag and fresh-clone validation at receipt time.
+- superseded_by: `v0.1.4` release validation.
 
 - thread_id: `019f2391-2dd1-76c3-b11f-904660fe0350`
 - class: post-fix realistic forward test
@@ -143,7 +152,7 @@ After adopting the first council findings, the same live Codex Threads rechecked
   - `python3 scripts/install_skill.py --dry-run --json` exit_code=0
   - `diff -qr -x .git -x .codex /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf .` exit_code=0
   - `git status --short` exit_code=0
-- verdict: open-source-ready candidate
+- verdict: pre-release ready-to-ship finding
 - blocking_findings: none
 
 ## Adopted Fixes
@@ -170,6 +179,6 @@ After adopting the first council findings, the same live Codex Threads rechecked
 
 ## Limits
 
-- The current evidence supports a local open-source-ready candidate, not guaranteed public adoption.
+- The current evidence supports `v0.1.4` local and fresh-clone release validation, not guaranteed public adoption.
 - No claim of "1000 star" quality is evidence-backed until external users, issues, stars, or independent adoption prove it.
-- The project is not a public release until the working tree is committed/tagged and fresh-clone validation is run.
+- Future releases must not be called complete until the working tree is committed/tagged and fresh-clone validation is run.

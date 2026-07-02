@@ -85,4 +85,9 @@ if grep -R -nE '^(Pending\.|.*status: `pending`)' validation/COUNCIL_ROUNDS.md v
   exit 1
 fi
 
+if grep -R -nE 'Public release still requires|project is not a public release until|fresh-clone install and real external user use remain unvalidated' README.md validation/THREADOPS_VALIDATION.md >/dev/null; then
+  echo "STALE release-candidate wording remains after public release." >&2
+  exit 1
+fi
+
 echo "Open-source package quality gate passed with documented ThreadOps evidence."
