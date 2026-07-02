@@ -51,6 +51,7 @@ python3 scripts/score_capabilities.py \
 python3 scripts/install_skill.py --help >/dev/null
 
 python3 scripts/discover_skills.py \
+  --root . \
   --query "zhijuan-codex-agency-chief-of-staf" \
   --limit 5 | grep -q "zhijuan-codex-agency-chief-of-staf"
 if [ -d ".codex/agents" ]; then
