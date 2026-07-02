@@ -1,0 +1,23 @@
+goal_id:
+parent_goal:
+owner_thread:
+task_id:
+objective:
+read_first:
+  - 
+allowed_skills:
+  - 
+allowed_agents:
+  - 
+forbidden_actions:
+  - 
+checkpoints:
+  - 
+validation:
+  - 
+done_when:
+  - 
+pause_when:
+  - 
+handoff:
+  - 

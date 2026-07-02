@@ -1,0 +1,17 @@
+delegation_id:
+from_thread:
+to_role:
+to_thread_name:
+task_id:
+goal_id:
+reason:
+inputs:
+  - 
+required_skill:
+  - 
+required_agent:
+  - 
+expected_output:
+stop_condition:
+needs_chief_confirmation: true
+risk_level: low | medium | high

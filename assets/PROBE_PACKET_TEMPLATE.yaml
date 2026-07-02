@@ -1,0 +1,10 @@
+probe_id:
+thread_name:
+role:
+question:
+finding:
+evidence:
+  - 
+risk:
+recommendation:
+upgrade_to_stateful: false
