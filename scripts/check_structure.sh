@@ -33,8 +33,11 @@ check_file "SECURITY.md"
 check_file "Makefile"
 check_file "agents/openai.yaml"
 check_file "evals/activation.prompts.csv"
+check_file "evals/activation_contract.fixture.json"
+check_file "evals/history_threads.sample.json"
 check_file "validation/THREADOPS_VALIDATION.md"
 check_file "validation/ACTIVATION_HARDENING.md"
+check_file "validation/HISTORICAL_THREAD_AUDIT.md"
 check_file "validation/COUNCIL_ROUNDS.md"
 check_file "validation/AGENCY_FLOW_PILOT.md"
 check_file "validation/receipts/ROUND1_RELEASE_ENGINEERING.md"
@@ -138,6 +141,7 @@ for f in \
   validate_task_graph.py \
   validate_agency_flow_receipt.py \
   validate_activation_contract.py \
+  audit_historical_threads.py \
   propose_skill_patch.py \
   release_smoke.sh \
   pilot_harness.py \

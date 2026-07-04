@@ -37,6 +37,12 @@ To overwrite an existing different install:
 python3 scripts/install_skill.py --force
 ```
 
+Installation makes the Skill discoverable; it does not force every future Codex thread to become a Chief-of-Staff thread. Use one of these activation paths:
+
+- Explicit prompt: `使用 $zhijuan-codex-agency-chief-of-staf`.
+- Project default: copy [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) into that project's `AGENTS.md`.
+- Global default: copy the same snippet into `~/.codex/AGENTS.md` when you intentionally want this routing everywhere.
+
 To install project-local Codex agents:
 
 ```bash
@@ -94,6 +100,7 @@ Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees 
 - For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md`, because `AGENTS.md` is read before task work while Skills are selected on demand.
 
 Regression prompts live in [evals/activation.prompts.csv](evals/activation.prompts.csv).
+Output-level contract fixtures live in [evals/activation_contract.fixture.json](evals/activation_contract.fixture.json), covering the historical failure cases where a pending worktree or same-thread simulation is incorrectly treated as a real dispatch.
 
 ## Quality Gate
 
@@ -119,6 +126,14 @@ Generate deterministic local pilot artifacts:
 python3 scripts/pilot_harness.py --root . --out /tmp/agency-thread-pilot
 ```
 
+Audit local historical runs that used this Skill:
+
+```bash
+python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --output /tmp/HISTORICAL_THREAD_AUDIT_RECEIPT.json
+```
+
+The history audit is intentionally local-only. It scans Codex thread metadata and rollout logs for activation, dispatch, pending worktree, title/readback, non-converged review, and cross-project routing risks without copying raw conversation text into the receipt.
+
 ## What Good Looks Like
 
 This skill is release-ready only when:
@@ -127,6 +142,7 @@ This skill is release-ready only when:
 - The installed skill copy matches the source bundle.
 - Scripts have useful `--help`, bounded output, and JSON modes where useful.
 - Real Codex Thread work records thread ids, receipts, and cleanup.
+- Historical-thread audits classify old failures without treating `pendingWorktreeId`, title self-report, or `thread_not_converged` as success evidence.
 - A full Agency-flow pilot has converged SKS, AGS, DEV, and REV receipts in `validation/AGENCY_FLOW_PILOT.md`.
 - If real Codex Thread tooling is unavailable, the correct result is `TOOL_BLOCKED`, not simulated worker evidence.
 - Stuck workers are marked `thread_not_converged` and rescued instead of silently treated as success.

@@ -11,7 +11,7 @@ for f in README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md Makefile; do
   fi
 done
 
-for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/ACTIVATION_HARDENING.md validation/COUNCIL_ROUNDS.md validation/AGENCY_FLOW_PILOT.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
+for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/ACTIVATION_HARDENING.md validation/HISTORICAL_THREAD_AUDIT.md validation/COUNCIL_ROUNDS.md validation/AGENCY_FLOW_PILOT.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
   if [ ! -f "$f" ]; then
     echo "MISSING: $f" >&2
     exit 1
@@ -38,9 +38,41 @@ if receipt.get("status") != "valid":
 summary = receipt.get("eval_summary", {})
 if summary.get("total", 0) < 10 or summary.get("dispatch_or_tool_blocked", 0) < 4:
     raise SystemExit("activation receipt eval coverage too weak")
+fixture = receipt.get("activation_fixture_summary", {})
+if fixture.get("valid_cases", 0) < 2 or fixture.get("invalid_cases", 0) < 2:
+    raise SystemExit("activation fixture coverage too weak")
 required = {"SKILL.md", "agents/openai.yaml", "evals/activation.prompts.csv"}
 if not required.issubset(set(receipt.get("source_hashes", {}))):
     raise SystemExit("activation receipt missing source hashes")
+PY
+
+history_receipt="$TMP_ROOT/HISTORICAL_THREAD_AUDIT_RECEIPT.json"
+python3 scripts/audit_historical_threads.py \
+  --repo-root . \
+  --fixture evals/history_threads.sample.json \
+  --output "$history_receipt"
+python3 - "$history_receipt" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if receipt.get("receipt_type") != "HISTORICAL_THREAD_AUDIT_RECEIPT":
+    raise SystemExit("bad historical audit receipt type")
+if receipt.get("status") != "valid":
+    raise SystemExit("historical audit receipt not valid")
+categories = set(receipt.get("summary", {}).get("issue_categories", {}))
+required = {
+    "activation_missing_or_unproven",
+    "dispatch_missing_or_unproven",
+    "pending_worktree_not_thread_id",
+    "nonconverged_evidence_must_be_rejected",
+    "title_receipt_metadata_requires_readback",
+    "cross_project_routing_requires_agents_snippet",
+}
+missing = required - categories
+if missing:
+    raise SystemExit(f"historical audit fixture missed categories: {sorted(missing)}")
 PY
 
 python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >/dev/null
@@ -89,7 +121,15 @@ grep -q "COS_BOOT_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
 grep -q "TOOL_BLOCKED" references/AGENTS_ROUTING_SNIPPET.md
+grep -q "Historical Thread Audit" references/ACTIVATION_PROTOCOL.md
+grep -q "HISTORICAL_THREAD_AUDIT_RECEIPT" README.md
+grep -q "pending-worktree-only-invalid" evals/activation_contract.fixture.json
+grep -q "same-thread-simulation-invalid" evals/activation_contract.fixture.json
+grep -q "activation_fixture_summary" scripts/validate_activation_contract.py
+test -f evals/history_threads.sample.json
+grep -q "pendingWorktreeId" evals/history_threads.sample.json
 grep -q "activation-10" evals/activation.prompts.csv
+test -x scripts/audit_historical_threads.py
 grep -q "COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "TITLE_SMOKE_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "POST_TITLE_DELTA_COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md

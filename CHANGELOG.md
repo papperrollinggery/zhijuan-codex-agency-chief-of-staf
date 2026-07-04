@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a local historical-thread audit script and fixture to detect prior Chief-of-Staff activation, dispatch, pending worktree, non-converged review, title/readback, and cross-project routing failure modes.
+- Documented the historical evidence hierarchy so old thread titles, worker self-report, `pendingWorktreeId`, and `thread_not_converged` cannot be mistaken for completion evidence.
+
 ## v0.1.6 - 2026-07-04
 
 - Hardened activation so explicit or routed Chief-of-Staff runs must emit `COS_BOOT_RECEIPT` before doing task work.

@@ -54,6 +54,7 @@ Skill 自我修改
 本 Skill 带有辅助材料。只在当前任务需要时读取对应文件，不要启动时全量加载。
 
 - 使用方式和启动口径：读 `references/USAGE.md`；若要确认强制启动和 no-dispatch 例外，读 `references/ACTIVATION_PROTOCOL.md`。
+- 历史线程、跨项目使用、worker 卡住或“之前怎么没按流程跑”的问题：读 `references/ACTIVATION_PROTOCOL.md`，并优先运行 `python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --output <receipt.json>` 生成历史审计 receipt。
 - 动态分级、控制面、线程命名、Skill/Agent 匹配、Plan/Goal、链式派发、自我优化、反官僚规则：按主题读 `references/` 下对应文件。
 - 需要创建 Project Brief、Task Graph、Goal Contract、Packet、Review、Rescue、Self-Improvement 产物时，复用 `assets/` 下模板。
 - 需要安装项目级 Codex agents 时，运行 `bash scripts/install_codex_agents.sh project`；未经用户确认不要运行 `user` 范围。
@@ -100,6 +101,7 @@ COS_BOOT_RECEIPT:
 4. 如果当前环境没有真实 Codex Thread 工具、或不能创建所需 isolated worktree，不得用 subagent、角色扮演、同线程模拟或主线程执行替代；输出 `TOOL_BLOCKED`。
 5. 若用户明确禁止创建子线程，遵守用户限制，并记录 `thread_dispatch_decision: no_dispatch` 与限制来源。
 6. 当 `thread_dispatch_decision: dispatch` 时，必须输出 `THREAD_DISPATCH_RECEIPT`，并包含真实 `thread_id`；如果工具只返回 `pendingWorktreeId`，状态只能是 `dispatch_pending`，不得算作完成派发。
+7. 当用户要求检查历史线程、所有项目或之前使用本 Skill 的失败案例时，不能只看 sidebar 标题或单个会话；必须交叉检查 `state_5.sqlite`、`session_index.jsonl`、rollout JSONL、thread metadata 和 worker receipts，并把 `pendingWorktreeId`、`thread_not_converged`、title 自述和 cleanup 自述当作待核验证据。
 
 ---
 

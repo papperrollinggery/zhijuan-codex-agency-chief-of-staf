@@ -1,0 +1,56 @@
+[
+  {
+    "id": "fixture-explicit-no-boot",
+    "cwd": "/tmp/project-a",
+    "title": "使用 $zhijuan-codex-agency-chief-of-staf 做发布准备",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。请完整团队处理。",
+    "preview": "",
+    "archived": 1,
+    "rollout_text": "Planner discussed tasks, but no boot receipt was emitted."
+  },
+  {
+    "id": "fixture-real-thread-no-dispatch",
+    "cwd": "/tmp/project-b",
+    "title": "幕僚长真实线程测试",
+    "first_user_message": "启动幕僚长，安排另一个线程，给 thread id 和 receipt。",
+    "preview": "",
+    "archived": 0,
+    "rollout_text": "The assistant answered directly in the main thread."
+  },
+  {
+    "id": "fixture-pending-worktree",
+    "cwd": "/tmp/project-c",
+    "title": "完整团队 worktree",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。请用真实 Codex Threads。",
+    "preview": "",
+    "archived": 1,
+    "rollout_text": "create_thread returned pendingWorktreeId=local:abc, then the run claimed dispatch was complete."
+  },
+  {
+    "id": "fixture-nonconverged",
+    "cwd": "/tmp/project-d",
+    "title": "反驳审核",
+    "first_user_message": "请做三轮反驳审核。",
+    "preview": "幕僚长",
+    "archived": 1,
+    "rollout_text": "thread_not_converged was later counted as release evidence."
+  },
+  {
+    "id": "fixture-title-risk",
+    "cwd": "/tmp/project-e",
+    "title": "COS title update",
+    "first_user_message": "启动幕僚长。",
+    "preview": "",
+    "archived": 1,
+    "rollout_text": "title_update_blocked occurred; dispatcher_set was not verified with read_thread/list_threads."
+  },
+  {
+    "id": "fixture-good",
+    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+    "title": "COS smoke",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。真实 Codex Threads smoke。",
+    "preview": "",
+    "archived": 1,
+    "rollout_text": "COS_BOOT_RECEIPT then THREAD_DISPATCH_RECEIPT with real thread_id and cleanup archived."
+  }
+]

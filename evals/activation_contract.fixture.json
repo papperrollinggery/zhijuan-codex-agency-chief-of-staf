@@ -1,0 +1,22 @@
+[
+  {
+    "id": "tool-blocked-no-thread-tools",
+    "expected_valid": true,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T2\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  reason: \"User asked for real Codex Threads but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n"
+  },
+  {
+    "id": "pending-worktree-only-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  pendingWorktreeId: \"local:abc\"\n  status: dispatched\n"
+  },
+  {
+    "id": "same-thread-simulation-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"same-thread-simulation\"\n  status: dispatched\n  note: \"same-thread simulated worker\"\n"
+  },
+  {
+    "id": "valid-real-dispatch",
+    "expected_valid": true,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  thread_class: review_worker\n  read_scope: README.md\n  write_scope: none\n  expected_receipt: WORKER_RECEIPT\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"
+  }
+]

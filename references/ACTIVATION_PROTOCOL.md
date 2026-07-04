@@ -32,8 +32,54 @@ Then `thread_dispatch_decision` must be `dispatch` or `tool_blocked`. It must no
 
 `no_dispatch` is allowed only when the user did not ask for real threads, or when the user explicitly forbids child threads.
 
+When thread tools are unavailable, the correct output is explicit blockage, not simulation:
+
+```yaml
+COS_BOOT_RECEIPT:
+  skill_loaded: true
+  trigger_type: explicit
+  thread_role: COS
+  thread_tools_available: false
+  thread_dispatch_decision: tool_blocked
+  reason: "User asked for real Codex Threads but thread tools are unavailable."
+
+TOOL_BLOCKED:
+  required_tool: "create_thread/read_thread/set_thread_archived"
+  fallback_allowed: false
+```
+
+If a tool returns only `pendingWorktreeId`, record `status: dispatch_pending` and wait for a real `thread_id`. `pendingWorktreeId` must never appear in a `THREAD_DISPATCH_RECEIPT` with `status: dispatched`.
+
 ## AGENTS.md Shim
 
 Skills are on-demand. For users who want the Chief-of-Staff routing to be the default behavior in a project, add the snippet from `references/AGENTS_ROUTING_SNIPPET.md` to the project `AGENTS.md` or global `~/.codex/AGENTS.md`.
 
 This does not override system/developer instructions or missing tools. It only makes the routing rule part of the instruction chain before task work begins.
+
+## Historical Thread Audit
+
+When a user asks whether previous runs used this Skill correctly, inspect history as evidence, not vibes.
+
+Recommended command:
+
+```bash
+python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --output /tmp/HISTORICAL_THREAD_AUDIT_RECEIPT.json
+```
+
+Evidence hierarchy:
+
+1. Codex thread metadata from `state_5.sqlite`, `list_threads`, or `read_thread`.
+2. Rollout JSONL entries that show actual tool calls, outputs, and final messages.
+3. Worker receipts only after matching `thread_id`, scope, commands, adoption/rejection, and cleanup.
+4. Sidebar titles and worker self-report only as hints.
+
+Historical failure categories to look for:
+
+- `activation_missing_or_unproven`: explicit Skill or 幕僚长 trigger without a visible `COS_BOOT_RECEIPT`.
+- `dispatch_missing_or_unproven`: real-thread request without `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`.
+- `pending_worktree_not_thread_id`: `pendingWorktreeId` was treated as a ready worker thread.
+- `nonconverged_evidence_must_be_rejected`: stuck or interrupted review threads were counted as approval.
+- `title_receipt_metadata_requires_readback`: title, receipt, or cleanup claims were not verified through metadata/readback.
+- `cross_project_routing_requires_agents_snippet`: the Skill was referenced from another project without a local routing shim.
+
+For cross-project use, add `references/AGENTS_ROUTING_SNIPPET.md` to the project where the work actually runs. Installing the Skill globally is not enough to guarantee that every future project route starts with the COS boot contract.
