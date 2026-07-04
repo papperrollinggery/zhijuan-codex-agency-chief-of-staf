@@ -40,6 +40,8 @@ check_file "validation/ACTIVATION_HARDENING.md"
 check_file "validation/HISTORICAL_THREAD_AUDIT.md"
 check_file "validation/COUNCIL_ROUNDS.md"
 check_file "validation/AGENCY_FLOW_PILOT.md"
+check_file "validation/RELEASE_RECEIPT.md"
+check_file "validation/release_receipt.json"
 check_file "validation/receipts/ROUND1_RELEASE_ENGINEERING.md"
 check_file "validation/receipts/ROUND2_BEHAVIOR.md"
 check_file "validation/receipts/ROUND3_RELEASE_GO_NO_GO.md"
@@ -77,6 +79,7 @@ for f in \
   PATCH_PROPOSAL_TEMPLATE.md \
   COS_BOOT_RECEIPT_TEMPLATE.yaml \
   THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml \
+  RELEASE_CONVERGENCE_RECEIPT_TEMPLATE.json \
   CHIEF_OF_STAFF_PROMPT.md \
   PLANNER_PROMPT.md \
   GOAL_STEWARD_PROMPT.md \
@@ -140,6 +143,7 @@ for f in \
   append_event.py \
   validate_task_graph.py \
   validate_agency_flow_receipt.py \
+  validate_release_receipt.py \
   validate_activation_contract.py \
   audit_historical_threads.py \
   propose_skill_patch.py \

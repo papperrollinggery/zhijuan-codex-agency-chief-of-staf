@@ -5,7 +5,7 @@ Copy this into a project `AGENTS.md` or global `~/.codex/AGENTS.md` when the Chi
 ```markdown
 ## Codex Agency Chief of Staff Routing
 
-When the user asks for 幕僚长, Codex Agency, 完整团队, 真实 Codex Threads, worker thread, another thread, thread id, receipt, cleanup, Plan/Goal orchestration, 自动调度, 反驳审核, 线程卡住, or a complex task that should be managed rather than directly executed, use `$zhijuan-codex-agency-chief-of-staf`.
+When the user asks for 幕僚长, Codex Agency, 完整团队, 真实 Codex Threads, worker thread, another thread, thread id, receipt, cleanup, Plan/Goal orchestration, 自动调度, 反驳审核, 线程卡住, release readiness, public repository publishing, reusable Skill hardening, multi-file reliability validation, or a complex task that should be managed rather than directly executed, use `$zhijuan-codex-agency-chief-of-staf`.
 
 If `$zhijuan-codex-agency-chief-of-staf` is used or clearly implied, the first visible output must include `COS_BOOT_RECEIPT` before any task execution.
 

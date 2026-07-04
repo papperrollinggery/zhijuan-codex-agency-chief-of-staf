@@ -13,6 +13,7 @@ This skill helps Codex decide whether a request should be handled directly, plan
 - Treats Codex Threads as a real execution surface, not a synonym for subagents.
 - Emits `COS_BOOT_RECEIPT` first when explicitly invoked, so a run cannot silently skip the Chief-of-Staff startup.
 - Treats stuck threads as recoverable failures through bounded rescue.
+- Enforces release review convergence budgets and a single release receipt table.
 - Ships with local validation, pilot harness, and release smoke checks.
 
 ## Install
@@ -94,12 +95,15 @@ More prompts are in [examples/real-world-prompts.md](examples/real-world-prompts
 
 Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees the skill name, description, path, and optional metadata. For this Skill, that means:
 
+- Skill 描述只能提高选择概率；只有项目级 `AGENTS.md` 或全局 `~/.codex/AGENTS.md` routing snippet can make Chief-of-Staff routing part of the instruction chain before task work begins.
 - `agents/openai.yaml` must not disable implicit invocation if you expect natural-language triggers.
 - Explicit `$zhijuan-codex-agency-chief-of-staf` runs must start with `COS_BOOT_RECEIPT`.
 - Explicit requests for real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup must dispatch real threads with `THREAD_DISPATCH_RECEIPT` or return `TOOL_BLOCKED`; they must not fall back to same-thread simulation.
+- Release readiness, public repository publishing, reusable Skill hardening, and multi-file reliability validation are routed triggers even when the prompt does not say "Chief of Staff".
 - For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md`, because `AGENTS.md` is read before task work while Skills are selected on demand.
 
 Regression prompts live in [evals/activation.prompts.csv](evals/activation.prompts.csv).
+Black-box complex-task prompts live in [evals/blackbox_complex.prompts.csv](evals/blackbox_complex.prompts.csv). They intentionally avoid `$skill`, Chief-of-Staff, thread, receipt, and cleanup wording so the gate can track whether implicit complex-task routing still has realistic coverage.
 Output-level contract fixtures live in [evals/activation_contract.fixture.json](evals/activation_contract.fixture.json), covering the historical failure cases where a pending worktree or same-thread simulation is incorrectly treated as a real dispatch.
 
 ## Quality Gate
@@ -113,6 +117,8 @@ bash scripts/quality_gate.sh .
 The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for public pull requests and pushes across Python 3.10, 3.11, and 3.12.
 
 ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must also cite a fresh Agency-flow receipt in [validation/AGENCY_FLOW_PILOT.md](validation/AGENCY_FLOW_PILOT.md). Council or release-review receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
+
+Release convergence is centralized in [validation/release_receipt.json](validation/release_receipt.json) and summarized in [validation/RELEASE_RECEIPT.md](validation/RELEASE_RECEIPT.md). It enforces `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, stuck-review rescue, and the stop condition after one cold review plus one domain/rebuttal review converge.
 
 Run a lighter release smoke check:
 
@@ -144,6 +150,7 @@ This skill is release-ready only when:
 - Real Codex Thread work records thread ids, receipts, and cleanup.
 - Historical-thread audits classify old failures without treating `pendingWorktreeId`, title self-report, or `thread_not_converged` as success evidence.
 - A full Agency-flow pilot has converged SKS, AGS, DEV, and REV receipts in `validation/AGENCY_FLOW_PILOT.md`.
+- A valid release convergence receipt unifies dispatch, adoption/rejection, cleanup, and review verdicts in `validation/release_receipt.json`.
 - If real Codex Thread tooling is unavailable, the correct result is `TOOL_BLOCKED`, not simulated worker evidence.
 - Stuck workers are marked `thread_not_converged` and rescued instead of silently treated as success.
 - Light tasks stay T0/T1 and do not generate management ceremony.

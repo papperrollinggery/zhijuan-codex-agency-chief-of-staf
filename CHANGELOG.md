@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added release convergence gates with `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, and stuck-review bounded rescue validation.
+- Added `validation/release_receipt.json` plus `scripts/validate_release_receipt.py` so dispatch, adoption/rejection, cleanup, and review verdicts converge into one machine-readable release artifact.
+- Expanded implicit routing metadata for release readiness, public repository publishing, reusable Skill hardening, and multi-file reliability validation.
+- Added black-box complex-task activation prompts that avoid `$skill`, COS, thread, receipt, and cleanup giveaway terms.
+- Added activation fixture coverage for COS main-thread over-execution so direct implementation claims are not accepted as routed worker evidence.
+- Clarified that Skill descriptions improve selection probability, while project `AGENTS.md` routing is required to force default Chief-of-Staff behavior.
 - Added a local historical-thread audit script and fixture to detect prior Chief-of-Staff activation, dispatch, pending worktree, non-converged review, title/readback, and cross-project routing failure modes.
 - Documented the historical evidence hierarchy so old thread titles, worker self-report, `pendingWorktreeId`, and `thread_not_converged` cannot be mistaken for completion evidence.
 

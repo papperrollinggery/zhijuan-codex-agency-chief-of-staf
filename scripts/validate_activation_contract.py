@@ -60,6 +60,31 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             reasons.append("dispatch receipt missing thread_id")
         if match and not looks_like_thread_id(match.group(1).strip()):
             reasons.append("dispatch receipt thread_id is not a real-looking UUID")
+    cos_overexecution_markers = [
+        "IMPLEMENTATION_RECEIPT",
+        "changed_files:",
+        "commands_run:",
+        "tests_passed:",
+        "diff --git",
+        "git diff",
+        "我已实现",
+        "我已修复",
+        "我修改了",
+    ]
+    worker_result_markers = [
+        "WORKER_RECEIPT",
+        "RESULT_PACKET",
+        "REVIEW_PACKET",
+        "worker_receipt",
+        "adoption:",
+        "rejection:",
+    ]
+    if (
+        re.search(r"(?m)^\s*thread_role:\s*COS\s*$", output)
+        and any(marker in output for marker in cos_overexecution_markers)
+        and not any(marker in output for marker in worker_result_markers)
+    ):
+        reasons.append("COS main thread appears to claim direct execution")
     return not reasons, reasons
 
 
@@ -72,6 +97,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "tool-blocked-no-thread-tools",
         "pending-worktree-only-invalid",
         "same-thread-simulation-invalid",
+        "cos-main-overexecution-invalid",
         "valid-real-dispatch",
     }
     seen = {str(case.get("id", "")) for case in cases}
@@ -100,6 +126,77 @@ def validate_activation_fixture(root: Path) -> dict:
         "valid_cases": sum(1 for item in results if item["observed_valid"]),
         "invalid_cases": sum(1 for item in results if not item["observed_valid"]),
         "results": results,
+    }
+
+
+def validate_blackbox_prompt_set(root: Path) -> dict:
+    path = root / "evals/blackbox_complex.prompts.csv"
+    rows = list(csv.DictReader(path.open(encoding="utf-8", newline="")))
+    if len(rows) < 12:
+        fail("blackbox complex prompt set must contain at least 12 rows")
+
+    required_columns = {
+        "id",
+        "category",
+        "should_trigger",
+        "requires_thread_dispatch_or_tool_blocked",
+        "prompt",
+    }
+    missing_columns = required_columns - set(rows[0])
+    if missing_columns:
+        fail(f"blackbox prompt set missing columns: {sorted(missing_columns)}")
+
+    giveaway_terms = [
+        "$zhijuan",
+        "skill",
+        "Skill",
+        "幕僚长",
+        "Codex Agency",
+        "完整团队",
+        "真实 Codex Threads",
+        "Codex Threads",
+        "thread",
+        "Thread",
+        "线程",
+        "worker",
+        "receipt",
+        "cleanup",
+        "Plan",
+        "Goal",
+        "自动调度",
+        "反驳审核",
+    ]
+    triggers = [row for row in rows if row["should_trigger"].lower() == "true"]
+    non_triggers = [row for row in rows if row["should_trigger"].lower() == "false"]
+    dispatch_cases = [
+        row
+        for row in rows
+        if row["requires_thread_dispatch_or_tool_blocked"].lower() == "true"
+    ]
+    if len(triggers) < 8 or len(non_triggers) < 3:
+        fail("blackbox evals need >=8 trigger and >=3 non-trigger cases")
+    if dispatch_cases:
+        fail("blackbox evals must not rely on explicit thread-dispatch requests")
+
+    categories = {row["category"].strip() for row in triggers if row["category"].strip()}
+    if len(categories) < 5:
+        fail("blackbox trigger prompts must cover at least five task categories")
+
+    for row in rows:
+        prompt = row["prompt"]
+        leaked = [term for term in giveaway_terms if term in prompt]
+        if leaked:
+            fail(f"blackbox prompt {row['id']} contains giveaway terms: {leaked}")
+        if row["should_trigger"].lower() == "true" and len(prompt) < 24:
+            fail(f"blackbox trigger prompt too short to be a complex-task probe: {row['id']}")
+
+    return {
+        "total": len(rows),
+        "should_trigger": len(triggers),
+        "should_not_trigger": len(non_triggers),
+        "dispatch_or_tool_blocked": len(dispatch_cases),
+        "trigger_categories": sorted(categories),
+        "giveaway_terms_blocked": True,
     }
 
 
@@ -171,6 +268,7 @@ def main() -> int:
             fail(f"trigger case must require boot receipt: {row['id']}")
 
     fixture_summary = validate_activation_fixture(root)
+    blackbox_summary = validate_blackbox_prompt_set(root)
 
     if args.receipt:
         watched = [
@@ -184,6 +282,7 @@ def main() -> int:
             "references/DELEGATION_CHAIN.md",
             "README.md",
             "evals/activation.prompts.csv",
+            "evals/blackbox_complex.prompts.csv",
             "evals/activation_contract.fixture.json",
         ]
         receipt = {
@@ -205,6 +304,7 @@ def main() -> int:
                 "should_not_trigger": len(non_triggers),
                 "dispatch_or_tool_blocked": len(dispatch_cases),
             },
+            "blackbox_eval_summary": blackbox_summary,
             "activation_fixture_summary": fixture_summary,
             "source_hashes": {
                 rel: sha256(root / rel)

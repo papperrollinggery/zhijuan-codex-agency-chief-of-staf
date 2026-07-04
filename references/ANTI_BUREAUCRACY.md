@@ -16,3 +16,6 @@
 12. 轻任务的正确表现是更少动作和更快闭环，不是生成更多管理模板。
 13. 执行/审核线程先交付命令结果、artifact 或 receipt，再解释流程。
 14. 一次收敛提醒后仍没有 artifact 或 receipt，按 `thread_not_converged` 处理并触发 bounded rescue。
+15. Release review 必须有预算：`max_review_waves`、`max_parallel_reviewers_per_deliverable`、`review_receipt_poll_limit`。
+16. 一轮 cold review 和一轮 domain/rebuttal review 已收敛后停止加 reviewer；继续加轮次必须在 release receipt 里写 `add_review_wave_reason`。
+17. 用户质疑线程未归档、未真实执行或未按 Skill 跑时，自动走历史线程审计，不靠当前 sidebar 或 worker 自述下结论。
