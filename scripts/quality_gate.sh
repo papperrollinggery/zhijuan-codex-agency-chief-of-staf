@@ -11,18 +11,37 @@ for f in README.md LICENSE CHANGELOG.md CONTRIBUTING.md SECURITY.md Makefile; do
   fi
 done
 
-for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/COUNCIL_ROUNDS.md validation/AGENCY_FLOW_PILOT.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
+for f in .github/workflows/ci.yml examples/real-world-prompts.md validation/THREADOPS_VALIDATION.md validation/ACTIVATION_HARDENING.md validation/COUNCIL_ROUNDS.md validation/AGENCY_FLOW_PILOT.md validation/receipts/ROUND1_RELEASE_ENGINEERING.md validation/receipts/ROUND2_BEHAVIOR.md validation/receipts/ROUND3_RELEASE_GO_NO_GO.md; do
   if [ ! -f "$f" ]; then
     echo "MISSING: $f" >&2
     exit 1
   fi
 done
 
-bash scripts/release_smoke.sh .
-python3 scripts/validate_agency_flow_receipt.py validation/AGENCY_FLOW_PILOT.md
-
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agency-quality.XXXXXX")"
 trap 'rm -rf "$TMP_ROOT"' EXIT
+
+bash scripts/release_smoke.sh .
+python3 scripts/validate_agency_flow_receipt.py validation/AGENCY_FLOW_PILOT.md
+activation_receipt="$TMP_ROOT/ACTIVATION_CONTRACT_RECEIPT.json"
+python3 scripts/validate_activation_contract.py . --receipt "$activation_receipt"
+python3 - "$activation_receipt" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if receipt.get("receipt_type") != "ACTIVATION_CONTRACT_RECEIPT":
+    raise SystemExit("bad activation receipt type")
+if receipt.get("status") != "valid":
+    raise SystemExit("activation receipt not valid")
+summary = receipt.get("eval_summary", {})
+if summary.get("total", 0) < 10 or summary.get("dispatch_or_tool_blocked", 0) < 4:
+    raise SystemExit("activation receipt eval coverage too weak")
+required = {"SKILL.md", "agents/openai.yaml", "evals/activation.prompts.csv"}
+if not required.issubset(set(receipt.get("source_hashes", {}))):
+    raise SystemExit("activation receipt missing source hashes")
+PY
 
 python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >/dev/null
 bash "$TMP_ROOT/skills/zhijuan-codex-agency-chief-of-staf/scripts/release_smoke.sh" \
@@ -55,6 +74,9 @@ grep -q "thread_not_converged" SKILL.md
 grep -q "Codex Threads 不是 subagent" SKILL.md
 grep -q "TOOL_BLOCKED" SKILL.md
 grep -q "set_thread_title" SKILL.md
+grep -q "COS_BOOT_RECEIPT" SKILL.md
+grep -q "THREAD_DISPATCH_RECEIPT" SKILL.md
+grep -q "thread_dispatch_decision" SKILL.md
 grep -q "dispatcher_set" SKILL.md
 grep -q "worker 自述.*不能单独作为证据" SKILL.md
 grep -q "不要要求 worker 加载完整幕僚长/COS Skill" SKILL.md
@@ -63,6 +85,11 @@ grep -q "read_thread/list_threads" references/THREAD_NAMING.md
 grep -q "dispatcher_set" references/THREAD_NAMING.md
 grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/EXECUTOR_PROMPT.md
 grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/REVIEWER_PROMPT.md
+grep -q "COS_BOOT_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "THREAD_DISPATCH_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "THREAD_DISPATCH_RECEIPT" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
+grep -q "TOOL_BLOCKED" references/AGENTS_ROUTING_SNIPPET.md
+grep -q "activation-10" evals/activation.prompts.csv
 grep -q "COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "TITLE_SMOKE_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "POST_TITLE_DELTA_COUNCIL_RECEIPT" validation/THREADOPS_VALIDATION.md
@@ -70,6 +97,10 @@ grep -q "FINAL_CRITIC_RELEASE_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "rejected evidence" validation/THREADOPS_VALIDATION.md
 grep -q "FORWARD_TEST_RECEIPT" validation/THREADOPS_VALIDATION.md
 grep -q "skipped_by_local_harness" validation/THREADOPS_VALIDATION.md
+grep -q "019f2d91-0e96-7de1-9b25-8c3b7c545811" validation/ACTIVATION_HARDENING.md
+grep -q "019f2d92-193e-7a12-8c12-4e19d4c5e264" validation/ACTIVATION_HARDENING.md
+grep -q "019f2d97-74d8-7601-a4a2-cebf23b716c4" validation/ACTIVATION_HARDENING.md
+grep -q "THREAD_DISPATCH_RECEIPT" validation/ACTIVATION_HARDENING.md
 grep -q "AGENCY_FLOW_PILOT_RECEIPT" validation/AGENCY_FLOW_PILOT.md
 grep -q "verdict: \"flow-pass\"" validation/AGENCY_FLOW_PILOT.md
 grep -q "ROUND1_COUNCIL_RECEIPT" validation/receipts/ROUND1_RELEASE_ENGINEERING.md

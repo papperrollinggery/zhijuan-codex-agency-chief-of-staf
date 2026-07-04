@@ -32,7 +32,9 @@ check_file "CONTRIBUTING.md"
 check_file "SECURITY.md"
 check_file "Makefile"
 check_file "agents/openai.yaml"
+check_file "evals/activation.prompts.csv"
 check_file "validation/THREADOPS_VALIDATION.md"
+check_file "validation/ACTIVATION_HARDENING.md"
 check_file "validation/COUNCIL_ROUNDS.md"
 check_file "validation/AGENCY_FLOW_PILOT.md"
 check_file "validation/receipts/ROUND1_RELEASE_ENGINEERING.md"
@@ -43,6 +45,7 @@ check_dir "assets"
 check_dir "assets/codex_agents"
 check_dir "references"
 check_dir "scripts"
+check_dir "evals"
 check_dir "validation"
 check_dir "validation/receipts"
 
@@ -69,6 +72,8 @@ for f in \
   DO_NOT_REPEAT_TEMPLATE.md \
   SELF_IMPROVEMENT_TEMPLATE.md \
   PATCH_PROPOSAL_TEMPLATE.md \
+  COS_BOOT_RECEIPT_TEMPLATE.yaml \
+  THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml \
   CHIEF_OF_STAFF_PROMPT.md \
   PLANNER_PROMPT.md \
   GOAL_STEWARD_PROMPT.md \
@@ -116,7 +121,9 @@ for f in \
   STATEFUL_VS_STATELESS.md \
   DELEGATION_CHAIN.md \
   SELF_IMPROVEMENT.md \
-  ANTI_BUREAUCRACY.md
+  ANTI_BUREAUCRACY.md \
+  ACTIVATION_PROTOCOL.md \
+  AGENTS_ROUTING_SNIPPET.md
 do
   check_file "references/$f"
 done
@@ -130,6 +137,7 @@ for f in \
   append_event.py \
   validate_task_graph.py \
   validate_agency_flow_receipt.py \
+  validate_activation_contract.py \
   propose_skill_patch.py \
   release_smoke.sh \
   pilot_harness.py \

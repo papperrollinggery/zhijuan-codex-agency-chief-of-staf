@@ -24,6 +24,14 @@
 当前线程内没有标题工具：不声称已改名，记录 title_update_blocked，并要求调度层兜底
 ```
 
+显式调用 Skill 时，标题动作必须出现在首个用户可见 `COS_BOOT_RECEIPT` 中：
+
+```text
+title_action: self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
+```
+
+如果标题动作尚未完成但不阻塞轻任务继续，`COS_BOOT_RECEIPT` 仍必须可见；不得把标题失败隐藏在内部日志。
+
 worker 线程由调度层创建或复用后，调度层必须尽快用规定格式命名；如果工具返回 pendingWorktreeId，必须等实际 thread_id 出现后再记录 dispatch receipt。
 
 标题验证必须看 Codex thread 元数据：

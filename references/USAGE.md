@@ -4,8 +4,10 @@
 
 ```text
 使用 $zhijuan-codex-agency-chief-of-staf 启动幕僚长模式。
-先判断当前项目、目标、输出物、复杂度，再决定是否进入 Plan / Goal。
+第一条可见输出先给 `COS_BOOT_RECEIPT`，再判断当前项目、目标、输出物、复杂度，并决定是否进入 Plan / Goal。
 ```
+
+如果不写 `$zhijuan-codex-agency-chief-of-staf`，但说“幕僚长 / Codex Agency / 完整团队 / 真实 Codex Threads / thread id / receipt / cleanup / 自动调度 / 反驳审核 / 线程卡住”，也应触发本 Skill。
 
 ## 进入 Plan mode
 
@@ -32,13 +34,20 @@
 ```text
 使用 $zhijuan-codex-agency-chief-of-staf 调度此任务。
 要求：
-1. 先判断复杂度 T0-T5。
-2. 决定是否 Plan / Goal。
-3. 扫描 Skill / Agent。
-4. 为有状态线程分配 Goal。
-5. 子线程只返回 Packet。
-6. Reviewer 独立审查。
-7. 幕僚长只负责管理和沟通，不做审核。
+1. 先输出 `COS_BOOT_RECEIPT`。
+2. 判断复杂度 T0-T5。
+3. 决定是否 Plan / Goal。
+4. 扫描 Skill / Agent。
+5. 为有状态线程分配 Goal。
+6. 子线程只返回 Packet。
+7. Reviewer 独立审查。
+8. 幕僚长只负责管理和沟通，不做审核。
+```
+
+## 强制真实线程
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。请创建真实 Codex Threads 的 isolated worktree worker 来修这个问题，并返回 thread id、THREAD_DISPATCH_RECEIPT、worker receipt 和 cleanup 状态；如果当前环境没有真实线程工具，请报告 TOOL_BLOCKED，不要用 subagent 代替。
 ```
 
 ## Heartbeat

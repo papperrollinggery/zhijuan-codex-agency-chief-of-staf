@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v0.1.6 - 2026-07-04
+
+- Hardened activation so explicit or routed Chief-of-Staff runs must emit `COS_BOOT_RECEIPT` before doing task work.
+- Re-enabled implicit invocation for natural-language triggers such as 幕僚长, 完整团队, true Codex Threads, receipt, cleanup, Plan/Goal orchestration, and stuck-thread rescue.
+- Added activation regression prompts, AGENTS routing snippet, boot/dispatch receipt templates, and quality-gate validation for dispatch-or-TOOL_BLOCKED behavior.
+
 ## v0.1.5 - 2026-07-03
 
 - Clarified post-release validation evidence so historical release-candidate receipts are not confused with current release status.

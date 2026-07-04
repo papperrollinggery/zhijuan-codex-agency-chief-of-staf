@@ -11,6 +11,7 @@ This skill helps Codex decide whether a request should be handled directly, plan
 - Uses Plan and Goal mode only when the task benefits from them.
 - Routes work to Skills, Agents, or Codex Threads with explicit scope and receipts.
 - Treats Codex Threads as a real execution surface, not a synonym for subagents.
+- Emits `COS_BOOT_RECEIPT` first when explicitly invoked, so a run cannot silently skip the Chief-of-Staff startup.
 - Treats stuck threads as recoverable failures through bounded rescue.
 - Ships with local validation, pilot harness, and release smoke checks.
 
@@ -56,6 +57,17 @@ Minimal prompt:
 使用 $zhijuan-codex-agency-chief-of-staf
 ```
 
+Expected first visible marker:
+
+```yaml
+COS_BOOT_RECEIPT:
+  skill_loaded: true
+  trigger_type: explicit
+  thread_role: COS
+```
+
+If you want natural-language prompts like “启动幕僚长 / 完整团队 / 真实 Codex Threads” to trigger automatically, keep `agents/openai.yaml` with `policy.allow_implicit_invocation: true` and use the routing snippet in [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) for projects where this workflow should be the default.
+
 Realistic prompts:
 
 ```text
@@ -71,6 +83,17 @@ Realistic prompts:
 ```
 
 More prompts are in [examples/real-world-prompts.md](examples/real-world-prompts.md).
+
+## Activation Reliability
+
+Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees the skill name, description, path, and optional metadata. For this Skill, that means:
+
+- `agents/openai.yaml` must not disable implicit invocation if you expect natural-language triggers.
+- Explicit `$zhijuan-codex-agency-chief-of-staf` runs must start with `COS_BOOT_RECEIPT`.
+- Explicit requests for real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup must dispatch real threads with `THREAD_DISPATCH_RECEIPT` or return `TOOL_BLOCKED`; they must not fall back to same-thread simulation.
+- For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md`, because `AGENTS.md` is read before task work while Skills are selected on demand.
+
+Regression prompts live in [evals/activation.prompts.csv](evals/activation.prompts.csv).
 
 ## Quality Gate
 
@@ -118,6 +141,7 @@ assets/                  Templates and role prompts
 references/              Progressive-disclosure operating rules
 scripts/                 Install, discovery, scoring, validation, pilot, quality gate
 examples/                Realistic forward-test prompts
+evals/                   Activation and dispatch regression prompts
 ```
 
 ## Status

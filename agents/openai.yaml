@@ -1,7 +1,7 @@
 interface:
   display_name: "Zhijuan Codex Agency Chief of Staff"
-  short_description: "动态幕僚长工作流：任务分级、Plan/Goal、Skill/Agent 匹配、真实线程、receipt、Rescue。"
-  default_prompt: "使用 $zhijuan-codex-agency-chief-of-staf。先判断任务复杂度，再决定直接处理、Plan、Goal、派发线程或 Rescue。"
+  short_description: "幕僚长/Codex Agency：显式启动回执、任务分级、真实线程派发、receipt、Rescue。"
+  default_prompt: "使用 $zhijuan-codex-agency-chief-of-staf。先输出 COS_BOOT_RECEIPT，再判断复杂度、线程派发、Plan/Goal 或 Rescue。"
 
 policy:
-  allow_implicit_invocation: false
+  allow_implicit_invocation: true

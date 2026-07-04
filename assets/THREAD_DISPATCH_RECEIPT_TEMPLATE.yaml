@@ -1,0 +1,10 @@
+THREAD_DISPATCH_RECEIPT:
+  thread_id: "" # required when status=dispatched
+  pending_worktree_id: "" # allowed only when status=dispatch_pending
+  thread_class: implementation_worker # implementation_worker | review_worker | scout_worker | rescue_worker | planner_worker
+  read_scope: ""
+  write_scope: ""
+  expected_receipt: ""
+  title_action: dispatcher_set # self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
+  cleanup_plan: archive_after_receipt # archive_after_receipt | keep_open_with_reason | cleanup_blocked
+  status: dispatched # dispatched | dispatch_pending

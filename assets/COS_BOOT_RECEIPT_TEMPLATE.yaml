@@ -1,0 +1,9 @@
+COS_BOOT_RECEIPT:
+  skill_loaded: true
+  trigger_type: explicit # explicit | implicit
+  thread_role: COS
+  title_action: title_update_blocked # self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
+  complexity: T0 # T0 | T1 | T2 | T3 | T4 | T5
+  thread_tools_available: unknown # true | false | unknown
+  thread_dispatch_decision: no_dispatch # dispatch | no_dispatch | tool_blocked
+  reason: "Tiny task and no explicit real-thread request."
