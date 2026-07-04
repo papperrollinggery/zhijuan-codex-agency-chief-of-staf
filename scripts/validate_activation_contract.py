@@ -175,8 +175,15 @@ def validate_blackbox_prompt_set(root: Path) -> dict:
     ]
     if len(triggers) < 8 or len(non_triggers) < 3:
         fail("blackbox evals need >=8 trigger and >=3 non-trigger cases")
-    if dispatch_cases:
-        fail("blackbox evals must not rely on explicit thread-dispatch requests")
+    if len(dispatch_cases) < 4:
+        fail("blackbox evals need >=4 implicit dispatch/tool-blocked cases")
+    non_trigger_dispatch = [
+        row["id"]
+        for row in non_triggers
+        if row["requires_thread_dispatch_or_tool_blocked"].lower() == "true"
+    ]
+    if non_trigger_dispatch:
+        fail(f"non-trigger blackbox prompts cannot require dispatch: {non_trigger_dispatch}")
 
     categories = {row["category"].strip() for row in triggers if row["category"].strip()}
     if len(categories) < 5:
@@ -189,6 +196,11 @@ def validate_blackbox_prompt_set(root: Path) -> dict:
             fail(f"blackbox prompt {row['id']} contains giveaway terms: {leaked}")
         if row["should_trigger"].lower() == "true" and len(prompt) < 24:
             fail(f"blackbox trigger prompt too short to be a complex-task probe: {row['id']}")
+        if (
+            row["requires_thread_dispatch_or_tool_blocked"].lower() == "true"
+            and row["should_trigger"].lower() != "true"
+        ):
+            fail(f"dispatch blackbox prompt must also be a trigger case: {row['id']}")
 
     return {
         "total": len(rows),

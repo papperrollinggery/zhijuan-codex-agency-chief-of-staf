@@ -103,7 +103,7 @@ Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees 
 - For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md`, because `AGENTS.md` is read before task work while Skills are selected on demand.
 
 Regression prompts live in [evals/activation.prompts.csv](evals/activation.prompts.csv).
-Black-box complex-task prompts live in [evals/blackbox_complex.prompts.csv](evals/blackbox_complex.prompts.csv). They intentionally avoid `$skill`, Chief-of-Staff, thread, receipt, and cleanup wording so the gate can track whether implicit complex-task routing still has realistic coverage.
+Black-box complex-task prompts live in [evals/blackbox_complex.prompts.csv](evals/blackbox_complex.prompts.csv). They intentionally avoid `$skill`, Chief-of-Staff, thread, receipt, and cleanup wording so the gate can track whether implicit complex-task routing and implicit dispatch-or-TOOL_BLOCKED decisions still have realistic coverage.
 Output-level contract fixtures live in [evals/activation_contract.fixture.json](evals/activation_contract.fixture.json), covering the historical failure cases where a pending worktree or same-thread simulation is incorrectly treated as a real dispatch.
 
 ## Quality Gate

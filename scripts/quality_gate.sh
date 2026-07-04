@@ -47,7 +47,7 @@ if (
     blackbox.get("total", 0) < 12
     or blackbox.get("should_trigger", 0) < 8
     or blackbox.get("should_not_trigger", 0) < 3
-    or blackbox.get("dispatch_or_tool_blocked", -1) != 0
+    or blackbox.get("dispatch_or_tool_blocked", 0) < 4
     or not blackbox.get("giveaway_terms_blocked")
 ):
     raise SystemExit("blackbox complex prompt coverage too weak")
