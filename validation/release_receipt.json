@@ -146,10 +146,72 @@
         "project": "ad-creative-orchestrator",
         "thread_class": "project_main_cos",
         "expected_receipt": "ADCO_CURRENT_STATE_RECEIPT",
-        "dispatch_status": "tool_blocked",
+        "dispatch_status": "tool_blocked_then_replaced",
         "receipt_status": "missing",
+        "cleanup_status": "archived",
+        "blocker": "send_message_to_thread returned no active turn to steer",
+        "replacement_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f"
+      },
+      {
+        "thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "project_main_cos_replacement",
+        "expected_receipt": "ADCO_REPLACEMENT_MAIN_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "received",
         "cleanup_status": "keep_open_with_reason",
-        "blocker": "send_message_to_thread returned no active turn to steer"
+        "receipt_summary": "main worktree contains 9056cad and 128736a; check_gate_fixtures, run_checks, check_distribution, and git diff --check passed; dirty worktree review still separate"
+      },
+      {
+        "thread_id": "019f2e9c-dafb-7750-ac10-3fdcbf8669b5",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "review_worker",
+        "expected_receipt": "ADCO_DIRTY_WORKTREE_REVIEW_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "received",
+        "adoption_status": "split_adopt_recommended",
+        "cleanup_status": "archived",
+        "receipt_summary": "do not adopt dirty worktree wholesale; split-adopt ThreadOps/agency schema items and keep dirty worktree until candidates are ported or explicitly rejected"
+      },
+      {
+        "thread_id": "019f2ea1-bb8b-7da2-825e-dd4e496b292d",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "implementation_worker",
+        "expected_receipt": "ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "archived",
+        "worktree_cleanup_status": "removed_by_thread_archive",
+        "worktree": "/Users/jinjungao/.codex/worktrees/d6f2/ad-creative-orchestrator",
+        "blocker": "read_thread reported systemError; no ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT; after archive the temporary worktree path was no longer present, so no adoption evidence remains"
+      },
+      {
+        "thread_id": "019f2eab-ff09-7db3-ab78-16ae6dd383b4",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "rescue_implementation_worker",
+        "expected_receipt": "ADCO_SPLIT_ADOPTION_RESCUE_RECEIPT",
+        "dispatch_status": "dispatch_pending_then_system_error",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "archived",
+        "worktree_cleanup_status": "removed_by_thread_archive",
+        "worktree": "/Users/jinjungao/.codex/worktrees/0e1f/ad-creative-orchestrator",
+        "blocker": "rescue worktree thread materialized but immediately reported systemError without receipt"
+      },
+      {
+        "thread_id": "019f2eac-aa97-7ec2-9591-d09c4414bce9",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "rescue_review_worker",
+        "expected_receipt": "ADCO_SPLIT_FAILURE_AUDIT_RECEIPT",
+        "dispatch_status": "dispatched_then_system_error",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "archived",
+        "blocker": "read-only rescue review thread also reported systemError without receipt"
       }
     ],
     "commands_run": [
@@ -214,10 +276,30 @@
         "result": "PASS"
       }
     ],
+    "automation_receipts": [
+      {
+        "automation_id": "cos",
+        "kind": "heartbeat",
+        "name": "COS 三项目硬化收敛心跳",
+        "status": "ACTIVE",
+        "rrule": "FREQ=HOURLY;INTERVAL=6",
+        "target_thread_id": "019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
+        "config_path": "/Users/jinjungao/.codex/automations/cos/automation.toml",
+        "purpose": "Continue three-project COS hardening with COS_BOOT_RECEIPT, current-state checks, gates/tests, receipt cleanup, and no remote push.",
+        "verified_by": [
+          "codex_app.automation_update view cos",
+          "sed -n '1,220p' /Users/jinjungao/.codex/automations/cos/automation.toml"
+        ]
+      }
+    ],
     "hard_blocks": [
       "No remote push has been performed in this round.",
       "Domain deliverable quality for creative/storyboard/proposal/copy/story artifacts remains not claimed without DOMAIN_DELIVERABLE_RECEIPT.",
-      "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer."
+      "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer.",
+      "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
+      "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; no split adoption into main is claimed.",
+      "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no ADCO split-adoption diff is claimed or adopted.",
+      "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence."
     ],
     "evidence_limits": [
       "This round proves current gates/tests and local worktree evidence, not live automatic thread startup in every future Codex surface.",
