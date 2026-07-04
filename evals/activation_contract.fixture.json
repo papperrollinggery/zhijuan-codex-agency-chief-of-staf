@@ -2,7 +2,7 @@
   {
     "id": "tool-blocked-no-thread-tools",
     "expected_valid": true,
-    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T2\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  reason: \"User asked for real Codex Threads but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n"
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T2\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"User asked for real Codex Threads but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n"
   },
   {
     "id": "pending-worktree-only-invalid",
@@ -15,13 +15,98 @@
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"same-thread-simulation\"\n  status: dispatched\n  note: \"same-thread simulated worker\"\n"
   },
   {
+    "id": "uuid-only-dispatch-receipt-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  status: dispatched\n"
+  },
+  {
     "id": "cos-main-overexecution-invalid",
     "expected_valid": false,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  thread_dispatch_decision: no_dispatch\n  reason: \"Complex task handled directly.\"\n\nIMPLEMENTATION_RECEIPT:\n  changed_files:\n    - scripts/quality_gate.sh\n  commands_run:\n    - bash scripts/quality_gate.sh .\n  tests_passed: true\n"
   },
   {
+    "id": "dispatch-decision-no-receipt-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  complexity: T3\n  thread_tools_available: unknown\n  thread_dispatch_decision: dispatch\n  reason: \"Complex task needs worker dispatch.\"\n\n## 当前判断\n我会先安排线程处理，然后再继续。\n"
+  },
+  {
+    "id": "passive-wait-no-rescue-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  complexity: T3\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2dfe-3423-7b22-8f83-eb008290f43b\"\n  pending_worktree_id: \"\"\n  thread_class: implementation_worker\n  expected_receipt: \"Result Packet\"\n  status: dispatched\n\n仍在等待开发线程产出；当前没有做 commit/push，也没有远端动作。\n"
+  },
+  {
+    "id": "rescue-fallback-to-cos-implementation-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  complexity: T3\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2e1b-be1f-7cc1-87cd-2e00168df3b8\"\n  thread_class: rescue_worker\n  expected_receipt: \"Result Packet\"\n  status: dispatched\n\nreceipt_status: pending\nremaining_polls: 1\n\nthread_not_converged:\n  thread_id: \"019f2e1b-be1f-7cc1-87cd-2e00168df3b8\"\n  reason: \"救援线程 3 次读回仍没有 Result Packet；为避免卡死，下面改为当前 worktree 内最小实现。\"\n\n我现在会在当前 worktree 做最小修复，开始改两个文件。\nfileChange: RecommendView.swift\n"
+  },
+  {
+    "id": "placeholder-thread-id-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"pending\"\n  pending_worktree_id: \"\"\n  thread_class: scout_worker\n  expected_receipt: HISTORY_CURRENT_AUDIT_RECEIPT\n  title_action: dispatcher_set\n  cleanup_plan: archive_after_receipt\n  status: dispatch_pending\n"
+  },
+  {
+    "id": "dispatcher-set-pending-title-action-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2e3d-40fe-7c60-879b-abadc9c7a72c\"\n  pending_worktree_id: \"\"\n  thread_class: scout_worker\n  expected_receipt: WORKER_RECEIPT\n  title_action: dispatcher_set_pending\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"
+  },
+  {
+    "id": "rapid-poll-nonconverged-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2e3e-b3ff-7612-a2d5-57d0412f08d8\"\n  thread_class: scout_worker\n  expected_receipt: HISTORY_CURRENT_AUDIT_RECEIPT\n  title_action: dispatcher_set\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n\nreceipt_status:\n  scout_worker: \"poll 3/3 pending; still no HISTORY_CURRENT_AUDIT_RECEIPT\"\nthread_not_converged:\n  thread_id: \"019f2e3e-b3ff-7612-a2d5-57d0412f08d8\"\n  reason: \"3 次轮询无 receipt，直接归档\"\n"
+  },
+  {
+    "id": "complex-quality-audit-no-dispatch-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"发布前质量审计涉及素材、旧图、浏览器资产和客户话术，但本轮直接同线程核查。\"\n"
+  },
+  {
+    "id": "heartbeat-explicit-skill-valid",
+    "expected_valid": true,
+    "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T4/T5 Goal、线程卡死和 Rescue。若真实线程工具不可用，输出 TOOL_BLOCKED。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat automation explicitly invoked the Skill for a T4 check, but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n  automation_prompt: \"使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat\"\n"
+  },
+  {
+    "id": "heartbeat-explicit-t5-no-dispatch-invalid",
+    "expected_valid": false,
+    "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T5 项目级系统。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T5\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat checked locally without dispatch.\"\n"
+  },
+  {
+    "id": "plain-one-line-heartbeat-no-cos-valid",
+    "expected_valid": true,
+    "requires_cos_boot": false,
+    "prompt": "Send exactly one plain text message: 五小时额度重置。Do nothing else and add no extra explanation or formatting.",
+    "output": "五小时额度重置。\n"
+  },
+  {
+    "id": "automation-enabled-no-evidence-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "prompt": "Set up a recurring heartbeat automation and tell me if it will start the Chief-of-Staff flow.",
+    "output": "Heartbeat automation enabled. It will start the Chief-of-Staff flow automatically on the next run.\n"
+  },
+  {
+    "id": "automation-created-before-keyword-no-evidence-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "prompt": "Set up a recurring heartbeat automation and tell me if it will start the Chief-of-Staff flow.",
+    "output": "I created the heartbeat automation. It will start the Chief-of-Staff flow automatically on the next run.\n"
+  },
+  {
+    "id": "automation-enabled-bare-agents-md-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "prompt": "Set up a recurring heartbeat automation and tell me if it will start the Chief-of-Staff flow.",
+    "output": "心跳自动化已启用。未检查 AGENTS.md，也没有 prompt evidence，但它会自动启动幕僚长。\n"
+  },
+  {
     "id": "valid-real-dispatch",
     "expected_valid": true,
-    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  thread_class: review_worker\n  read_scope: README.md\n  write_scope: none\n  expected_receipt: WORKER_RECEIPT\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Complex review requires a real worker.\"\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  thread_class: review_worker\n  read_scope: README.md\n  write_scope: none\n  expected_receipt: WORKER_RECEIPT\n  title_action: dispatcher_set\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"
+  },
+  {
+    "id": "valid-pending-worktree-dispatch",
+    "expected_valid": true,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Complex implementation requires an isolated worktree worker.\"\n\nTHREAD_DISPATCH_RECEIPT:\n  pending_worktree_id: \"local:44283b28-4b47-4e50-b948-aa7b43801d5d\"\n  thread_class: implementation_worker\n  read_scope: /Users/example/project\n  write_scope: isolated Codex worktree only\n  expected_receipt: IMPLEMENTATION_RECEIPT\n  title_action: title_update_blocked\n  cleanup_plan: keep_open_with_reason\n  status: dispatch_pending\n"
   }
 ]

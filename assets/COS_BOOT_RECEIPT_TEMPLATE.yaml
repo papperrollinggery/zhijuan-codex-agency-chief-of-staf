@@ -6,4 +6,7 @@ COS_BOOT_RECEIPT:
   complexity: T0 # T0 | T1 | T2 | T3 | T4 | T5
   thread_tools_available: unknown # true | false | unknown
   thread_dispatch_decision: no_dispatch # dispatch | no_dispatch | tool_blocked
+  worker_receipt_poll_limit: 3
+  worker_receipt_poll_interval_seconds: 60
+  worker_startup_grace_seconds: 120
   reason: "Tiny task and no explicit real-thread request."

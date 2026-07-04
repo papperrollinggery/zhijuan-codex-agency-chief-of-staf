@@ -1,4 +1,11 @@
-这是一次 Heartbeat。
+使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat。
+
+Automation activation contract:
+- Codex automation executes only the configured automation prompt.
+- Use this template only when the heartbeat should start the Chief-of-Staff flow and therefore produce `COS_BOOT_RECEIPT`.
+- If the automation prompt does not include `使用 $zhijuan-codex-agency-chief-of-staf` and the target context does not have the AGENTS routing shim, do not expect `COS_BOOT_RECEIPT`.
+- A plain emitter prompt such as "Send exactly one plain text message ... Do nothing else" must not use this template and must not be rewritten into a Chief-of-Staff heartbeat.
+- Any claim that Heartbeat/Automation is enabled must cite evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`; a bare `AGENTS.md` mention is not evidence.
 
 身份：
 幕僚长-COS 调度，但检查动作可以派发给专门线程。

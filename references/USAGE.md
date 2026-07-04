@@ -57,10 +57,27 @@
 检查 Goal 遗忘、职责污染、线程卡死、任务不收敛、重复错误、Skill 匹配失败，并建议 Rescue 或 Skill 自我优化。
 ```
 
+Codex automation heartbeat 只执行 automation prompt。若自动化 prompt 没有显式写 `使用 $zhijuan-codex-agency-chief-of-staf`，且目标线程/项目没有 AGENTS routing shim，就不会自动启动幕僚长。像“只发送一句话，其他什么都不要做”的 heartbeat 不应被本 Skill 接管。
+
+可验证 contract:
+
+- 需要 COS heartbeat 时，automation prompt 必须保留 `使用 $zhijuan-codex-agency-chief-of-staf`，或目标上下文必须有 AGENTS routing shim；输出应先出现 `COS_BOOT_RECEIPT`。
+- T4/T5 heartbeat 不能只在同线程“检查一下”；必须真实派发 worker，或在缺工具时输出 `TOOL_BLOCKED`。
+- 只发送固定一句话的 heartbeat 是 plain emitter，不需要也不应出现 `COS_BOOT_RECEIPT`。
+- 声称 Heartbeat/Automation 已启用时，必须给出 `automation_prompt` 文本/路径加 `prompt_contains_skill_invocation: true`，或明确的 `agents_routing_evidence` / `AGENTS routing shim`；裸 `AGENTS.md` 提及、未检查 AGENTS.md、没有 prompt evidence 的启用声称按 invalid 处理。
+
 ## 发布验证
 
 ```bash
 bash scripts/release_smoke.sh .
+```
+
+## 领域交付验证
+
+创意、分镜、提案、资料整理、文案、故事、执行规划等任务，如果要声明 `client-ready`、`ready to send`、`可交付` 或 `可发布`，必须收敛 `DOMAIN_DELIVERABLE_RECEIPT`，不能只靠 worker receipt 或测试 PASS。
+
+```bash
+python3 scripts/validate_domain_deliverable_contract.py .
 ```
 
 需要生成本地 pilot 证据时：

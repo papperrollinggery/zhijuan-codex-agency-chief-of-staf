@@ -1,0 +1,33 @@
+DOMAIN_DELIVERABLE_RECEIPT:
+  task_id: ""
+  thread_id: ""
+  deliverable_type: creative | storyboard | proposal | research | copy | story | execution_plan | planning
+  audience: ""
+  brief_trace:
+    source_brief_refs:
+      - ""
+    preserved_requirements:
+      - ""
+    assumptions:
+      - ""
+    explicit_exclusions:
+      - ""
+  artifacts:
+    - path: ""
+      role: ""
+      status: draft | reviewed | final
+  domain_quality_gates:
+    client_readable_language: PASS | FAIL | NOT_APPLICABLE
+    source_brief_preservation: PASS | FAIL | NOT_APPLICABLE
+    storyboard_or_shot_logic: PASS | FAIL | NOT_APPLICABLE
+    asset_manifest_or_reference_trace: PASS | FAIL | NOT_APPLICABLE
+    evidence_or_source_trace: PASS | FAIL | NOT_APPLICABLE
+  validation:
+    commands_run:
+      - ""
+    manual_review:
+      - ""
+  review_status: not_reviewed | cold_reviewed | domain_reviewed | cold_reviewed_and_domain_reviewed
+  verdict: PASS | FAIL | NEEDS_HUMAN
+  limitations:
+    - ""

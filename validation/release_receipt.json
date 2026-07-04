@@ -122,5 +122,106 @@
     "stop_more_reviewers": true,
     "additional_review_wave_reason": ""
   },
-  "additional_review_waves_after_stop": false
+  "additional_review_waves_after_stop": false,
+  "cross_project_validation_round": {
+    "round_id": "2026-07-05-three-project-hardening-recheck",
+    "scope": [
+      "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+      "/Users/jinjungao/work/DIR SKILL",
+      "/Users/jinjungao/work/ad-creative-orchestrator"
+    ],
+    "thread_dispatch_status": [
+      {
+        "thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "project": "DIR SKILL",
+        "thread_class": "project_main_cos",
+        "expected_receipt": "DIR_CURRENT_STATE_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "received",
+        "cleanup_status": "keep_open_with_reason",
+        "receipt_summary": "customer-preview gate patch verified; validate_project and git diff --check passed; DOMAIN_DELIVERABLE_RECEIPT not_applicable"
+      },
+      {
+        "thread_id": "019f2e3c-9a52-7d70-845a-9db49acbb7bf",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "project_main_cos",
+        "expected_receipt": "ADCO_CURRENT_STATE_RECEIPT",
+        "dispatch_status": "tool_blocked",
+        "receipt_status": "missing",
+        "cleanup_status": "keep_open_with_reason",
+        "blocker": "send_message_to_thread returned no active turn to steer"
+      }
+    ],
+    "commands_run": [
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/validate_activation_contract.py .",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/validate_domain_deliverable_contract.py .",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "bash scripts/check_structure.sh .",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "bash scripts/quality_gate.sh .",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "bash scripts/release_smoke.sh .",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "git diff --check",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/DIR SKILL",
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/DIR SKILL",
+        "command": "git diff --check",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "python3 tools/check_gate_fixtures.py",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "python3 tools/run_checks.py",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "python3 tools/check_distribution.py",
+        "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "git diff --check",
+        "result": "PASS"
+      }
+    ],
+    "hard_blocks": [
+      "No remote push has been performed in this round.",
+      "Domain deliverable quality for creative/storyboard/proposal/copy/story artifacts remains not claimed without DOMAIN_DELIVERABLE_RECEIPT.",
+      "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer."
+    ],
+    "evidence_limits": [
+      "This round proves current gates/tests and local worktree evidence, not live automatic thread startup in every future Codex surface.",
+      "Project-main COS threads remain open by design; only completed worker/review threads should be archived."
+    ]
+  }
 }

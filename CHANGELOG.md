@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added explicit installer support for project/global `AGENTS.md` routing shims without making the default install silently modify user rules.
+- Hardened the dispatch handshake so `thread_dispatch_decision: dispatch` must immediately converge to `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`.
+- Added bounded worker receipt polling so dispatched workers that do not return receipts are marked `thread_not_converged` and rescued instead of passively waited on.
+- Blocked the live-test failure mode where COS falls back to current-worktree implementation after both the original worker and rescue worker fail to return receipts.
+- Documented that Codex automation heartbeats execute their configured prompt and only start this Skill when the prompt or AGENTS routing explicitly invokes it.
+- Added poll pacing and startup grace so complex workers are not killed by three rapid readbacks before they have time to produce a receipt.
+- Added domain-deliverable gates and `DOMAIN_DELIVERABLE_RECEIPT` validation so creative, storyboard, proposal, research, copy, story, execution, and planning work cannot be called client-ready from process receipts alone.
+- Tightened domain-deliverable validation so `verdict: PASS` requires passing domain gates plus `cold_reviewed_and_domain_reviewed`; all-FAIL gate receipts are now blocked.
+- Tightened activation validation so UUID-only dispatch self-reports are invalid while legitimate `pending_worktree_id` + `dispatch_pending` receipts remain valid.
 - Added release convergence gates with `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, and stuck-review bounded rescue validation.
 - Added `validation/release_receipt.json` plus `scripts/validate_release_receipt.py` so dispatch, adoption/rejection, cleanup, and review verdicts converge into one machine-readable release artifact.
 - Expanded implicit routing metadata for release readiness, public repository publishing, reusable Skill hardening, and multi-file reliability validation.

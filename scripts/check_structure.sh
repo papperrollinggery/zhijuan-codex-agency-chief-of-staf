@@ -34,6 +34,7 @@ check_file "Makefile"
 check_file "agents/openai.yaml"
 check_file "evals/activation.prompts.csv"
 check_file "evals/activation_contract.fixture.json"
+check_file "evals/domain_deliverable_contract.fixture.json"
 check_file "evals/history_threads.sample.json"
 check_file "validation/THREADOPS_VALIDATION.md"
 check_file "validation/ACTIVATION_HARDENING.md"
@@ -79,6 +80,7 @@ for f in \
   PATCH_PROPOSAL_TEMPLATE.md \
   COS_BOOT_RECEIPT_TEMPLATE.yaml \
   THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml \
+  DOMAIN_DELIVERABLE_RECEIPT_TEMPLATE.yaml \
   RELEASE_CONVERGENCE_RECEIPT_TEMPLATE.json \
   CHIEF_OF_STAFF_PROMPT.md \
   PLANNER_PROMPT.md \
@@ -129,6 +131,7 @@ for f in \
   SELF_IMPROVEMENT.md \
   ANTI_BUREAUCRACY.md \
   ACTIVATION_PROTOCOL.md \
+  DOMAIN_DELIVERABLE_GATES.md \
   AGENTS_ROUTING_SNIPPET.md
 do
   check_file "references/$f"
@@ -145,6 +148,7 @@ for f in \
   validate_agency_flow_receipt.py \
   validate_release_receipt.py \
   validate_activation_contract.py \
+  validate_domain_deliverable_contract.py \
   audit_historical_threads.py \
   propose_skill_patch.py \
   release_smoke.sh \

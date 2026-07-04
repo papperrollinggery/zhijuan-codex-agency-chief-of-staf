@@ -54,6 +54,7 @@ python3 scripts/validate_release_receipt.py \
   evals/release_receipt.invalid_stuck_review_no_rescue.json \
   --expect-invalid
 python3 scripts/validate_activation_contract.py .
+python3 scripts/validate_domain_deliverable_contract.py .
 
 python3 scripts/discover_skills.py --help >/dev/null
 python3 scripts/discover_agents.py --help >/dev/null
@@ -82,7 +83,7 @@ python3 scripts/pilot_harness.py --root . --out "$PILOT_TMP" >/dev/null
 INSTALLED="$HOME/.agents/skills/zhijuan-codex-agency-chief-of-staf"
 CURRENT="$(pwd -P)"
 INSTALLED_REAL="$(cd "$INSTALLED" 2>/dev/null && pwd -P || true)"
-if [ -d "$INSTALLED" ] && [ "$CURRENT" != "$INSTALLED_REAL" ]; then
+if [ "${SKIP_INSTALLED_COPY_DIFF:-0}" != "1" ] && [ -d "$INSTALLED" ] && [ "$CURRENT" != "$INSTALLED_REAL" ]; then
   diff -qr \
     -x .git \
     -x .codex \

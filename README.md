@@ -4,6 +4,24 @@ Dynamic Chief-of-Staff Agency workflow for Codex.
 
 This skill helps Codex decide whether a request should be handled directly, planned first, tracked as a long-running goal, delegated to real Codex Threads, reviewed independently, rescued, or turned into a reusable improvement. It is designed for users who want a high-autonomy Codex workflow without losing evidence, receipts, or cleanup discipline.
 
+## 中文快速说明
+
+这个 Skill 的目标不是“多开几个角色”，而是把复杂任务变成可验证、可收敛、可归档的 Codex 工作流。显式调用后，它要求当前线程先输出 `COS_BOOT_RECEIPT`，再判断任务复杂度、是否需要 Plan/Goal、是否需要真实 Codex Threads、如何派发 worker、如何收集 receipt、如何做独立审查和 cleanup。
+
+适合使用的场景：
+
+- 你要求“幕僚长 / Codex Agency / 完整团队 / 真实 Codex Threads / worker thread / receipt / cleanup”。
+- 任务需要多个角色协作，例如规划、研究、实现、创意、分镜、提案、资料整理、文案、故事、执行计划、反驳审核。
+- 你要检查线程是否真的执行、是否卡住、是否没有归档、是否把测试 PASS 误当成客户交付质量。
+- 你要把某个长期复用 Skill 或公开仓库做成可发布版本，并需要 release receipt、cold review、rebuttal review、安装验证和历史失败审计。
+
+关键边界：
+
+- 安装 Skill 只让它可被选择；默认不会写入 `AGENTS.md`，也不能强制所有未来任务自动进入幕僚长流程。
+- 如果希望某个项目默认路由到幕僚长流程，需要把 [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) 合入该项目 `AGENTS.md`，或运行 `python3 scripts/install_skill.py --agents-routing project --project-root /path/to/project`。
+- 当用户明确要求真实线程时，必须输出真实 `THREAD_DISPATCH_RECEIPT`；没有真实线程工具时只能 `TOOL_BLOCKED`，不能用同线程角色扮演替代。
+- 创意、分镜、提案、资料整理、文案、故事、执行规划等客户交付物，不能只凭 worker receipt、脚本 PASS 或 `VALIDATION=PASS` 宣称 `client-ready` / `可交付`；必须有 `DOMAIN_DELIVERABLE_RECEIPT`。
+
 ## Why Use It
 
 - Classifies tasks from T0 to T5 instead of forcing every request into the same process.
@@ -14,6 +32,7 @@ This skill helps Codex decide whether a request should be handled directly, plan
 - Emits `COS_BOOT_RECEIPT` first when explicitly invoked, so a run cannot silently skip the Chief-of-Staff startup.
 - Treats stuck threads as recoverable failures through bounded rescue.
 - Enforces release review convergence budgets and a single release receipt table.
+- Requires `DOMAIN_DELIVERABLE_RECEIPT` before creative, storyboard, proposal, research, copy, story, execution, or planning outputs can be called client-ready.
 - Ships with local validation, pilot harness, and release smoke checks.
 
 ## Install
@@ -43,6 +62,18 @@ Installation makes the Skill discoverable; it does not force every future Codex 
 - Explicit prompt: `使用 $zhijuan-codex-agency-chief-of-staf`.
 - Project default: copy [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) into that project's `AGENTS.md`.
 - Global default: copy the same snippet into `~/.codex/AGENTS.md` when you intentionally want this routing everywhere.
+
+The installer can add that routing snippet when explicitly requested:
+
+```bash
+python3 scripts/install_skill.py --agents-routing project --project-root /path/to/project
+```
+
+```bash
+python3 scripts/install_skill.py --agents-routing global
+```
+
+Use `--agents-routing both` only when you intentionally want both project-local and global routing. The default `python3 scripts/install_skill.py` does not modify `AGENTS.md`.
 
 To install project-local Codex agents:
 
@@ -99,8 +130,11 @@ Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees 
 - `agents/openai.yaml` must not disable implicit invocation if you expect natural-language triggers.
 - Explicit `$zhijuan-codex-agency-chief-of-staf` runs must start with `COS_BOOT_RECEIPT`.
 - Explicit requests for real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup must dispatch real threads with `THREAD_DISPATCH_RECEIPT` or return `TOOL_BLOCKED`; they must not fall back to same-thread simulation.
+- Pre-release quality, public release, multi-file reliability, asset/stale-file/browser-evidence/customer-language audits are T3+ routing cases. They should dispatch real workers or report `TOOL_BLOCKED`, not collapse to `no_dispatch`.
+- Codex automation heartbeats execute their configured prompt. They only start this Skill when the prompt explicitly invokes `$zhijuan-codex-agency-chief-of-staf` or the target context has the AGENTS routing shim; a heartbeat prompt that says "do nothing else" should never emit `COS_BOOT_RECEIPT`.
+- Heartbeat/Automation enablement claims are invalid without activation evidence: cite the `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or cite explicit `agents_routing_evidence` / `AGENTS routing shim`. A bare `AGENTS.md` mention is not evidence, and [assets/HEARTBEAT_PROMPT.md](assets/HEARTBEAT_PROMPT.md) by itself does not enable COS heartbeat.
 - Release readiness, public repository publishing, reusable Skill hardening, and multi-file reliability validation are routed triggers even when the prompt does not say "Chief of Staff".
-- For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md`, because `AGENTS.md` is read before task work while Skills are selected on demand.
+- For stronger default routing, add [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) to `AGENTS.md` manually or with `scripts/install_skill.py --agents-routing project`, because `AGENTS.md` is read before task work while Skills are selected on demand.
 
 Regression prompts live in [evals/activation.prompts.csv](evals/activation.prompts.csv).
 Black-box complex-task prompts live in [evals/blackbox_complex.prompts.csv](evals/blackbox_complex.prompts.csv). They intentionally avoid `$skill`, Chief-of-Staff, thread, receipt, and cleanup wording so the gate can track whether implicit complex-task routing and implicit dispatch-or-TOOL_BLOCKED decisions still have realistic coverage.
@@ -119,6 +153,14 @@ The same gate is wired into GitHub Actions at `.github/workflows/ci.yml` for pub
 ThreadOps validation is documented in [validation/THREADOPS_VALIDATION.md](validation/THREADOPS_VALIDATION.md). The local pilot harness intentionally skips live Codex Thread creation; release claims must also cite a fresh Agency-flow receipt in [validation/AGENCY_FLOW_PILOT.md](validation/AGENCY_FLOW_PILOT.md). Council or release-review receipts cannot substitute for SKS/AGS/DEV/REV worker receipts.
 
 Release convergence is centralized in [validation/release_receipt.json](validation/release_receipt.json) and summarized in [validation/RELEASE_RECEIPT.md](validation/RELEASE_RECEIPT.md). It enforces `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, stuck-review rescue, and the stop condition after one cold review plus one domain/rebuttal review converge.
+
+Domain deliverable readiness is validated separately:
+
+```bash
+python3 scripts/validate_domain_deliverable_contract.py .
+```
+
+This blocks the common false-positive where a worker receipt, green script, or `VALIDATION=PASS` is treated as proof that a creative, storyboard, proposal, research, copy, story, execution-plan, or planning deliverable is client-ready. Client-ready claims require `DOMAIN_DELIVERABLE_RECEIPT` with brief trace, artifacts, passing domain quality gates, validation evidence, `review_status: cold_reviewed_and_domain_reviewed`, and `verdict: PASS`.
 
 Run a lighter release smoke check:
 
@@ -151,6 +193,7 @@ This skill is release-ready only when:
 - Historical-thread audits classify old failures without treating `pendingWorktreeId`, title self-report, or `thread_not_converged` as success evidence.
 - A full Agency-flow pilot has converged SKS, AGS, DEV, and REV receipts in `validation/AGENCY_FLOW_PILOT.md`.
 - A valid release convergence receipt unifies dispatch, adoption/rejection, cleanup, and review verdicts in `validation/release_receipt.json`.
+- Domain deliverables use `DOMAIN_DELIVERABLE_RECEIPT`; thread/process PASS is not treated as creative or client-ready quality PASS.
 - If real Codex Thread tooling is unavailable, the correct result is `TOOL_BLOCKED`, not simulated worker evidence.
 - Stuck workers are marked `thread_not_converged` and rescued instead of silently treated as success.
 - Light tasks stay T0/T1 and do not generate management ceremony.
