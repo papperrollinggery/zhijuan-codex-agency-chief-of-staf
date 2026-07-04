@@ -1,0 +1,76 @@
+{
+  "receipt_type": "RELEASE_CONVERGENCE_RECEIPT",
+  "root_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+  "review_convergence_budget": {
+    "max_review_waves": 2,
+    "max_parallel_reviewers_per_deliverable": 2,
+    "review_receipt_poll_limit": 3,
+    "required_fields_for_new_review_wave": [
+      "wave",
+      "type",
+      "deliverable",
+      "reviewer_thread_ids",
+      "add_review_wave_reason"
+    ],
+    "stuck_review_policy": "If a review thread has no receipt after review_receipt_poll_limit polls, mark thread_not_converged, archive or set cleanup_blocked, and dispatch bounded_rescue_reviewer."
+  },
+  "review_waves": [
+    {
+      "wave": 1,
+      "type": "cold_review",
+      "deliverable": "public release bundle",
+      "reviewer_thread_ids": [
+        "019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0"
+      ],
+      "add_review_wave_reason": "Required independent cold review before release readiness can be claimed.",
+      "verdict": "PASS",
+      "receipt_status": "received",
+      "cleanup_status": "archived"
+    },
+    {
+      "wave": 2,
+      "type": "domain_rebuttal_review",
+      "deliverable": "public release bundle",
+      "reviewer_thread_ids": [
+        "019f23a4-2d6e-7690-9ae0-78c7a4014151"
+      ],
+      "add_review_wave_reason": "Rebut release-evidence overclaims and check domain-specific go/no-go conditions after cold review.",
+      "verdict": "conditional-go",
+      "receipt_status": "received",
+      "cleanup_status": "archived"
+    }
+  ],
+  "unified_release_thread_table": [
+    {
+      "thread_id": "019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0",
+      "thread_class": "review_worker",
+      "deliverable": "public release bundle",
+      "wave": 1,
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "PASS"
+    },
+    {
+      "thread_id": "019f23a4-2d6e-7690-9ae0-78c7a4014151",
+      "thread_class": "review_worker",
+      "deliverable": "public release bundle",
+      "wave": 2,
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_after_fix",
+      "cleanup_status": "archived",
+      "review_verdict": "conditional-go"
+    }
+  ],
+  "release_decision": {
+    "cold_review_converged": true,
+    "domain_or_rebuttal_review_converged": true,
+    "stop_more_reviewers": true,
+    "additional_review_wave_reason": ""
+  },
+  "additional_review_waves_after_stop": false
+}

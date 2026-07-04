@@ -9,6 +9,8 @@ Use this reference when a run does not clearly start the Chief-of-Staff flow, or
 3. A process-heavy description can become a shortcut: Codex may follow the summary instead of reading the full Skill body. Keep the description trigger-focused.
 4. Anti-bureaucracy rules for T0/T1 can be misread as permission to skip Chief-of-Staff boot. They are only permission to skip heavy artifacts, not permission to skip `COS_BOOT_RECEIPT` after explicit invocation.
 
+Skill 描述只能提高选择概率. It cannot force every future complex task into the Chief-of-Staff path, because the Skill body is not guaranteed to be loaded before selection. If a project requires default routing, put `references/AGENTS_ROUTING_SNIPPET.md` into that project's `AGENTS.md`; then the route exists in the instruction chain before task execution.
+
 ## Hard Boot Rule
 
 When the Skill is explicitly invoked, the first visible output must contain `COS_BOOT_RECEIPT`. Do not answer, implement, review, draw, publish, or summarize before this receipt.
@@ -80,6 +82,9 @@ Historical failure categories to look for:
 - `pending_worktree_not_thread_id`: `pendingWorktreeId` was treated as a ready worker thread.
 - `nonconverged_evidence_must_be_rejected`: stuck or interrupted review threads were counted as approval.
 - `title_receipt_metadata_requires_readback`: title, receipt, or cleanup claims were not verified through metadata/readback.
+- `release_review_budget_missing`: review waves kept expanding without `max_review_waves`, `max_parallel_reviewers_per_deliverable`, or `add_review_wave_reason`.
+- `release_receipt_fragmented`: dispatch, adoption/rejection, cleanup, and review verdict were scattered across worker replies instead of a single release receipt.
+- `history_audit_not_triggered`: user challenged missing archive, fake execution, or skipped Skill flow, but the run did not enter historical thread audit.
 - `cross_project_routing_requires_agents_snippet`: the Skill was referenced from another project without a local routing shim.
 
 For cross-project use, add `references/AGENTS_ROUTING_SNIPPET.md` to the project where the work actually runs. Installing the Skill globally is not enough to guarantee that every future project route starts with the COS boot contract.

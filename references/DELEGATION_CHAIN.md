@@ -10,6 +10,8 @@
 派发记录必须使用 `THREAD_DISPATCH_RECEIPT`，包含 thread_id、thread_class、read_scope/write_scope、预期 receipt、cleanup 方式。
 worker receipt 必须被幕僚长明确 adoption 或 rejection。
 worker 完成、失败或不收敛后必须归档，或记录 cleanup 未完成及原因。
+发布/合并/公开仓库放行必须写统一 release receipt，集中记录 dispatch、adoption/rejection、cleanup 和 review verdict。
+reviewer 无 receipt 超过限定轮询后必须落 `thread_not_converged`，归档或 `cleanup_blocked`，并派发 bounded rescue reviewer。
 工具不可用时报告 TOOL_BLOCKED，不得静默降级。
 调度层创建或复用 thread 后必须显式 set_thread_title，并用 read_thread/list_threads 核验；worker 自述标题不能替代元数据。
 执行/审查 worker 不应加载完整幕僚长/COS Skill；除非任务就是 COS 或 Skill 维护，否则派发 prompt 必须使用角色边界：不要扮演幕僚长，不要重分级，不要继续派发，先执行命令/产物/receipt。

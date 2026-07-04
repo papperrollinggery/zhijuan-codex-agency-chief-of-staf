@@ -45,6 +45,15 @@
     "rollout_text": "title_update_blocked occurred; dispatcher_set was not verified with read_thread/list_threads."
   },
   {
+    "id": "fixture-user-challenge-no-audit",
+    "cwd": "/tmp/project-f",
+    "title": "用户质疑线程证据",
+    "first_user_message": "你这个线程为什么没有归档？是不是没真实执行、没按 Skill 跑？",
+    "preview": "幕僚长",
+    "archived": 0,
+    "rollout_text": "The assistant checked only sidebar state and did not run historical audit."
+  },
+  {
     "id": "fixture-good",
     "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
     "title": "COS smoke",

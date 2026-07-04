@@ -41,6 +41,20 @@ SELF_EXECUTION_COMPLAINTS = [
     "不会自动启动",
     "不会自己去安排其他线程",
     "必须得我要求",
+    "没真实执行",
+    "没有真实执行",
+]
+
+HISTORY_AUDIT_CHALLENGES = [
+    "线程没归档",
+    "没有归档",
+    "没真实执行",
+    "没有真实执行",
+    "没按 Skill 跑",
+    "没有按 Skill 跑",
+    "为什么都没有合并或者或者归档",
+    "你还是自己在执行",
+    "没安排别的线程",
 ]
 
 
@@ -136,6 +150,15 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
         categories.append("title_receipt_metadata_requires_readback")
     if contains_any(text, SELF_EXECUTION_COMPLAINTS):
         categories.append("main_thread_self_execution_complaint")
+    if contains_any(text, HISTORY_AUDIT_CHALLENGES) and not contains_any(
+        text,
+        [
+            "HISTORICAL_THREAD_AUDIT_RECEIPT",
+            "audit_historical_threads.py",
+            "历史线程审计",
+        ],
+    ):
+        categories.append("history_audit_not_triggered")
 
     try:
         in_repo = Path(thread["cwd"]).resolve().is_relative_to(repo_root.resolve())
@@ -213,6 +236,7 @@ def main() -> int:
             "Do not use sidebar title or worker self-report alone as evidence; read thread metadata and receipts.",
             "Treat pendingWorktreeId as dispatch_pending until a real thread_id is observed.",
             "Classify non-converged review threads as rejected evidence until a receipt exists.",
+            "When a user challenges archive, real execution, or skipped Skill flow, run the historical audit path.",
             "For cross-project default routing, install the AGENTS routing snippet where the work runs.",
             "When real Codex Threads are requested, dispatch with THREAD_DISPATCH_RECEIPT or stop with TOOL_BLOCKED.",
         ],

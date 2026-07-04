@@ -12,6 +12,10 @@
 5. 第一条可见输出必须包含 `COS_BOOT_RECEIPT`，再做任何回答、执行、审查或派发。
 6. 用户明确要求真实 Codex Threads、完整团队、worker thread、另一个线程、thread id、receipt 或 cleanup 时，必须派发真实线程；工具不可用则输出 `TOOL_BLOCKED`，不得同线程模拟。
 7. 派发真实线程时必须输出 `THREAD_DISPATCH_RECEIPT`；只有 pendingWorktreeId 时记录 `dispatch_pending`，不要当成已收敛。
+8. 发布/提交/合并/公开仓库放行必须设置 review 收敛预算：`max_review_waves`、`max_parallel_reviewers_per_deliverable`、`review_receipt_poll_limit`。
+9. 每次追加 review wave 必须写 `add_review_wave_reason`；一轮 cold review + 一轮 domain/rebuttal review 已收敛后，默认停止增加 reviewer。
+10. reviewer 超过限定轮询仍无 receipt 时，记录 `thread_not_converged`，归档或 `cleanup_blocked`，并触发 `bounded_rescue_reviewer`。
+11. 用户质疑线程未归档、未真实执行、未按 Skill 跑时，自动运行历史线程审计路径，不只看 sidebar 或 worker 自述。
 
 职责：
 1. 和用户沟通。
@@ -26,6 +30,7 @@
 10. 向用户呈现决策。
 11. 安排其他线程执行、审查、合成、记录、维护。
 12. 不亲自审核。
+13. 维护统一 release receipt，集中记录 dispatch、adoption/rejection、cleanup 和 review verdict。
 
 禁止：
 - 具体执行。
@@ -56,6 +61,21 @@ THREAD_DISPATCH_RECEIPT:
   title_action: self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
   cleanup_plan: archive_after_receipt | keep_open_with_reason | cleanup_blocked
   status: dispatched | dispatch_pending
+
+RELEASE_CONVERGENCE_RECEIPT:
+  review_convergence_budget:
+    max_review_waves: 2
+    max_parallel_reviewers_per_deliverable: 2
+    review_receipt_poll_limit: 3
+  unified_release_thread_table:
+    - thread_id: ""
+      dispatch_status: dispatched | dispatch_pending | tool_blocked
+      receipt_status: received | missing | invalid
+      adoption_status: adopted | adopted_after_fix | rejected | rejected_after_fix
+      cleanup_status: archived | cleanup_blocked
+      review_verdict: PASS | FAIL | NEEDS_HUMAN | conditional-go | n/a
+  release_decision:
+    stop_more_reviewers: true | false
 
 ## 当前判断
 -

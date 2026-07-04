@@ -1,0 +1,60 @@
+{
+  "receipt_type": "RELEASE_CONVERGENCE_RECEIPT",
+  "root_thread_id": "",
+  "review_convergence_budget": {
+    "max_review_waves": 2,
+    "max_parallel_reviewers_per_deliverable": 2,
+    "review_receipt_poll_limit": 3,
+    "required_fields_for_new_review_wave": [
+      "wave",
+      "type",
+      "deliverable",
+      "reviewer_thread_ids",
+      "add_review_wave_reason"
+    ],
+    "stuck_review_policy": "thread_not_converged -> archived | cleanup_blocked -> bounded_rescue_reviewer"
+  },
+  "review_waves": [
+    {
+      "wave": 1,
+      "type": "cold_review",
+      "deliverable": "",
+      "reviewer_thread_ids": [],
+      "add_review_wave_reason": "Required initial cold review.",
+      "verdict": "",
+      "receipt_status": "",
+      "cleanup_status": ""
+    },
+    {
+      "wave": 2,
+      "type": "domain_rebuttal_review",
+      "deliverable": "",
+      "reviewer_thread_ids": [],
+      "add_review_wave_reason": "Required domain or rebuttal review after cold review.",
+      "verdict": "",
+      "receipt_status": "",
+      "cleanup_status": ""
+    }
+  ],
+  "unified_release_thread_table": [
+    {
+      "thread_id": "",
+      "thread_class": "",
+      "deliverable": "",
+      "wave": null,
+      "status": "",
+      "dispatch_status": "",
+      "receipt_status": "",
+      "adoption_status": "",
+      "cleanup_status": "",
+      "review_verdict": ""
+    }
+  ],
+  "release_decision": {
+    "cold_review_converged": false,
+    "domain_or_rebuttal_review_converged": false,
+    "stop_more_reviewers": false,
+    "additional_review_wave_reason": ""
+  },
+  "additional_review_waves_after_stop": false
+}

@@ -15,6 +15,11 @@
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"same-thread-simulation\"\n  status: dispatched\n  note: \"same-thread simulated worker\"\n"
   },
   {
+    "id": "cos-main-overexecution-invalid",
+    "expected_valid": false,
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  thread_dispatch_decision: no_dispatch\n  reason: \"Complex task handled directly.\"\n\nIMPLEMENTATION_RECEIPT:\n  changed_files:\n    - scripts/quality_gate.sh\n  commands_run:\n    - bash scripts/quality_gate.sh .\n  tests_passed: true\n"
+  },
+  {
     "id": "valid-real-dispatch",
     "expected_valid": true,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  thread_class: review_worker\n  read_scope: README.md\n  write_scope: none\n  expected_receipt: WORKER_RECEIPT\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"

@@ -44,6 +44,15 @@ python3 scripts/validate_thread_name.py \
   "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000"
 python3 scripts/validate_task_graph.py assets/TASK_GRAPH_TEMPLATE.md
 python3 scripts/validate_agency_flow_receipt.py validation/AGENCY_FLOW_PILOT.md
+python3 scripts/validate_release_receipt.py validation/release_receipt.json
+python3 scripts/validate_release_receipt.py \
+  evals/release_receipt.valid_no_stuck_review.json
+python3 scripts/validate_release_receipt.py \
+  evals/release_receipt.invalid_extra_wave_no_reason.json \
+  --expect-invalid
+python3 scripts/validate_release_receipt.py \
+  evals/release_receipt.invalid_stuck_review_no_rescue.json \
+  --expect-invalid
 python3 scripts/validate_activation_contract.py .
 
 python3 scripts/discover_skills.py --help >/dev/null
