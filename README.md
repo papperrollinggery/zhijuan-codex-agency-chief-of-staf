@@ -8,7 +8,7 @@ This skill helps Codex decide whether a request should be handled directly, plan
 
 这个 Skill 的目标不是“多开几个角色”，而是把复杂任务变成可验证、可收敛、可归档的 Codex 工作流。显式调用后，它要求当前线程先输出 `COS_BOOT_RECEIPT`，再判断任务复杂度、是否需要 Plan/Goal、是否需要真实 Codex Threads、如何派发 worker、如何收集 receipt、如何做独立审查和 cleanup。
 
-用户可见输出默认中文、简洁、先结论。`COS_BOOT_RECEIPT` 作为自动化识别标记保留，但 T0/T1 或状态说明任务默认用中文短句，例如：`COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。` 只有真实派发、阻断、heartbeat 验收、release receipt 或失败诊断时，才展开完整机器字段。
+用户可见输出默认中文、简洁、先结论。`COS_BOOT_RECEIPT` 作为自动化识别标记保留，但 T0/T1、状态说明、轻量答复、用户只是问“为什么/什么情况/是否受阻/怎么显示”时，必须用中文短句，例如：`COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。` 只有真实派发、阻断、heartbeat 验收、release receipt、失败诊断或用户明确要求机器字段时，才展开完整机器字段。
 
 适合使用的场景：
 

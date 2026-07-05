@@ -114,6 +114,36 @@ def compact_boot_requires_full_receipt(prompt: str, output: str) -> bool:
     return any(marker in context for marker in markers)
 
 
+def full_machine_boot_allowed(prompt: str, output: str) -> bool:
+    """Full boot fields are reserved for evidence-heavy contexts or explicit requests."""
+    prompt_context = prompt.lower()
+    output_context = output.lower()
+    explicit_user_markers = [
+        "机器字段",
+        "完整字段",
+        "完整 receipt",
+        "完整回执",
+        "yaml",
+        "machine field",
+        "machine-readable",
+    ]
+    evidence_markers = [
+        "tool_blocked",
+        "thread_dispatch_receipt",
+        "cos_heartbeat_run_receipt",
+        "heartbeat_run_receipt",
+        "release_convergence_receipt",
+        "thread_not_converged",
+        "invalid_worker_thread_id",
+        "cleanup_blocked",
+    ]
+    if any(marker in prompt_context for marker in explicit_user_markers):
+        return True
+    if any(marker in output_context for marker in evidence_markers):
+        return True
+    return compact_boot_requires_full_receipt(prompt, "")
+
+
 def case_prompt_text(case: dict) -> str:
     parts = [
         str(case.get("prompt", "")),
@@ -473,6 +503,13 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
                     reasons.append(f"COS boot receipt missing {field}")
         dispatch_decision = first_field_value(output, "thread_dispatch_decision")
         complexity = first_field_value(output, "complexity")
+        if (
+            not compact_chinese_boot
+            and complexity in {"T0", "T1"}
+            and dispatch_decision == "no_dispatch"
+            and not full_machine_boot_allowed(prompt, output)
+        ):
+            reasons.append("lightweight/status COS boot must use the compact Chinese line, not full English YAML fields")
         if compact_chinese_boot:
             if compact_boot_requires_full_receipt(prompt, output):
                 reasons.append("compact Chinese boot cannot replace full receipt for heartbeat/thread/release work")
@@ -640,6 +677,7 @@ def validate_activation_fixture(root: Path) -> dict:
         fail("activation contract fixture must contain at least four cases")
     required_ids = {
         "compact-chinese-t0-boot-valid",
+        "full-english-t0-status-boot-invalid",
         "compact-chinese-heartbeat-missing-receipt-invalid",
         "compact-chinese-complex-audit-no-dispatch-invalid",
         "tool-blocked-no-thread-tools",

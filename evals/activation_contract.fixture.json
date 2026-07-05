@@ -6,6 +6,13 @@
     "output": "COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。\n\n当前结论：这是轻量状态解释，不需要展开机器字段。"
   },
   {
+    "id": "full-english-t0-status-boot-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": true,
+    "prompt": "用户问：为什么现在显示目标受阻？请简单说明。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  title_action: title_preserved_by_user\n  complexity: T0\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"用户问当前 Goal 状态原因；这是状态解释，不需要派发 worker。\"\n\n当前结论：目标未完成，所以显示受阻。"
+  },
+  {
     "id": "compact-chinese-heartbeat-missing-receipt-invalid",
     "expected_valid": false,
     "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T4/T5 Goal、线程卡死和 Rescue。",

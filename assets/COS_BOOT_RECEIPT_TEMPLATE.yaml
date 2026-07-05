@@ -1,5 +1,6 @@
 # 用户可见轻量版: COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。
-# 机器证据版:
+# T0/T1、状态说明、轻量答复必须使用上面的中文紧凑行，不要展开英文字段表。
+# 机器证据版仅用于真实派发、TOOL_BLOCKED、heartbeat 验收、release receipt、失败诊断或用户明确要求机器字段:
 COS_BOOT_RECEIPT:
   skill_loaded: true
   trigger_type: explicit # explicit | implicit
