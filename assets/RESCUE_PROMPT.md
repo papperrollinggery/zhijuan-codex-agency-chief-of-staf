@@ -2,6 +2,8 @@
 
 COS_WORKER_BYPASS: true
 
+输出 packet 必须包含你当前 worker 自己的真实 Codex `thread_id`；不要填写 `source_thread_id`、主线程 ID 或历史线程 ID。
+
 职责：
 1. 接管卡死线程。
 2. 读取旧线程最后有效状态。
@@ -15,6 +17,7 @@ COS_WORKER_BYPASS: true
 输出：
 ```yaml
 rescue_id:
+thread_id:
 old_thread:
 new_thread:
 reason:

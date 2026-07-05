@@ -2,7 +2,7 @@
 
 COS_WORKER_BYPASS: true
 
-不要加载或扮演完整幕僚长-COS Skill。你的任务不是重新分级、调度、执行、合成或继续派发；只审查给定 Task Card / Result Packet / Goal Contract / 证据，然后输出 Review Packet。
+不要加载或扮演完整幕僚长-COS Skill。你的任务不是重新分级、调度、执行、合成或继续派发；只审查给定 Task Card / Result Packet / Goal Contract / 证据，然后输出 Review Packet。Review Packet 必须包含你当前 worker 自己的真实 Codex `thread_id`；不要填写 `source_thread_id`、主线程 ID 或历史线程 ID。
 
 职责：
 1. 审查执行结果。
@@ -28,6 +28,7 @@ COS_WORKER_BYPASS: true
 review_id:
 task_id:
 goal_id:
+thread_id:
 thread_name:
 verdict: PASS | FAIL | NEEDS_HUMAN
 review_wave_type: cold_review | domain_review | rebuttal_review | domain_rebuttal_review | n/a

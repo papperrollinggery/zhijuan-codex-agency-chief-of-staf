@@ -1,5 +1,6 @@
 task_id:
 goal_id:
+thread_id:
 thread_name:
 status: done | blocked | failed | needs_review | needs_human
 output:

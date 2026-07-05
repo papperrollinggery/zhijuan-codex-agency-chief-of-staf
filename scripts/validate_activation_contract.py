@@ -298,6 +298,27 @@ def validate_missing_cwd_thread_handling(output: str) -> list[str]:
     return reasons
 
 
+def validate_worker_receipt_thread_identity(case: dict, output: str) -> list[str]:
+    reasons: list[str] = []
+    expected_thread_id = str(case.get("expected_self_thread_id", "")).strip()
+    source_thread_id = str(case.get("source_thread_id", "")).strip()
+    worker_thread_ids = [value.strip() for value in field_values(output, "thread_id") if value.strip()]
+
+    if not worker_thread_ids:
+        reasons.append("role-specific worker receipt missing worker thread_id")
+        return reasons
+    if not any(looks_like_thread_id(thread_id) for thread_id in worker_thread_ids):
+        reasons.append("role-specific worker receipt thread_id is not a real-looking UUID")
+    if expected_thread_id:
+        if not looks_like_thread_id(expected_thread_id):
+            reasons.append("fixture expected_self_thread_id is not a real-looking UUID")
+        if expected_thread_id not in worker_thread_ids:
+            reasons.append("role-specific worker receipt thread_id does not match worker metadata")
+    if source_thread_id and source_thread_id in worker_thread_ids and source_thread_id != expected_thread_id:
+        reasons.append("role-specific worker receipt copied source_thread_id instead of worker thread_id")
+    return reasons
+
+
 def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     output = str(case.get("output", ""))
     prompt = case_prompt_text(case)
@@ -325,6 +346,7 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             marker in output for marker in ["REVIEW_PACKET", "RESULT_PACKET", "_RECEIPT"]
         ):
             reasons.append("role-specific worker bypass missing packet or receipt output")
+        reasons.extend(validate_worker_receipt_thread_identity(case, output))
     if explicit_skill_heartbeat and not requires_cos_boot:
         reasons.append("heartbeat automation prompt explicitly invokes Skill but fixture marks COS boot optional")
         requires_cos_boot = True
@@ -528,6 +550,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "heartbeat-active-no-run-receipt-invalid",
         "heartbeat-run-target-unverified-invalid",
         "role-worker-bypass-valid",
+        "role-worker-bypass-source-thread-id-invalid",
         "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",
         "valid-pending-worktree-dispatch",
@@ -709,8 +732,13 @@ def main() -> int:
         "assets/SYNTHESIZER_PROMPT.md",
     ]
     for rel in role_prompt_files:
-        if "COS_WORKER_BYPASS: true" not in read(root / rel):
+        prompt_text = read(root / rel)
+        if "COS_WORKER_BYPASS: true" not in prompt_text:
             fail(f"{rel} missing COS_WORKER_BYPASS marker")
+        if "thread_id" not in prompt_text:
+            fail(f"{rel} missing worker thread_id output field")
+        if "source_thread_id" not in prompt_text:
+            fail(f"{rel} missing source_thread_id misuse warning")
 
     eval_path = root / "evals/activation.prompts.csv"
     rows = list(csv.DictReader(eval_path.open(encoding="utf-8", newline="")))

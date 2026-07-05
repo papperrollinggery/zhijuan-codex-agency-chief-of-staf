@@ -97,6 +97,8 @@ cleanup_status: archived | cleanup_blocked
 
 Then dispatch a bounded rescue worker with the same bypass marker, or report `TOOL_BLOCKED` / `NEEDS_HUMAN` if rescue also fails.
 
+If a role-specific worker emits the requested receipt but the receipt `thread_id` is not the worker's own Codex thread id read back from metadata, record `receipt_status: invalid_worker_thread_id` and `adoption_status: rejected_evidence`. A common invalid case is copying `source_thread_id` or the Chief-of-Staff/main thread id into the worker receipt. The content may be used as an untrusted clue only after independent verification; it is not completion evidence.
+
 Heartbeat note: Codex automations execute the automation prompt. They do not automatically load this Skill just because the Skill contains Heartbeat rules. To make a heartbeat run the Chief-of-Staff flow, include `使用 $zhijuan-codex-agency-chief-of-staf` in the automation prompt or install the AGENTS routing shim in the heartbeat target project/thread context. A prompt that says "do nothing else" must not be rewritten by the Skill into a COS run.
 
 Heartbeat/Automation contract:

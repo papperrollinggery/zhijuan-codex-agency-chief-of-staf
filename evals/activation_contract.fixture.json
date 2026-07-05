@@ -143,8 +143,20 @@
     "requires_cos_boot": false,
     "worker_bypass": true,
     "expected_worker_receipt": "THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT",
+    "expected_self_thread_id": "019f306b-5652-7322-9ac2-ecdd651fae2f",
     "prompt": "你是审查官-REV。\nCOS_WORKER_BYPASS: true\n不要加载或扮演完整幕僚长-COS Skill，不要重分级，不要再派发。请直接读取证据并输出 THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT。",
     "output": "THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT:\n  thread_id: \"019f306b-5652-7322-9ac2-ecdd651fae2f\"\n  status: done\n  commands_run:\n    - git status --short --branch\n  complete_ready: false\n  blocking_gaps:\n    - natural heartbeat not due yet\n  recommended_next_action: wait for natural heartbeat due window\n  DOMAIN_DELIVERABLE_RECEIPT: not_applicable\n"
+  },
+  {
+    "id": "role-worker-bypass-source-thread-id-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "worker_bypass": true,
+    "expected_worker_receipt": "COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT",
+    "expected_self_thread_id": "019f30b7-3879-76c2-87ab-76286de8142f",
+    "source_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+    "prompt": "你是只读审查官-REV。\nCOS_WORKER_BYPASS: true\n不要加载或扮演完整幕僚长-COS Skill，不要重分级，不要再派发。请直接读取证据并输出 COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT。",
+    "output": "COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT:\n  thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\n  verdict: PASS\n  commands_run:\n    - git status --short --branch\n  DOMAIN_DELIVERABLE_RECEIPT: not_applicable\n"
   },
   {
     "id": "role-worker-bypass-cos-only-invalid",

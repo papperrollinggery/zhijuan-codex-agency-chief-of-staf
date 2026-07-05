@@ -211,6 +211,7 @@ grep -q "bounded_rescue_reviewer" validation/release_receipt.json
 test -f evals/release_receipt.valid_no_stuck_review.json
 grep -q "additional_review_wave_reason" evals/release_receipt.invalid_extra_wave_no_reason.json
 grep -q "stuck review row" scripts/validate_release_receipt.py
+grep -q "invalid_worker_thread_id" scripts/validate_release_receipt.py
 grep -q "validate_release_receipt.py" scripts/release_smoke.sh
 grep -q "TOOL_BLOCKED" references/AGENTS_ROUTING_SNIPPET.md
 grep -q "Historical Thread Audit" references/ACTIVATION_PROTOCOL.md
@@ -226,6 +227,7 @@ grep -q "dispatcher-set-pending-title-action-invalid" evals/activation_contract.
 grep -q "rapid-poll-nonconverged-invalid" evals/activation_contract.fixture.json
 grep -q "missing-cwd-thread-adopted-invalid" evals/activation_contract.fixture.json
 grep -q "missing-cwd-thread-archived-valid" evals/activation_contract.fixture.json
+grep -q "role-worker-bypass-source-thread-id-invalid" evals/activation_contract.fixture.json
 grep -q "complex-quality-audit-no-dispatch-invalid" evals/activation_contract.fixture.json
 grep -q "dispatch decision without THREAD_DISPATCH_RECEIPT or TOOL_BLOCKED" scripts/validate_activation_contract.py
 grep -q "COS boot receipt missing" scripts/validate_activation_contract.py
@@ -235,8 +237,12 @@ grep -q "COS cannot fall back to same-thread implementation after rescue non-con
 grep -q "title_action is not one of the allowed receipt enum values" scripts/validate_activation_contract.py
 grep -q "thread_not_converged lacks paced polling or startup-grace evidence" scripts/validate_activation_contract.py
 grep -q "missing-cwd thread must be marked thread_not_converged" scripts/validate_activation_contract.py
+grep -q "role-specific worker receipt copied source_thread_id instead of worker thread_id" scripts/validate_activation_contract.py
+grep -q "missing source_thread_id misuse warning" scripts/validate_activation_contract.py
 grep -q "thread_cwd_missing_requires_archive_or_rehome" scripts/audit_historical_threads.py
 grep -q "thread_cwd_missing" SKILL.md
+grep -q "invalid_worker_thread_id" SKILL.md
+grep -q "invalid_worker_thread_id" references/ACTIVATION_PROTOCOL.md
 grep -q "current working directory missing" references/ACTIVATION_PROTOCOL.md
 grep -q "heartbeat automation prompt explicitly invokes Skill but output lacks COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
 grep -q "T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED" scripts/validate_activation_contract.py

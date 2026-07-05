@@ -12,6 +12,7 @@
 - Tightened domain-deliverable validation so `verdict: PASS` requires passing domain gates plus `cold_reviewed_and_domain_reviewed`; all-FAIL gate receipts are now blocked.
 - Tightened activation validation so UUID-only dispatch self-reports are invalid while legitimate `pending_worktree_id` + `dispatch_pending` receipts remain valid.
 - Added release convergence gates with `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, and stuck-review bounded rescue validation.
+- Hardened worker receipt identity so role-specific worker packets must include the worker's own Codex `thread_id`; receipts that copy `source_thread_id` or the main thread id are now rejected as `invalid_worker_thread_id`.
 - Added `validation/release_receipt.json` plus `scripts/validate_release_receipt.py` so dispatch, adoption/rejection, cleanup, and review verdicts converge into one machine-readable release artifact.
 - Expanded implicit routing metadata for release readiness, public repository publishing, reusable Skill hardening, and multi-file reliability validation.
 - Tightened black-box complex prompts so realistic complex tasks must require dispatch-or-TOOL_BLOCKED without leaking thread/receipt wording.
