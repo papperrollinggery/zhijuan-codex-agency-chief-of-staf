@@ -45,6 +45,14 @@ Current sync evidence: `2026-07-06-current-three-project-sync`
 | `ad-creative-orchestrator` | project-main COS `019f2e9d-c7a1-7b83-9b24-05117432c52f` adopted worker `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` as local commit `9f2ae62 Sync ADCO COS routing boundary`; changed `AGENTS.md` | `PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py`, `tools/run_checks.py`, `tools/check_distribution.py`, `git diff --check` all PASS | no push, no remote CI for current local HEAD, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 | `DIR SKILL` | project-main COS `019f2e3c-93f6-7b40-8616-4945feb79c0d` adopted worker `019f338d-3964-77f0-8a6f-4fa5d5c95ae5`; validation worker `019f3393-3a08-78b3-8082-6af9e68d1dda`; local commit `24bc7bb Sync COS routing boundaries`; branch `codex/p01th09r01-skillskmdirtaskdirroutingsync` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py` PASS and `git diff --check` PASS after removing clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` | no push, no remote CI for current local HEAD, live acceptance still `NEEDS_USER`, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 
+Latest state-convergence update: `2026-07-06-project-state-and-automation-update`
+
+| Project | Receipt | Evidence | Limits |
+|---|---|---|---|
+| `DIR SKILL` | `DIR_PROJECT_STATE_CONVERGENCE_RECEIPT` | project COS `019f2e3c-93f6-7b40-8616-4945feb79c0d`; worker `019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac`; `main` ff-only merged `24bc7bb`; final `## main...origin/main [ahead 3]`; worktree clean; `validate_project.py` and `git diff --check` passed | local project state only; `DOMAIN_DELIVERABLE_RECEIPT` remains not_applicable |
+| `ad-creative-orchestrator` | `ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT` | project COS `019f2e9d-c7a1-7b83-9b24-05117432c52f`; worker `019f33e7-68eb-76c0-9317-8c81b958c57a`; local commit `e7f3fd4 Adopt ADCO natural domain draft evidence`; final `## main...origin/main [ahead 6]`; worktree clean; local gate/distribution/diff checks passed | draft is evidence-only, not client/PPT-ready; remote/GitHub CI current HEAD and double review remain incomplete |
+| `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT` | OPS worker `019f33e6-3a59-79a1-bf0c-226261faeb13`; `cos` automation ACTIVE; `FREQ=HOURLY;INTERVAL=6`; target `019f2354-f00c-7132-90d7-fb6c26ff2ecf`; next natural due `2026-07-06T07:43:28.193+08:00` | do not delete or pause automation before final due-window evidence; PID `1233` is not task-owned; dirty worktree cleanup remains blocked |
+
 Current local validation evidence:
 
 | Project | Command | Result |
@@ -147,7 +155,9 @@ Current hard limits:
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
 - ADCO latest recorded routing-sync evidence is local commit `9f2ae62`; remote CI is still not checked because no push was performed. Earlier `fa60638` fresh-clone evidence remains historical, not current remote-release proof.
+- ADCO latest local state-convergence evidence is local commit `e7f3fd4`; it adopts `drafts/domain_tests/outdoor_gear_launch_first_round.md` as evidence only, not as client/PPT-ready output. Remote/GitHub CI for current HEAD remains unverified.
 - DIR latest recorded routing-sync evidence is local commit `24bc7bb` on branch `codex/p01th09r01-skillskmdirtaskdirroutingsync`; do not describe it as remotely published.
+- DIR latest project-state convergence also remains local commit `24bc7bb` on `main` after ff-only merge; final status was `## main...origin/main [ahead 3]` and `DOMAIN_DELIVERABLE_RECEIPT` remains not_applicable.
 - Any public release, push, merge, or publication still requires explicit user authorization.
 - The old ADCO project-main thread could not be steered and was replaced by `019f2e9d-c7a1-7b83-9b24-05117432c52f`.
 - ADCO split adoption implementation and early bounded rescue attempts failed with systemError before receipts; those failed threads are rejected as evidence.
@@ -168,6 +178,7 @@ Current hard limits:
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-06T01:54:49+08:00` the long-running six-hour `cos` automation is not due until `2026-07-06T07:43:28.193+08:00`, so natural-fire completion remains unproven rather than failed.
+- The latest OPS audit still leaves `cos` automation active and not self-recycled: public release is incomplete, the three-project objective is incomplete, and final due-window evidence is still required before completion or cancellation.
 - Human-readable dispatch summary hardening is validated locally and installed-copy synced; it still needs to be observed in a future organic ADCO/DIR worker dispatch after this patch.
 - Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes from validation; no `adco-check-*` temp dirs remained; cache dirs were removed. Multiple stale `xcodebuildmcp` MCP server pairs were sleeping, so older duplicate pairs were terminated and the newest pair was left running.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

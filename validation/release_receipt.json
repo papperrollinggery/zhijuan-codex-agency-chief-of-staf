@@ -677,6 +677,130 @@
       "review_verdict": "double_review_incomplete",
       "project": "ad-creative-orchestrator",
       "receipt_summary": "Review worker confirmed internal first-round value while preserving not_client_ready, ppt_entry_status=blocked, and incomplete double-review status."
+    },
+    {
+      "thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+      "thread_class": "project_main_cos",
+      "deliverable": "DIR project state convergence",
+      "wave": "post-stop-bounded",
+      "status": "local_state_converged_with_release_limits",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_local_state_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "local_state_converged",
+      "project": "DIR SKILL",
+      "receipt": "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT",
+      "worker_thread_id": "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac",
+      "initial_branch": "codex/p01th09r01-skillskmdirtaskdirroutingsync",
+      "final_branch": "main",
+      "merged_commit": "24bc7bb",
+      "merge_mode": "ff-only",
+      "final_git_status": "## main...origin/main [ahead 3]",
+      "working_tree": "clean",
+      "validation_commands": [
+        "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py",
+        "git diff --check"
+      ],
+      "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+      "release_limit": "Project state converged locally only; this does not prove client-ready domain output, public release, remote push, or remote CI.",
+      "receipt_summary": "DIR project-main COS reported worker 019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac was merged ff-only into main at 24bc7bb, final main was ahead 3 and clean, local validation passed, worker was archived, and DOMAIN_DELIVERABLE_RECEIPT was not_applicable."
+    },
+    {
+      "thread_id": "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac",
+      "thread_class": "project_bound_worker",
+      "deliverable": "DIR routing sync worker convergence",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received_via_project_main_cos",
+      "adoption_status": "adopted_by_project_main_cos",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "project": "DIR SKILL",
+      "adopted_commit": "24bc7bb",
+      "receipt_summary": "DIR worker was archived after project-main COS merged the branch into main and reran validate_project.py plus git diff --check."
+    },
+    {
+      "thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+      "thread_class": "project_main_cos",
+      "deliverable": "ADCO project state convergence",
+      "wave": "post-stop-bounded",
+      "status": "local_state_converged_with_hard_blockers",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_local_state_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "blocked_for_release",
+      "project": "ad-creative-orchestrator",
+      "receipt": "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT",
+      "worker_thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
+      "adopted_commit": "e7f3fd4",
+      "commit_subject": "Adopt ADCO natural domain draft evidence",
+      "final_git_status": "## main...origin/main [ahead 6]",
+      "working_tree": "clean",
+      "artifact": "drafts/domain_tests/outdoor_gear_launch_first_round.md",
+      "artifact_adoption": "adopted_as_evidence_only",
+      "validation_commands": [
+        "PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py",
+        "PYTHONDONTWRITEBYTECODE=1 python3 tools/run_checks.py",
+        "PYTHONDONTWRITEBYTECODE=1 python3 tools/check_distribution.py",
+        "git diff --check"
+      ],
+      "hard_blockers": [
+        "remote/GitHub CI current HEAD not verified",
+        "draft is not a client-ready PPT deliverable",
+        "double review incomplete",
+        "no remote push performed"
+      ],
+      "release_limit": "Local evidence converged only; no client-ready, public-release, remote-push, or remote-CI completion is claimed.",
+      "receipt_summary": "ADCO project-main COS adopted the natural domain draft as evidence only in local commit e7f3fd4, ended main ahead 6 and clean, and reran the local gate, distribution, and diff checks. Hard blockers remain remote/GitHub CI for current HEAD, non-client/PPT status, and incomplete double review."
+    },
+    {
+      "thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
+      "thread_class": "project_bound_worker",
+      "deliverable": "ADCO natural draft evidence worker convergence",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received_via_project_main_cos",
+      "adoption_status": "adopted_as_evidence_only",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "project": "ad-creative-orchestrator",
+      "adopted_commit": "e7f3fd4",
+      "artifact": "drafts/domain_tests/outdoor_gear_launch_first_round.md",
+      "receipt_summary": "ADCO worker output was adopted as evidence-only natural domain draft material, not as client-ready creative or PPT deliverable evidence."
+    },
+    {
+      "thread_id": "019f33e6-3a59-79a1-bf0c-226261faeb13",
+      "thread_class": "ops_cleanup_audit_worker",
+      "deliverable": "COS automation cleanup audit",
+      "wave": "post-stop-bounded",
+      "status": "blocked_until_due_window_evidence",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NOT_DUE",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt": "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT",
+      "automation_id": "cos",
+      "automation_status": "ACTIVE",
+      "rrule": "FREQ=HOURLY;INTERVAL=6",
+      "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+      "prompt_contains": [
+        "Skill invocation",
+        "self_improvement",
+        "self-recycle"
+      ],
+      "next_natural_due_at_local": "2026-07-06T07:43:28.193+08:00",
+      "natural_due_status_at_audit": "not_due_yet",
+      "automation_natural_long_run_status": "requires_final_due_window_evidence_before_completion_or_cancellation",
+      "cleanup_decision": "do_not_delete_or_pause_until public_release_complete=false, three_project_objective_complete=false, and final due-window evidence is resolved",
+      "process_safety": "High CPU PID 1233 is not task-owned and must not be killed from this task.",
+      "dirty_worktree_cleanup": "cleanup_blocked",
+      "receipt_summary": "OPS audit confirmed the cos automation is active, points at the root COS thread, fires every six hours, and was not naturally due at audit time. It must not be deleted or paused until the long-run goal and due-window evidence converge."
     }
   ],
   "release_decision": {
@@ -735,10 +859,75 @@
         "client_ready_status": "not_client_ready",
         "ppt_entry_status": "blocked",
         "adoption_status": "internal_first_round_only",
-        "double_review_status": "incomplete"
+        "double_review_status": "incomplete",
+        "artifact_adoption": "adopted_as_evidence_only",
+        "local_commit": "e7f3fd4",
+        "remote_ci_current_head": "not_verified"
+      },
+      "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "local_commit": "24bc7bb",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "completion_limit": "local project state only"
       }
     },
-    "automation_natural_long_run_status": "requires_final_due_window_evidence_before_completion_or_cancellation"
+    "automation_natural_long_run_status": "requires_final_due_window_evidence_before_completion_or_cancellation",
+    "latest_project_state_convergence": {
+      "round_id": "2026-07-06-project-state-and-automation-update",
+      "public_release_complete": false,
+      "three_project_objective_complete": false,
+      "remote_push_performed": false,
+      "client_ready_claim": false,
+      "automation_self_recycle_complete": false,
+      "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "worker_thread_id": "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac",
+        "local_commit": "24bc7bb",
+        "final_git_status": "## main...origin/main [ahead 3]",
+        "working_tree": "clean",
+        "validation": "validate_project.py and git diff --check passed",
+        "worker_cleanup_status": "archived",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "completion_limit": "local project state only"
+      },
+      "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "worker_thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
+        "local_commit": "e7f3fd4",
+        "commit_subject": "Adopt ADCO natural domain draft evidence",
+        "final_git_status": "## main...origin/main [ahead 6]",
+        "working_tree": "clean",
+        "artifact": "drafts/domain_tests/outdoor_gear_launch_first_round.md",
+        "artifact_adoption": "adopted_as_evidence_only",
+        "validation": "check_gate_fixtures.py, run_checks.py, check_distribution.py, and git diff --check passed",
+        "hard_blockers": [
+          "remote/GitHub CI current HEAD not verified",
+          "draft is not client/PPT deliverable",
+          "double review incomplete"
+        ],
+        "completion_limit": "local evidence only"
+      },
+      "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT": {
+        "worker_thread_id": "019f33e6-3a59-79a1-bf0c-226261faeb13",
+        "automation_id": "cos",
+        "automation_status": "ACTIVE",
+        "rrule": "FREQ=HOURLY;INTERVAL=6",
+        "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "next_natural_due_at_local": "2026-07-06T07:43:28.193+08:00",
+        "due_status_at_audit": "not_due_yet",
+        "cleanup_decision": "do_not_delete_or_pause",
+        "status": "requires_final_due_window_evidence_before_completion_or_cancellation",
+        "process_boundary": "PID 1233 is not task-owned; do not kill",
+        "dirty_worktree_cleanup_status": "cleanup_blocked"
+      },
+      "still_blocked": [
+        "public release is incomplete",
+        "three-project objective is incomplete",
+        "no remote push or current remote CI proof is recorded",
+        "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
+        "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
+        "cos automation self-recycle must wait for final due-window evidence and objective completion"
+      ]
+    }
   },
   "additional_review_waves_after_stop": true,
   "cross_project_sync_evidence": {
@@ -871,13 +1060,73 @@
       "No remote CI proof exists for the current local HEAD of the Skill, ADCO, or DIR commits recorded here.",
       "DIR live acceptance remains NEEDS_USER and is not satisfied by local validation.",
       "DIR and ADCO client-ready domain deliverables cannot be claimed without DOMAIN_DELIVERABLE_RECEIPT.",
-      "Any public release, push, merge, or publication still requires explicit user authorization."
+      "Any public release, push, merge, or publication still requires explicit user authorization.",
+      "ADCO current local evidence commit is e7f3fd4 but remote/GitHub CI for that HEAD is not verified.",
+      "DIR current local project-state convergence remains local commit 24bc7bb with DOMAIN_DELIVERABLE_RECEIPT not_applicable.",
+      "The cos automation must remain active until final due-window evidence and objective completion are proven."
     ],
     "still_convention_only": [
       "Cross-project routing boundaries are locally hardened and validated, but future organic project dispatches still need receipts to prove the convention is followed.",
       "DIR/ADCO client-ready creative or proposal quality remains convention-only until a valid DOMAIN_DELIVERABLE_RECEIPT and live acceptance evidence exist.",
       "Public release readiness remains convention-only for remote consumers until push, remote CI, and any required publication authorization are completed."
-    ]
+    ],
+    "latest_state_convergence": {
+      "round_id": "2026-07-06-project-state-and-automation-update",
+      "public_release_complete": false,
+      "three_project_objective_complete": false,
+      "remote_push_performed": false,
+      "client_ready_claim": false,
+      "automation_self_recycle_complete": false,
+      "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "worker_thread_id": "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac",
+        "local_commit": "24bc7bb",
+        "final_git_status": "## main...origin/main [ahead 3]",
+        "working_tree": "clean",
+        "validation": "validate_project.py and git diff --check passed",
+        "worker_cleanup_status": "archived",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "completion_limit": "local project state only"
+      },
+      "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "worker_thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
+        "local_commit": "e7f3fd4",
+        "commit_subject": "Adopt ADCO natural domain draft evidence",
+        "final_git_status": "## main...origin/main [ahead 6]",
+        "working_tree": "clean",
+        "artifact": "drafts/domain_tests/outdoor_gear_launch_first_round.md",
+        "artifact_adoption": "adopted_as_evidence_only",
+        "validation": "check_gate_fixtures.py, run_checks.py, check_distribution.py, and git diff --check passed",
+        "hard_blockers": [
+          "remote/GitHub CI current HEAD not verified",
+          "draft is not client/PPT deliverable",
+          "double review incomplete"
+        ],
+        "completion_limit": "local evidence only"
+      },
+      "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT": {
+        "worker_thread_id": "019f33e6-3a59-79a1-bf0c-226261faeb13",
+        "automation_id": "cos",
+        "automation_status": "ACTIVE",
+        "rrule": "FREQ=HOURLY;INTERVAL=6",
+        "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "next_natural_due_at_local": "2026-07-06T07:43:28.193+08:00",
+        "due_status_at_audit": "not_due_yet",
+        "cleanup_decision": "do_not_delete_or_pause",
+        "status": "requires_final_due_window_evidence_before_completion_or_cancellation",
+        "process_boundary": "PID 1233 is not task-owned; do not kill",
+        "dirty_worktree_cleanup_status": "cleanup_blocked"
+      },
+      "still_blocked": [
+        "public release is incomplete",
+        "three-project objective is incomplete",
+        "no remote push or current remote CI proof is recorded",
+        "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
+        "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
+        "cos automation self-recycle must wait for final due-window evidence and objective completion"
+      ]
+    }
   },
   "notes": [
     {
@@ -895,6 +1144,10 @@
     {
       "topic": "release decision boundary",
       "summary": "Full public release and three-project objective remain incomplete. No push was performed. Automation natural long-run/self-recycle still requires final due-window evidence if objective closure or cancellation is required."
+    },
+    {
+      "topic": "latest project state and automation update",
+      "summary": "DIR local state converged at 24bc7bb and ADCO local state converged at e7f3fd4, but these are local evidence only. OPS audit says the cos automation remains active and not self-recycled until final due-window evidence, public release status, and the three-project objective converge."
     }
   ],
   "cross_project_validation_round": {
