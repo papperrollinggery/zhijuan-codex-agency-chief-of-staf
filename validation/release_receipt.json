@@ -349,9 +349,9 @@
       "dispatch_status": "dispatched",
       "receipt_status": "received",
       "adoption_status": "adopted",
-      "cleanup_status": "cleanup_blocked",
+      "cleanup_status": "archived",
       "review_verdict": "PASS",
-      "cleanup_reason": "Worker cleanup is pending main controller archive; this worker cannot archive itself from inside the receipt.",
+      "cleanup_reason": "Main controller read back convergence and archived the worker after adoption.",
       "receipt_summary": "PROJECT_BOUNDARY_COS_FIX_RECEIPT used the correct worker thread id and hardened COS project-boundary rules: main COS direct commands/changed_files/gates/process cleanup are invalid without worker receipt/adoption, cross-project gates must run in target project main COS or target project-bound worker, and Skill self-hardening must go through SKM/DEV worker.",
       "controller_validation": "Validator, activation fixtures, quality gate, release smoke, installed-copy sync, and git diff whitespace check passed after the patch."
     },
@@ -364,11 +364,68 @@
       "dispatch_status": "dispatched",
       "receipt_status": "received",
       "adoption_status": "adopted",
-      "cleanup_status": "cleanup_blocked",
+      "cleanup_status": "archived",
       "review_verdict": "PASS",
-      "cleanup_reason": "Review worker cleanup is pending main controller archive; receipt was read back by main control.",
+      "cleanup_reason": "Main controller read back the independent review verdict and archived the worker after adoption.",
       "receipt_summary": "PROJECT_BOUNDARY_PATCH_REVIEW_RECEIPT returned verdict PASS and confirmed the project-boundary hardening patch, validator, fixture, and quality_gate behavior.",
       "controller_validation": "Main control read the independent review receipt and requested this SKM adoption/commit closeout."
+    },
+    {
+      "thread_id": "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
+      "thread_class": "project_bound_worker",
+      "deliverable": "ADCO COS routing boundary sync",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched_by_adco_project_main_cos",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "project": "ad-creative-orchestrator",
+      "adopted_by_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+      "adopted_commit": "9f2ae62",
+      "changed_files": [
+        "AGENTS.md"
+      ],
+      "receipt_summary": "ADCO project-main COS adopted worker 019f338d-cc9a-7fc2-a1c2-d90c572ce88d as local commit 9f2ae62 Sync ADCO COS routing boundary. Validation passed for PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py, tools/run_checks.py, tools/check_distribution.py, and git diff --check. DOMAIN_DELIVERABLE_RECEIPT is not_applicable; no push or remote CI verification was performed."
+    },
+    {
+      "thread_id": "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
+      "thread_class": "project_bound_worker",
+      "deliverable": "DIR COS routing boundary sync",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched_by_dir_project_main_cos",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "project": "DIR SKILL",
+      "adopted_by_thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+      "adopted_commit": "24bc7bb",
+      "changed_files": [
+        "AGENTS.md",
+        "docs/film-preproduction/project-agents-protocol.md",
+        "scripts/dircreative_project_agents.py",
+        "scripts/validate_project.py"
+      ],
+      "receipt_summary": "DIR project-main COS adopted worker 019f338d-3964-77f0-8a6f-4fa5d5c95ae5 as local commit 24bc7bb Sync COS routing boundaries. The readback branch is codex/p01th09r01-skillskmdirtaskdirroutingsync; this is local evidence only and is not remote publication."
+    },
+    {
+      "thread_id": "019f3393-3a08-78b3-8082-6af9e68d1dda",
+      "thread_class": "handoff_validation_worker",
+      "deliverable": "DIR routing sync cleanup and revalidation",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched_by_dir_project_main_cos",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "PASS",
+      "project": "DIR SKILL",
+      "validated_commit": "24bc7bb",
+      "cleanup_summary": "Found residual task-owned clean worktree /Users/jinjungao/.codex/worktrees/7298/DIR SKILL at the same commit 24bc7bb, then removed it with git worktree remove.",
+      "receipt_summary": "Final DIR revalidation passed with PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py and git diff --check. DOMAIN_DELIVERABLE_RECEIPT is not_applicable; no push or remote CI verification was performed."
     }
   ],
   "release_decision": {
@@ -378,6 +435,109 @@
     "additional_review_wave_reason": "User challenged whether the long-running three-project goal was actually complete after prior evidence showed unverified natural heartbeat and worker-routing failures. The added goal-readiness audit is bounded post-stop evidence collection, not open-ended release review expansion."
   },
   "additional_review_waves_after_stop": true,
+  "cross_project_sync_evidence": {
+    "round_id": "2026-07-06-current-three-project-sync",
+    "status": "local_evidence_recorded",
+    "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+    "remote_push": "not_performed",
+    "projects": [
+      {
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "local_commit": "a822df2",
+        "commit_subject": "Harden COS project-boundary enforcement",
+        "remote_push": "not_performed",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "worker_threads": [
+          {
+            "thread_id": "019f3382-2e19-7300-af88-2adf22eddbc0",
+            "thread_class": "skill_maintainer_worker",
+            "adoption_status": "adopted",
+            "cleanup_status": "archived",
+            "review_verdict": "PASS"
+          },
+          {
+            "thread_id": "019f3387-af55-7522-a24a-18a86ebe9885",
+            "thread_class": "review_worker",
+            "adoption_status": "adopted",
+            "cleanup_status": "archived",
+            "review_verdict": "PASS"
+          }
+        ],
+        "validation_chain": [
+          "python3 scripts/validate_release_receipt.py validation/release_receipt.json",
+          "python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json",
+          "bash scripts/quality_gate.sh .",
+          "bash scripts/release_smoke.sh .",
+          "git diff --check"
+        ],
+        "evidence_summary": "Self Skill hardening is already committed as a822df2 and the SKM/REV workers have converged and been archived."
+      },
+      {
+        "project": "ad-creative-orchestrator",
+        "main_cos_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "worker_thread_id": "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
+        "local_commit": "9f2ae62",
+        "commit_subject": "Sync ADCO COS routing boundary",
+        "remote_push": "not_performed",
+        "remote_ci_current_head": "not_verified",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "changed_files": [
+          "AGENTS.md"
+        ],
+        "validation_commands": [
+          "PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py",
+          "PYTHONDONTWRITEBYTECODE=1 python3 tools/run_checks.py",
+          "PYTHONDONTWRITEBYTECODE=1 python3 tools/check_distribution.py",
+          "git diff --check"
+        ],
+        "adoption_status": "adopted",
+        "cleanup_status": "archived",
+        "evidence_summary": "ADCO project-main COS adopted the worker patch locally. It does not prove remote CI for current HEAD and does not claim a client-ready domain deliverable."
+      },
+      {
+        "project": "DIR SKILL",
+        "main_cos_thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "worker_thread_id": "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
+        "validation_worker_thread_id": "019f3393-3a08-78b3-8082-6af9e68d1dda",
+        "local_commit": "24bc7bb",
+        "commit_subject": "Sync COS routing boundaries",
+        "readback_branch": "codex/p01th09r01-skillskmdirtaskdirroutingsync",
+        "remote_push": "not_performed",
+        "remote_ci_current_head": "not_verified",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
+        "changed_files": [
+          "AGENTS.md",
+          "docs/film-preproduction/project-agents-protocol.md",
+          "scripts/dircreative_project_agents.py",
+          "scripts/validate_project.py"
+        ],
+        "validation_commands": [
+          "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py",
+          "git diff --check"
+        ],
+        "cleanup": {
+          "residual_worktree_removed": true,
+          "removed_worktree": "/Users/jinjungao/.codex/worktrees/7298/DIR SKILL",
+          "removal_basis": "clean task-owned worktree at the same commit 24bc7bb"
+        },
+        "adoption_status": "adopted",
+        "cleanup_status": "archived",
+        "evidence_summary": "DIR project-main COS adopted the worker patch locally and a validation worker removed the residual task-owned worktree before final validation. It does not prove remote publication or live user acceptance."
+      }
+    ],
+    "hard_blockers": [
+      "No remote push has been performed for the three projects in this evidence round.",
+      "No remote CI proof exists for the current local HEAD of the Skill, ADCO, or DIR commits recorded here.",
+      "DIR live acceptance remains NEEDS_USER and is not satisfied by local validation.",
+      "DIR and ADCO client-ready domain deliverables cannot be claimed without DOMAIN_DELIVERABLE_RECEIPT.",
+      "Any public release, push, merge, or publication still requires explicit user authorization."
+    ],
+    "still_convention_only": [
+      "Cross-project routing boundaries are locally hardened and validated, but future organic project dispatches still need receipts to prove the convention is followed.",
+      "DIR/ADCO client-ready creative or proposal quality remains convention-only until a valid DOMAIN_DELIVERABLE_RECEIPT and live acceptance evidence exist.",
+      "Public release readiness remains convention-only for remote consumers until push, remote CI, and any required publication authorization are completed."
+    ]
+  },
   "cross_project_validation_round": {
     "round_id": "2026-07-05-three-project-hardening-recheck",
     "scope": [

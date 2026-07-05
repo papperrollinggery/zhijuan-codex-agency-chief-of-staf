@@ -29,6 +29,32 @@ python3 scripts/validate_release_receipt.py validation/release_receipt.json
 python3 scripts/validate_release_receipt.py evals/release_receipt.valid_no_stuck_review.json
 python3 scripts/validate_release_receipt.py evals/release_receipt.invalid_extra_wave_no_reason.json --expect-invalid
 python3 scripts/validate_release_receipt.py evals/release_receipt.invalid_stuck_review_no_rescue.json --expect-invalid
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+receipt = json.loads(Path("validation/release_receipt.json").read_text(encoding="utf-8"))
+sync = receipt.get("cross_project_sync_evidence", {})
+if sync.get("status") != "local_evidence_recorded":
+    raise SystemExit("cross_project_sync_evidence missing local_evidence_recorded status")
+if sync.get("remote_push") != "not_performed":
+    raise SystemExit("cross_project_sync_evidence remote_push must be not_performed")
+text = json.dumps(sync, ensure_ascii=False)
+for marker in [
+    "a822df2",
+    "9f2ae62",
+    "24bc7bb",
+    "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
+    "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
+    "019f3393-3a08-78b3-8082-6af9e68d1dda",
+    "codex/p01th09r01-skillskmdirtaskdirroutingsync",
+    "/Users/jinjungao/.codex/worktrees/7298/DIR SKILL",
+    "DOMAIN_DELIVERABLE_RECEIPT",
+    "user authorization",
+]:
+    if marker not in text:
+        raise SystemExit(f"cross_project_sync_evidence missing marker: {marker}")
+PY
 activation_receipt="$TMP_ROOT/ACTIVATION_CONTRACT_RECEIPT.json"
 python3 scripts/validate_activation_contract.py . --receipt "$activation_receipt"
 python3 - "$activation_receipt" <<'PY'

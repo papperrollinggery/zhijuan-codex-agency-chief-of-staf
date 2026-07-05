@@ -12,8 +12,8 @@ This receipt is the single release table for dispatch, adoption or rejection, cl
 | `019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0` | review worker | 1 | received | adopted | archived | PASS |
 | `019f23a0-bdf5-79d1-8d2d-5730a27be2ee` | review worker | 2 | missing | rejected | archived | thread_not_converged; bounded rescue |
 | `019f23a4-2d6e-7690-9ae0-78c7a4014151` | review worker | 2 | received | adopted after fix | archived | conditional-go |
-| `019f3382-2e19-7300-af88-2adf22eddbc0` | skill maintainer worker | post-stop-bounded | received | adopted | cleanup_blocked; pending main archive | PASS |
-| `019f3387-af55-7522-a24a-18a86ebe9885` | review worker | post-stop-bounded | received | adopted | cleanup_blocked; pending main archive | PASS |
+| `019f3382-2e19-7300-af88-2adf22eddbc0` | skill maintainer worker | post-stop-bounded | received | adopted | archived | PASS |
+| `019f3387-af55-7522-a24a-18a86ebe9885` | review worker | post-stop-bounded | received | adopted | archived | PASS |
 
 Release review budget:
 
@@ -34,6 +34,14 @@ Stuck review rule:
 
 Round: `2026-07-05-three-project-hardening-recheck`
 
+Current sync evidence: `2026-07-06-current-three-project-sync`
+
+| Project | Adopted evidence | Validation | Limits |
+|---|---|---|---|
+| `zhijuan-codex-agency-chief-of-staf` | local commit `a822df2 Harden COS project-boundary enforcement`; SKM worker `019f3382-2e19-7300-af88-2adf22eddbc0` and REV worker `019f3387-af55-7522-a24a-18a86ebe9885` adopted and archived | `validate_release_receipt.py`, `validate_activation_contract.py`, `quality_gate.sh`, `release_smoke.sh`, `git diff --check` | no remote push in this SKM evidence sync |
+| `ad-creative-orchestrator` | project-main COS `019f2e9d-c7a1-7b83-9b24-05117432c52f` adopted worker `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` as local commit `9f2ae62 Sync ADCO COS routing boundary`; changed `AGENTS.md` | `PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py`, `tools/run_checks.py`, `tools/check_distribution.py`, `git diff --check` all PASS | no push, no remote CI for current local HEAD, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
+| `DIR SKILL` | project-main COS `019f2e3c-93f6-7b40-8616-4945feb79c0d` adopted worker `019f338d-3964-77f0-8a6f-4fa5d5c95ae5`; validation worker `019f3393-3a08-78b3-8082-6af9e68d1dda`; local commit `24bc7bb Sync COS routing boundaries`; branch `codex/p01th09r01-skillskmdirtaskdirroutingsync` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py` PASS and `git diff --check` PASS after removing clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` | no push, no remote CI for current local HEAD, live acceptance still `NEEDS_USER`, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
+
 Current local validation evidence:
 
 | Project | Command | Result |
@@ -50,8 +58,11 @@ Current local validation evidence:
 | `ad-creative-orchestrator` | `python3 tools/run_checks.py` | PASS |
 | `ad-creative-orchestrator` | `python3 tools/check_distribution.py` | PASS |
 | `ad-creative-orchestrator` | `git diff --check` | PASS |
+| `ad-creative-orchestrator` | `PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py; PYTHONDONTWRITEBYTECODE=1 python3 tools/run_checks.py; PYTHONDONTWRITEBYTECODE=1 python3 tools/check_distribution.py; git diff --check` | PASS for local commit `9f2ae62`; no remote CI checked |
+| `DIR SKILL` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py; git diff --check` | PASS for local commit `24bc7bb` after residual worktree cleanup |
 | `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_activation_contract.py .; bash scripts/check_structure.sh .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json; bash scripts/quality_gate.sh .` | PASS after human-readable dispatch summary hardening |
 | `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json; bash scripts/release_smoke.sh .; git diff --check` | PASS after installed-copy sync |
+| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_release_receipt.py validation/release_receipt.json; python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json; bash scripts/quality_gate.sh .; bash scripts/release_smoke.sh .; git diff --check` | PASS chain recorded for local commit `a822df2` |
 
 Project-main thread status:
 
@@ -90,8 +101,11 @@ Project-main thread status:
 | `019f3183-1cb6-7d72-99f5-1be8dfab4096` | `DIR SKILL` | `DOMAIN_DELIVERABLE_RECEIPT` | natural DIR test dispatched execution/review/fix threads, but dispatch receipts lacked `worker_prompt_identity_contract` and the domain receipt omitted worker self `thread_id`; archived and rejected as completion evidence while content remains clue-only |
 | `019f335a-217c-7c93-b847-281bf29d5021` | `zhijuan-codex-agency-chief-of-staf` | `COS_HEARTBEAT_THREE_PROJECT_AUDIT_RECEIPT` | received with correct worker id; adopted as current blocking evidence: three local project gates/status pass, but DIR still lacks live-user acceptance, ADCO remote CI/fresh-clone is not verified in this turn, and the full long goal remains open |
 | `019f335b-4d64-7e42-839b-1d3bc411c7d9` | `zhijuan-codex-agency-chief-of-staf` | `SKM_AUTOMATION_LIFECYCLE_HARDENING_RECEIPT` | received with correct worker id; adopted after controller validation; adds hard gates for due heartbeat dispatch, bounded self-improvement/SKM path during execution, and delete/pause self-recycle evidence when automation goals complete |
-| `019f3382-2e19-7300-af88-2adf22eddbc0` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_COS_FIX_RECEIPT` | received with correct SKM worker id; adopted; review verdict PASS; hardens the rule that COS cannot directly execute tests/gates/process cleanup/file edits, cross-project work must run in the target project main COS or target project-bound worker, and Skill self-hardening must run through SKM/DEV worker; cleanup pending main controller archive |
-| `019f3387-af55-7522-a24a-18a86ebe9885` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_PATCH_REVIEW_RECEIPT` | received; independent REV verdict PASS; adopted; confirms project-boundary hardening patch, validator, fixture, and quality_gate behavior; cleanup pending main controller archive |
+| `019f3382-2e19-7300-af88-2adf22eddbc0` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_COS_FIX_RECEIPT` | received with correct SKM worker id; adopted; review verdict PASS; hardens the rule that COS cannot directly execute tests/gates/process cleanup/file edits, cross-project work must run in the target project main COS or target project-bound worker, and Skill self-hardening must run through SKM/DEV worker; archived after convergence |
+| `019f3387-af55-7522-a24a-18a86ebe9885` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_PATCH_REVIEW_RECEIPT` | received; independent REV verdict PASS; adopted; confirms project-boundary hardening patch, validator, fixture, and quality_gate behavior; archived after convergence |
+| `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` | `ad-creative-orchestrator` | `ADCO_COS_ROUTING_BOUNDARY_SYNC_RECEIPT` | adopted by ADCO project-main COS as local commit `9f2ae62`; changed `AGENTS.md`; local gates PASS; no push, no remote CI, domain deliverable not_applicable |
+| `019f338d-3964-77f0-8a6f-4fa5d5c95ae5` | `DIR SKILL` | `DIR_COS_ROUTING_BOUNDARY_SYNC_RECEIPT` | adopted by DIR project-main COS as local commit `24bc7bb`; changed `AGENTS.md`, `docs/film-preproduction/project-agents-protocol.md`, `scripts/dircreative_project_agents.py`, `scripts/validate_project.py`; branch readback `codex/p01th09r01-skillskmdirtaskdirroutingsync`; no push |
+| `019f3393-3a08-78b3-8082-6af9e68d1dda` | `DIR SKILL` | `DIR_ROUTING_SYNC_CLEANUP_REVALIDATION_RECEIPT` | verified clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` at commit `24bc7bb`, removed it with `git worktree remove`, then reran `validate_project.py` and `git diff --check` PASS |
 
 Automation receipt:
 
@@ -122,10 +136,12 @@ Automation target audit:
 
 Current hard limits:
 
-- No remote push has been performed in this round.
+- No remote push has been performed in this round; no current local HEAD has remote CI proof from this evidence sync.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
-- ADCO local current-HEAD evidence improved: `ADCO_LOCAL_FRESH_CLONE_SMOKE_RECEIPT` confirms fresh-clone and installed-copy smoke pass for local `fa60638`, but remote CI is still not checked because no push was performed and `origin/main` remains `48f2193`.
+- ADCO latest recorded routing-sync evidence is local commit `9f2ae62`; remote CI is still not checked because no push was performed. Earlier `fa60638` fresh-clone evidence remains historical, not current remote-release proof.
+- DIR latest recorded routing-sync evidence is local commit `24bc7bb` on branch `codex/p01th09r01-skillskmdirtaskdirroutingsync`; do not describe it as remotely published.
+- Any public release, push, merge, or publication still requires explicit user authorization.
 - The old ADCO project-main thread could not be steered and was replaced by `019f2e9d-c7a1-7b83-9b24-05117432c52f`.
 - ADCO split adoption implementation and early bounded rescue attempts failed with systemError before receipts; those failed threads are rejected as evidence.
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.

@@ -28,6 +28,18 @@ def as_bool(value: Any, label: str) -> bool:
     return value
 
 
+def require_list(value: Any, label: str) -> list[Any]:
+    if not isinstance(value, list) or not value:
+        fail(f"{label} must be a non-empty list")
+    return value
+
+
+def require_marker(values: list[Any], marker: str, label: str) -> None:
+    marker_lower = marker.lower()
+    if not any(marker_lower in str(value).lower() for value in values):
+        fail(f"{label} missing marker: {marker}")
+
+
 def load(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -199,6 +211,126 @@ def validate_release_decision(data: dict[str, Any], cold: bool, domain: bool) ->
         fail("extra review waves after stop condition require additional_review_wave_reason")
 
 
+def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
+    evidence = data.get("cross_project_sync_evidence")
+    if evidence is None:
+        return
+    if not isinstance(evidence, dict):
+        fail("cross_project_sync_evidence must be an object")
+    if evidence.get("status") != "local_evidence_recorded":
+        fail("cross_project_sync_evidence status must be local_evidence_recorded")
+    if evidence.get("remote_push") != "not_performed":
+        fail("cross_project_sync_evidence remote_push must be not_performed")
+    if evidence.get("DOMAIN_DELIVERABLE_RECEIPT") != "not_applicable":
+        fail("cross_project_sync_evidence DOMAIN_DELIVERABLE_RECEIPT must be not_applicable")
+
+    rows = data.get("unified_release_thread_table", [])
+    row_ids = {str(row.get("thread_id")) for row in rows if isinstance(row, dict)}
+    for thread_id in [
+        "019f3382-2e19-7300-af88-2adf22eddbc0",
+        "019f3387-af55-7522-a24a-18a86ebe9885",
+        "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
+        "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
+        "019f3393-3a08-78b3-8082-6af9e68d1dda",
+    ]:
+        if thread_id not in row_ids:
+            fail(f"cross-project sync evidence missing unified table row for {thread_id}")
+
+    projects = require_list(evidence.get("projects"), "cross_project_sync_evidence.projects")
+    projects_by_name = {str(project.get("project")): project for project in projects if isinstance(project, dict)}
+    expected_commits = {
+        "zhijuan-codex-agency-chief-of-staf": "a822df2",
+        "ad-creative-orchestrator": "9f2ae62",
+        "DIR SKILL": "24bc7bb",
+    }
+    for project, commit in expected_commits.items():
+        row = projects_by_name.get(project)
+        if not isinstance(row, dict):
+            fail(f"cross_project_sync_evidence missing project: {project}")
+        if row.get("local_commit") != commit:
+            fail(f"{project} local_commit must be {commit}")
+        if row.get("remote_push") != "not_performed":
+            fail(f"{project} remote_push must be not_performed")
+        if row.get("DOMAIN_DELIVERABLE_RECEIPT") != "not_applicable":
+            fail(f"{project} DOMAIN_DELIVERABLE_RECEIPT must be not_applicable")
+
+    skill = projects_by_name["zhijuan-codex-agency-chief-of-staf"]
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "validate_release_receipt.py", "skill validation_chain")
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "validate_activation_contract.py", "skill validation_chain")
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "quality_gate.sh", "skill validation_chain")
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "release_smoke.sh", "skill validation_chain")
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "git diff --check", "skill validation_chain")
+    workers = require_list(skill.get("worker_threads"), "skill worker_threads")
+    worker_ids = {str(worker.get("thread_id")) for worker in workers if isinstance(worker, dict)}
+    if worker_ids != {
+        "019f3382-2e19-7300-af88-2adf22eddbc0",
+        "019f3387-af55-7522-a24a-18a86ebe9885",
+    }:
+        fail("skill worker_threads must record SKM and REV worker ids")
+    for worker in workers:
+        if not isinstance(worker, dict):
+            fail("skill worker_threads entries must be objects")
+        require_uuid(str(worker.get("thread_id")), "skill worker thread_id")
+        if worker.get("cleanup_status") != "archived":
+            fail("skill worker cleanup_status must be archived")
+        if worker.get("adoption_status") != "adopted":
+            fail("skill worker adoption_status must be adopted")
+
+    adco = projects_by_name["ad-creative-orchestrator"]
+    require_uuid(str(adco.get("main_cos_thread_id")), "ADCO main_cos_thread_id")
+    require_uuid(str(adco.get("worker_thread_id")), "ADCO worker_thread_id")
+    if adco.get("worker_thread_id") != "019f338d-cc9a-7fc2-a1c2-d90c572ce88d":
+        fail("ADCO worker_thread_id mismatch")
+    require_marker(require_list(adco.get("changed_files"), "ADCO changed_files"), "AGENTS.md", "ADCO changed_files")
+    for marker in [
+        "tools/check_gate_fixtures.py",
+        "tools/run_checks.py",
+        "tools/check_distribution.py",
+        "git diff --check",
+    ]:
+        require_marker(require_list(adco.get("validation_commands"), "ADCO validation_commands"), marker, "ADCO validation_commands")
+    if adco.get("remote_ci_current_head") != "not_verified":
+        fail("ADCO remote_ci_current_head must be not_verified")
+
+    directory = projects_by_name["DIR SKILL"]
+    require_uuid(str(directory.get("main_cos_thread_id")), "DIR main_cos_thread_id")
+    require_uuid(str(directory.get("worker_thread_id")), "DIR worker_thread_id")
+    require_uuid(str(directory.get("validation_worker_thread_id")), "DIR validation_worker_thread_id")
+    if directory.get("worker_thread_id") != "019f338d-3964-77f0-8a6f-4fa5d5c95ae5":
+        fail("DIR worker_thread_id mismatch")
+    if directory.get("validation_worker_thread_id") != "019f3393-3a08-78b3-8082-6af9e68d1dda":
+        fail("DIR validation_worker_thread_id mismatch")
+    if directory.get("readback_branch") != "codex/p01th09r01-skillskmdirtaskdirroutingsync":
+        fail("DIR readback_branch must preserve the local branch name")
+    for marker in [
+        "AGENTS.md",
+        "docs/film-preproduction/project-agents-protocol.md",
+        "scripts/dircreative_project_agents.py",
+        "scripts/validate_project.py",
+    ]:
+        require_marker(require_list(directory.get("changed_files"), "DIR changed_files"), marker, "DIR changed_files")
+    require_marker(require_list(directory.get("validation_commands"), "DIR validation_commands"), "scripts/validate_project.py", "DIR validation_commands")
+    require_marker(require_list(directory.get("validation_commands"), "DIR validation_commands"), "git diff --check", "DIR validation_commands")
+    cleanup = directory.get("cleanup")
+    if not isinstance(cleanup, dict) or cleanup.get("residual_worktree_removed") is not True:
+        fail("DIR cleanup must record residual_worktree_removed true")
+    if cleanup.get("removed_worktree") != "/Users/jinjungao/.codex/worktrees/7298/DIR SKILL":
+        fail("DIR cleanup removed_worktree mismatch")
+
+    hard_blockers = require_list(evidence.get("hard_blockers"), "cross_project_sync_evidence.hard_blockers")
+    for marker in [
+        "No remote push",
+        "remote CI",
+        "DOMAIN_DELIVERABLE_RECEIPT",
+        "DIR live acceptance",
+        "user authorization",
+    ]:
+        require_marker(hard_blockers, marker, "cross_project_sync_evidence.hard_blockers")
+    convention_only = require_list(evidence.get("still_convention_only"), "cross_project_sync_evidence.still_convention_only")
+    for marker in ["routing boundaries", "client-ready", "public release"]:
+        require_marker(convention_only, marker, "cross_project_sync_evidence.still_convention_only")
+
+
 def validate(data: dict[str, Any]) -> None:
     if data.get("receipt_type") != "RELEASE_CONVERGENCE_RECEIPT":
         fail("receipt_type must be RELEASE_CONVERGENCE_RECEIPT")
@@ -207,6 +339,7 @@ def validate(data: dict[str, Any]) -> None:
     cold, domain = validate_review_waves(data, budget)
     validate_unified_table(data)
     validate_release_decision(data, cold, domain)
+    validate_cross_project_sync_evidence(data)
 
 
 def main() -> int:

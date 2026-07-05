@@ -15,5 +15,7 @@ If the user explicitly requests real Codex Threads, worker threads, a complete t
 
 `THREAD_DISPATCH_RECEIPT` 用户可见时必须先输出中文“派发摘要”卡片，至少包含工作线程、职责、读取范围、写入范围、预期回执、身份契约、收尾方式、当前状态；机器 YAML 只能放在摘要之后并标注“机器凭证”。不要只展示英文键值表。
 
+幕僚长主线程不是执行面。除 T0/T1 轻量状态说明，或用户明确禁止 worker 且任务只读外，主 COS 不得直接跑测试、gate、清理进程、修改文件、实现代码或运维清理。跨项目任务必须派给目标项目主 COS 或 target project-bound worker；源 COS 只能读回、采纳、拒绝、归档。优化本 Skill 本身必须派给 Skill维护-SKM / DEV worker；主 COS 误执行产生的 `commands_run`、`changed_files`、`quality_gate.sh`、`release_smoke.sh`、`validate_project.py`、`ps`、`kill` 等只能作为 `cos_main_overexecution` 线索，不能作为完成证据。
+
 For tiny direct-answer tasks, keep the result light. If the Skill was explicitly invoked, still output a compact `COS_BOOT_RECEIPT` and record `thread_dispatch_decision: no_dispatch`.
 <!-- END zhijuan-codex-agency-chief-of-staf routing -->

@@ -809,8 +809,8 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     return not reasons, reasons
 
 
-def validate_activation_fixture(root: Path) -> dict:
-    fixture_path = root / "evals/activation_contract.fixture.json"
+def validate_activation_fixture(root: Path, fixture_path: Path | None = None) -> dict:
+    fixture_path = fixture_path or root / "evals/activation_contract.fixture.json"
     cases = json.loads(read(fixture_path))
     if not isinstance(cases, list) or len(cases) < 4:
         fail("activation contract fixture must contain at least four cases")
@@ -982,7 +982,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    root = Path(args.root)
+    input_path = Path(args.root)
+    activation_fixture_path = None
+    if input_path.is_file():
+        activation_fixture_path = input_path
+        if input_path.name != "activation_contract.fixture.json":
+            fail(f"unsupported activation fixture path: {input_path}")
+        root = input_path.parent.parent
+    else:
+        root = input_path
     skill = read(root / "SKILL.md")
     fm = frontmatter(skill)
     desc = frontmatter_value(fm, "description")
@@ -1082,7 +1090,7 @@ def main() -> int:
         if row["requires_boot_receipt"].lower() != "true":
             fail(f"trigger case must require boot receipt: {row['id']}")
 
-    fixture_summary = validate_activation_fixture(root)
+    fixture_summary = validate_activation_fixture(root, activation_fixture_path)
     blackbox_summary = validate_blackbox_prompt_set(root)
 
     if args.receipt:
