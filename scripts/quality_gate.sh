@@ -39,12 +39,17 @@ grep -q "automation_self_recycle_complete" scripts/validate_release_receipt.py
 grep -q "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT" scripts/validate_release_receipt.py
 grep -q "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT" scripts/validate_release_receipt.py
 grep -q "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT" scripts/validate_release_receipt.py
+grep -q "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT" scripts/validate_release_receipt.py
 grep -q "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac" scripts/validate_release_receipt.py
 grep -q "019f33e7-68eb-76c0-9317-8c81b958c57a" scripts/validate_release_receipt.py
 grep -q "019f33e6-3a59-79a1-bf0c-226261faeb13" scripts/validate_release_receipt.py
+grep -q "019f33fd-5e5b-7d52-8ec8-c518cebec1bd" scripts/validate_release_receipt.py
 grep -q "remote/GitHub CI current HEAD not verified" scripts/validate_release_receipt.py
 grep -q "draft is not client/PPT deliverable" scripts/validate_release_receipt.py
 grep -q "requires_final_due_window_evidence_before_completion_or_cancellation" scripts/validate_release_receipt.py
+grep -q "no_direct_kill_or_rm_without_user_confirmation" validation/release_receipt.json
+grep -q "confirm_no_active_thread_before_rm" validation/release_receipt.json
+grep -q "do_not_clean_without_separate_review" validation/release_receipt.json
 python3 - <<'PY'
 import json
 from pathlib import Path

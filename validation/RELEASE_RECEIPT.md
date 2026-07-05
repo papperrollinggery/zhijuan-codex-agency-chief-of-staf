@@ -52,6 +52,7 @@ Latest state-convergence update: `2026-07-06-project-state-and-automation-update
 | `DIR SKILL` | `DIR_PROJECT_STATE_CONVERGENCE_RECEIPT` | project COS `019f2e3c-93f6-7b40-8616-4945feb79c0d`; worker `019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac`; `main` ff-only merged `24bc7bb`; final `## main...origin/main [ahead 3]`; worktree clean; `validate_project.py` and `git diff --check` passed | local project state only; `DOMAIN_DELIVERABLE_RECEIPT` remains not_applicable |
 | `ad-creative-orchestrator` | `ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT` | project COS `019f2e9d-c7a1-7b83-9b24-05117432c52f`; worker `019f33e7-68eb-76c0-9317-8c81b958c57a`; local commit `e7f3fd4 Adopt ADCO natural domain draft evidence`; final `## main...origin/main [ahead 6]`; worktree clean; local gate/distribution/diff checks passed | draft is evidence-only, not client/PPT-ready; remote/GitHub CI current HEAD and double review remain incomplete |
 | `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT` | OPS worker `019f33e6-3a59-79a1-bf0c-226261faeb13`; `cos` automation ACTIVE; `FREQ=HOURLY;INTERVAL=6`; target `019f2354-f00c-7132-90d7-fb6c26ff2ecf`; next natural due `2026-07-06T07:43:28.193+08:00` | do not delete or pause automation before final due-window evidence; PID `1233` is not task-owned; dirty worktree cleanup remains blocked |
+| `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT` | OPS worker `019f33fd-5e5b-7d52-8ec8-c518cebec1bd`; sampled `2026-07-06 04:34:59-04:35:59 +0800`; related processes `278`; zombies `0`; MCP/Node fanout recorded; tmp cache candidates empty | no direct `kill` or `rm`: PID `1233`/`1514` ownership unproven, five clean Skill worktrees require active-thread confirmation, dirty ADCO worktrees must be preserved or separately reviewed |
 
 Current local validation evidence:
 
@@ -149,6 +150,13 @@ Automation target audit:
 - `target_thread_verified: false`, `unknown`, or unverified target text is now a hard validation failure for heartbeat run receipts; the regression fixture is `heartbeat-run-target-unverified-invalid`.
 - Automation lifecycle is now a hard gate: due heartbeats must dispatch, dispatch pending, report `TOOL_BLOCKED`, or record `thread_not_converged`; in-flight failure-mode fixes must name a bounded self-improvement/SKM patch path; completed automations must delete or pause themselves and record self-recycle evidence.
 
+OPS process/cache sampling:
+
+- Sampling window `2026-07-06 04:34:59-04:35:59 +0800` found `278` related processes and `0` zombies; no tmp cache candidates were identified.
+- PID `1233` Codex app-server showed intermittent/sustained CPU (`20.6%`, `5.4%`, later `30.3%`) and PID `1514` Codex Renderer showed transient high CPU, but neither was proven task-owned; closing/restarting Codex Desktop requires user confirmation.
+- MCP/Node fanout remains broad: `skycomputer_mcp` 44, `xcodebuildmcp_or_child` 40, `opendesign_mcp` 22, `gitnexus_mcp` 22, `node_repl` 22, `generic_node_mcp` 110.
+- Five clean Skill worktree candidates (`72b0`, `d2ea`, `d555`, `daa9`, `fa6a`) may only be removed after confirming no active thread owns them. Dirty ADCO worktrees at `adco-skill-hardening` and `f7b3` are not cleanup candidates.
+
 Current hard limits:
 
 - No remote push has been performed in this round; no current local HEAD has remote CI proof from this evidence sync.
@@ -179,6 +187,7 @@ Current hard limits:
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-06T01:54:49+08:00` the long-running six-hour `cos` automation is not due until `2026-07-06T07:43:28.193+08:00`, so natural-fire completion remains unproven rather than failed.
 - The latest OPS audit still leaves `cos` automation active and not self-recycled: public release is incomplete, the three-project objective is incomplete, and final due-window evidence is still required before completion or cancellation.
+- Latest OPS process/cache sampling found no action safe to run without confirmation: do not kill PID `1233`/`1514`, do not remove clean Skill worktrees until active-thread ownership is checked, and do not clean dirty ADCO worktrees without separate review.
 - Human-readable dispatch summary hardening is validated locally and installed-copy synced; it still needs to be observed in a future organic ADCO/DIR worker dispatch after this patch.
 - Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes from validation; no `adco-check-*` temp dirs remained; cache dirs were removed. Multiple stale `xcodebuildmcp` MCP server pairs were sleeping, so older duplicate pairs were terminated and the newest pair was left running.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

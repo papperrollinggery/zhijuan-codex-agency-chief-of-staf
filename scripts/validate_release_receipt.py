@@ -23,6 +23,7 @@ LATEST_ADCO_MAIN_COS_THREAD_ID = "019f2e9d-c7a1-7b83-9b24-05117432c52f"
 LATEST_ADCO_WORKER_THREAD_ID = "019f33e7-68eb-76c0-9317-8c81b958c57a"
 LATEST_ADCO_LOCAL_COMMIT = "e7f3fd4"
 LATEST_OPS_WORKER_THREAD_ID = "019f33e6-3a59-79a1-bf0c-226261faeb13"
+LATEST_OPS_SAMPLING_WORKER_THREAD_ID = "019f33fd-5e5b-7d52-8ec8-c518cebec1bd"
 
 
 def fail(message: str) -> None:
@@ -290,6 +291,127 @@ def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
         "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT",
     )
 
+    sampling_receipt = convergence.get("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT")
+    if not isinstance(sampling_receipt, dict):
+        fail("latest_project_state_convergence.COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT must be an object")
+    require_equal(
+        sampling_receipt,
+        "worker_thread_id",
+        LATEST_OPS_SAMPLING_WORKER_THREAD_ID,
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT",
+    )
+    require_equal(
+        sampling_receipt,
+        "sampling_window",
+        "2026-07-06 04:34:59-04:35:59 +0800",
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT",
+    )
+    require_equal(sampling_receipt, "related_process_count", 278, "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT")
+    require_equal(sampling_receipt, "zombies_found", 0, "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT")
+    if sampling_receipt.get("safe_to_cleanup_without_user_confirmation") != []:
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.safe_to_cleanup_without_user_confirmation must be empty")
+    require_equal(
+        sampling_receipt,
+        "cleanup_decision",
+        "no_direct_kill_or_rm_without_user_confirmation",
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT",
+    )
+    high_cpu = require_list(
+        sampling_receipt.get("high_cpu_processes"),
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.high_cpu_processes",
+    )
+    high_cpu_pids = {process.get("pid") for process in high_cpu if isinstance(process, dict)}
+    if high_cpu_pids != {1233, 1514}:
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.high_cpu_processes must record PID 1233 and PID 1514")
+    for process in high_cpu:
+        if not isinstance(process, dict):
+            fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.high_cpu_processes entries must be objects")
+        require_equal(
+            process,
+            "ownership_status",
+            "not_proven_task_owned",
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.high_cpu_processes",
+        )
+        require_text_marker(
+            process.get("cleanup_boundary"),
+            "requires_user_confirmation",
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.high_cpu_processes.cleanup_boundary",
+        )
+    fanout = sampling_receipt.get("mcp_node_fanout")
+    if not isinstance(fanout, dict):
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.mcp_node_fanout must be an object")
+    expected_fanout = {
+        "skycomputer_mcp": 44,
+        "xcodebuildmcp_or_child": 40,
+        "opendesign_mcp": 22,
+        "gitnexus_mcp": 22,
+        "node_repl": 22,
+        "generic_node_mcp": 110,
+    }
+    for field, expected in expected_fanout.items():
+        if fanout.get(field) != expected:
+            fail(f"COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.mcp_node_fanout.{field} must be {expected}")
+    clean_worktrees = require_list(
+        sampling_receipt.get("clean_skill_worktree_candidates"),
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.clean_skill_worktree_candidates",
+    )
+    expected_clean_worktrees = {
+        "/Users/jinjungao/.codex/worktrees/72b0/zhijuan-codex-agency-chief-of-staf": "3e66f49",
+        "/Users/jinjungao/.codex/worktrees/d2ea/zhijuan-codex-agency-chief-of-staf": "d970325",
+        "/Users/jinjungao/.codex/worktrees/d555/zhijuan-codex-agency-chief-of-staf": "a822df2",
+        "/Users/jinjungao/.codex/worktrees/daa9/zhijuan-codex-agency-chief-of-staf": "e4066fc",
+        "/Users/jinjungao/.codex/worktrees/fa6a/zhijuan-codex-agency-chief-of-staf": "e524455",
+    }
+    clean_by_path = {
+        str(worktree.get("path")): worktree for worktree in clean_worktrees if isinstance(worktree, dict)
+    }
+    if set(clean_by_path) != set(expected_clean_worktrees):
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.clean_skill_worktree_candidates path set mismatch")
+    for path, head in expected_clean_worktrees.items():
+        worktree = clean_by_path[path]
+        require_equal(worktree, "head", head, "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.clean_skill_worktree_candidates")
+        require_equal(
+            worktree,
+            "git_status",
+            "clean",
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.clean_skill_worktree_candidates",
+        )
+        require_equal(
+            worktree,
+            "cleanup_boundary",
+            "confirm_no_active_thread_before_rm",
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.clean_skill_worktree_candidates",
+        )
+    dirty_worktrees = require_list(
+        sampling_receipt.get("dirty_adco_worktrees"),
+        "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.dirty_adco_worktrees",
+    )
+    dirty_by_path = {
+        str(worktree.get("path")): worktree for worktree in dirty_worktrees if isinstance(worktree, dict)
+    }
+    expected_dirty_worktrees = {
+        "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator": 49,
+        "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator": 3,
+    }
+    if set(dirty_by_path) != set(expected_dirty_worktrees):
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.dirty_adco_worktrees path set mismatch")
+    for path, dirty_entries in expected_dirty_worktrees.items():
+        worktree = dirty_by_path[path]
+        require_equal(
+            worktree,
+            "dirty_entries",
+            dirty_entries,
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.dirty_adco_worktrees",
+        )
+        require_equal(
+            worktree,
+            "cleanup_boundary",
+            "do_not_clean_without_separate_review",
+            "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.dirty_adco_worktrees",
+        )
+    if sampling_receipt.get("tmp_cache_candidates") != []:
+        fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.tmp_cache_candidates must be empty")
+
     still_blocked = require_list(convergence.get("still_blocked"), "latest_project_state_convergence.still_blocked")
     for marker in [
         "public release",
@@ -298,6 +420,7 @@ def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
         "ADCO evidence draft",
         "DOMAIN_DELIVERABLE_RECEIPT",
         "automation self-recycle",
+        "OPS process/cache sampling",
     ]:
         require_marker(still_blocked, marker, "latest_project_state_convergence.still_blocked")
 

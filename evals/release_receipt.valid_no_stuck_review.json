@@ -102,13 +102,87 @@
         "cleanup_decision": "do_not_delete_or_pause",
         "status": "requires_final_due_window_evidence_before_completion_or_cancellation"
       },
+      "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT": {
+        "worker_thread_id": "019f33fd-5e5b-7d52-8ec8-c518cebec1bd",
+        "sampling_window": "2026-07-06 04:34:59-04:35:59 +0800",
+        "related_process_count": 278,
+        "zombies_found": 0,
+        "safe_to_cleanup_without_user_confirmation": [],
+        "high_cpu_processes": [
+          {
+            "pid": 1233,
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_close_or_restart"
+          },
+          {
+            "pid": 1514,
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_kill"
+          }
+        ],
+        "mcp_node_fanout": {
+          "skycomputer_mcp": 44,
+          "xcodebuildmcp_or_child": 40,
+          "opendesign_mcp": 22,
+          "gitnexus_mcp": 22,
+          "node_repl": 22,
+          "generic_node_mcp": 110
+        },
+        "clean_skill_worktree_candidates": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/72b0/zhijuan-codex-agency-chief-of-staf",
+            "head": "3e66f49",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d2ea/zhijuan-codex-agency-chief-of-staf",
+            "head": "d970325",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d555/zhijuan-codex-agency-chief-of-staf",
+            "head": "a822df2",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/daa9/zhijuan-codex-agency-chief-of-staf",
+            "head": "e4066fc",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/fa6a/zhijuan-codex-agency-chief-of-staf",
+            "head": "e524455",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          }
+        ],
+        "dirty_adco_worktrees": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+            "dirty_entries": 49,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+            "dirty_entries": 3,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          }
+        ],
+        "tmp_cache_candidates": [],
+        "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
+      },
       "still_blocked": [
         "public release remains incomplete",
         "three-project objective remains incomplete",
         "remote CI for current HEAD remains unverified",
         "ADCO evidence draft remains non-client-ready",
         "DOMAIN_DELIVERABLE_RECEIPT is still missing for client-ready deliverables",
-        "automation self-recycle remains blocked until final due-window evidence"
+        "automation self-recycle remains blocked until final due-window evidence",
+        "OPS process/cache sampling found no safe kill/rm action without user confirmation"
       ]
     }
   },

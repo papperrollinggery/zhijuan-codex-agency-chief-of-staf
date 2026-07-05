@@ -801,6 +801,30 @@
       "process_safety": "High CPU PID 1233 is not task-owned and must not be killed from this task.",
       "dirty_worktree_cleanup": "cleanup_blocked",
       "receipt_summary": "OPS audit confirmed the cos automation is active, points at the root COS thread, fires every six hours, and was not naturally due at audit time. It must not be deleted or paused until the long-run goal and due-window evidence converge."
+    },
+    {
+      "thread_id": "019f33fd-5e5b-7d52-8ec8-c518cebec1bd",
+      "thread_class": "ops_process_cache_sampling_worker",
+      "deliverable": "COS process and cache cleanup sampling",
+      "wave": "post-stop-bounded",
+      "status": "cleanup_blocked",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_ops_boundary_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NO_SAFE_CLEANUP",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt": "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT",
+      "sampling_window": "2026-07-06 04:34:59-04:35:59 +0800",
+      "related_process_count": 278,
+      "zombies_found": 0,
+      "safe_to_cleanup_without_user_confirmation": [],
+      "requires_user_confirmation": [
+        "close or restart Codex Desktop before handling PID 1233",
+        "remove five clean Skill worktrees only after confirming no active thread owns them",
+        "dirty ADCO worktrees must be preserved or separately reviewed"
+      ],
+      "receipt_summary": "OPS process/cache sampling found no zombies and no safe cleanup candidates. PID 1233 app-server and PID 1514 renderer CPU ownership could not be proven, MCP/Node fanout is broad, five clean Skill worktrees need active-thread confirmation before rm, dirty ADCO worktrees are blocked, and tmp cache candidates are empty."
     }
   ],
   "release_decision": {
@@ -919,13 +943,97 @@
         "process_boundary": "PID 1233 is not task-owned; do not kill",
         "dirty_worktree_cleanup_status": "cleanup_blocked"
       },
+      "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT": {
+        "worker_thread_id": "019f33fd-5e5b-7d52-8ec8-c518cebec1bd",
+        "sampling_window": "2026-07-06 04:34:59-04:35:59 +0800",
+        "related_process_count": 278,
+        "zombies_found": 0,
+        "safe_to_cleanup_without_user_confirmation": [],
+        "high_cpu_processes": [
+          {
+            "pid": 1233,
+            "process": "Codex app-server",
+            "cpu_observed_percent": [
+              20.6,
+              5.4,
+              30.3
+            ],
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_close_or_restart"
+          },
+          {
+            "pid": 1514,
+            "process": "Codex Renderer",
+            "cpu_observed_percent": [
+              "transient_high"
+            ],
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_kill"
+          }
+        ],
+        "mcp_node_fanout": {
+          "skycomputer_mcp": 44,
+          "xcodebuildmcp_or_child": 40,
+          "opendesign_mcp": 22,
+          "gitnexus_mcp": 22,
+          "node_repl": 22,
+          "generic_node_mcp": 110
+        },
+        "clean_skill_worktree_candidates": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/72b0/zhijuan-codex-agency-chief-of-staf",
+            "head": "3e66f49",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d2ea/zhijuan-codex-agency-chief-of-staf",
+            "head": "d970325",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d555/zhijuan-codex-agency-chief-of-staf",
+            "head": "a822df2",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/daa9/zhijuan-codex-agency-chief-of-staf",
+            "head": "e4066fc",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/fa6a/zhijuan-codex-agency-chief-of-staf",
+            "head": "e524455",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          }
+        ],
+        "dirty_adco_worktrees": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+            "dirty_entries": 49,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+            "dirty_entries": 3,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          }
+        ],
+        "tmp_cache_candidates": [],
+        "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
+      },
       "still_blocked": [
         "public release is incomplete",
         "three-project objective is incomplete",
         "no remote push or current remote CI proof is recorded",
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle must wait for final due-window evidence and objective completion"
+        "cos automation self-recycle must wait for final due-window evidence and objective completion",
+        "OPS process/cache sampling found no safe kill/rm action without user confirmation"
       ]
     }
   },
@@ -1118,13 +1226,97 @@
         "process_boundary": "PID 1233 is not task-owned; do not kill",
         "dirty_worktree_cleanup_status": "cleanup_blocked"
       },
+      "COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT": {
+        "worker_thread_id": "019f33fd-5e5b-7d52-8ec8-c518cebec1bd",
+        "sampling_window": "2026-07-06 04:34:59-04:35:59 +0800",
+        "related_process_count": 278,
+        "zombies_found": 0,
+        "safe_to_cleanup_without_user_confirmation": [],
+        "high_cpu_processes": [
+          {
+            "pid": 1233,
+            "process": "Codex app-server",
+            "cpu_observed_percent": [
+              20.6,
+              5.4,
+              30.3
+            ],
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_close_or_restart"
+          },
+          {
+            "pid": 1514,
+            "process": "Codex Renderer",
+            "cpu_observed_percent": [
+              "transient_high"
+            ],
+            "ownership_status": "not_proven_task_owned",
+            "cleanup_boundary": "requires_user_confirmation_before_kill"
+          }
+        ],
+        "mcp_node_fanout": {
+          "skycomputer_mcp": 44,
+          "xcodebuildmcp_or_child": 40,
+          "opendesign_mcp": 22,
+          "gitnexus_mcp": 22,
+          "node_repl": 22,
+          "generic_node_mcp": 110
+        },
+        "clean_skill_worktree_candidates": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/72b0/zhijuan-codex-agency-chief-of-staf",
+            "head": "3e66f49",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d2ea/zhijuan-codex-agency-chief-of-staf",
+            "head": "d970325",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/d555/zhijuan-codex-agency-chief-of-staf",
+            "head": "a822df2",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/daa9/zhijuan-codex-agency-chief-of-staf",
+            "head": "e4066fc",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/fa6a/zhijuan-codex-agency-chief-of-staf",
+            "head": "e524455",
+            "git_status": "clean",
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          }
+        ],
+        "dirty_adco_worktrees": [
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+            "dirty_entries": 49,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          },
+          {
+            "path": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+            "dirty_entries": 3,
+            "cleanup_boundary": "do_not_clean_without_separate_review"
+          }
+        ],
+        "tmp_cache_candidates": [],
+        "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
+      },
       "still_blocked": [
         "public release is incomplete",
         "three-project objective is incomplete",
         "no remote push or current remote CI proof is recorded",
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle must wait for final due-window evidence and objective completion"
+        "cos automation self-recycle must wait for final due-window evidence and objective completion",
+        "OPS process/cache sampling found no safe kill/rm action without user confirmation"
       ]
     }
   },
@@ -1148,6 +1340,10 @@
     {
       "topic": "latest project state and automation update",
       "summary": "DIR local state converged at 24bc7bb and ADCO local state converged at e7f3fd4, but these are local evidence only. OPS audit says the cos automation remains active and not self-recycled until final due-window evidence, public release status, and the three-project objective converge."
+    },
+    {
+      "topic": "OPS process and cache sampling",
+      "summary": "OPS worker 019f33fd-5e5b-7d52-8ec8-c518cebec1bd sampled 2026-07-06 04:34:59-04:35:59 +0800: 278 related processes, no zombies, no tmp cache candidates, no safe cleanup without user confirmation. PID 1233/PID 1514 ownership was not proven, five clean Skill worktrees require active-thread confirmation before rm, and dirty ADCO worktrees must be preserved or separately reviewed."
     }
   ],
   "cross_project_validation_round": {
