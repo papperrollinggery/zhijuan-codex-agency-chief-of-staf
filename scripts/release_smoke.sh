@@ -83,7 +83,11 @@ python3 scripts/pilot_harness.py --root . --out "$PILOT_TMP" >/dev/null
 INSTALLED="$HOME/.agents/skills/zhijuan-codex-agency-chief-of-staf"
 CURRENT="$(pwd -P)"
 INSTALLED_REAL="$(cd "$INSTALLED" 2>/dev/null && pwd -P || true)"
-if [ "${SKIP_INSTALLED_COPY_DIFF:-0}" != "1" ] && [ -d "$INSTALLED" ] && [ "$CURRENT" != "$INSTALLED_REAL" ]; then
+ISOLATED_CODEX_WORKTREE=0
+case "$CURRENT" in
+  "$HOME/.codex/worktrees/"*) ISOLATED_CODEX_WORKTREE=1 ;;
+esac
+if [ "${SKIP_INSTALLED_COPY_DIFF:-0}" != "1" ] && [ "$ISOLATED_CODEX_WORKTREE" != "1" ] && [ -d "$INSTALLED" ] && [ "$CURRENT" != "$INSTALLED_REAL" ]; then
   diff -qr \
     -x .git \
     -x .codex \

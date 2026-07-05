@@ -14,6 +14,9 @@ This receipt is the single release table for dispatch, adoption or rejection, cl
 | `019f23a4-2d6e-7690-9ae0-78c7a4014151` | review worker | 2 | received | adopted after fix | archived | conditional-go |
 | `019f3382-2e19-7300-af88-2adf22eddbc0` | skill maintainer worker | post-stop-bounded | received | adopted | archived | PASS |
 | `019f3387-af55-7522-a24a-18a86ebe9885` | review worker | post-stop-bounded | received | adopted | archived | PASS |
+| `019f339a-6907-7ff3-9dfc-2457e7a8db29` | skill maintainer worker | post-stop-bounded | received | adopted | archived | n/a |
+| `019f33a3-a120-70d1-af52-d3739df4395d` | handoff validation worker | post-stop-bounded | received | adopted | archived | PASS |
+| `019f33a8-9dd3-7741-ab18-025a657c025a` | review worker | post-stop-bounded | received | adopted as blocking evidence | archived | NEEDS_HUMAN |
 
 Release review budget:
 
@@ -38,7 +41,7 @@ Current sync evidence: `2026-07-06-current-three-project-sync`
 
 | Project | Adopted evidence | Validation | Limits |
 |---|---|---|---|
-| `zhijuan-codex-agency-chief-of-staf` | local commit `a822df2 Harden COS project-boundary enforcement`; SKM worker `019f3382-2e19-7300-af88-2adf22eddbc0` and REV worker `019f3387-af55-7522-a24a-18a86ebe9885` adopted and archived | `validate_release_receipt.py`, `validate_activation_contract.py`, `quality_gate.sh`, `release_smoke.sh`, `git diff --check` | no remote push in this SKM evidence sync |
+| `zhijuan-codex-agency-chief-of-staf` | current local commit `e4066fc Record cross-project COS routing evidence`; previous self-hardening commit `a822df2 Harden COS project-boundary enforcement`; SKM worker `019f339a-6907-7ff3-9dfc-2457e7a8db29`; corrected handoff/adoption validation thread `019f33a3-a120-70d1-af52-d3739df4395d`; rebuttal review `019f33a8-9dd3-7741-ab18-025a657c025a` adopted as blocking evidence before this fix | `validate_release_receipt.py`, `validate_activation_contract.py`, `quality_gate.sh`, `release_smoke.sh`, `git diff --check` | no remote push in this SKM evidence sync |
 | `ad-creative-orchestrator` | project-main COS `019f2e9d-c7a1-7b83-9b24-05117432c52f` adopted worker `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` as local commit `9f2ae62 Sync ADCO COS routing boundary`; changed `AGENTS.md` | `PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py`, `tools/run_checks.py`, `tools/check_distribution.py`, `git diff --check` all PASS | no push, no remote CI for current local HEAD, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 | `DIR SKILL` | project-main COS `019f2e3c-93f6-7b40-8616-4945feb79c0d` adopted worker `019f338d-3964-77f0-8a6f-4fa5d5c95ae5`; validation worker `019f3393-3a08-78b3-8082-6af9e68d1dda`; local commit `24bc7bb Sync COS routing boundaries`; branch `codex/p01th09r01-skillskmdirtaskdirroutingsync` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py` PASS and `git diff --check` PASS after removing clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` | no push, no remote CI for current local HEAD, live acceptance still `NEEDS_USER`, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 
@@ -62,7 +65,8 @@ Current local validation evidence:
 | `DIR SKILL` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py; git diff --check` | PASS for local commit `24bc7bb` after residual worktree cleanup |
 | `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_activation_contract.py .; bash scripts/check_structure.sh .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json; bash scripts/quality_gate.sh .` | PASS after human-readable dispatch summary hardening |
 | `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json; bash scripts/release_smoke.sh .; git diff --check` | PASS after installed-copy sync |
-| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_release_receipt.py validation/release_receipt.json; python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json; bash scripts/quality_gate.sh .; bash scripts/release_smoke.sh .; git diff --check` | PASS chain recorded for local commit `a822df2` |
+| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_release_receipt.py validation/release_receipt.json; python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json; bash scripts/quality_gate.sh .; bash scripts/release_smoke.sh .; git diff --check` | historical PASS chain recorded for previous self-hardening commit `a822df2` |
+| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_release_receipt.py validation/release_receipt.json; python3 scripts/validate_activation_contract.py .; python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json; bash scripts/quality_gate.sh .; bash scripts/release_smoke.sh .; git diff --check` | required current validation chain for local commit `e4066fc` and this release-evidence hardening |
 
 Project-main thread status:
 
@@ -106,6 +110,9 @@ Project-main thread status:
 | `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` | `ad-creative-orchestrator` | `ADCO_COS_ROUTING_BOUNDARY_SYNC_RECEIPT` | adopted by ADCO project-main COS as local commit `9f2ae62`; changed `AGENTS.md`; local gates PASS; no push, no remote CI, domain deliverable not_applicable |
 | `019f338d-3964-77f0-8a6f-4fa5d5c95ae5` | `DIR SKILL` | `DIR_COS_ROUTING_BOUNDARY_SYNC_RECEIPT` | adopted by DIR project-main COS as local commit `24bc7bb`; changed `AGENTS.md`, `docs/film-preproduction/project-agents-protocol.md`, `scripts/dircreative_project_agents.py`, `scripts/validate_project.py`; branch readback `codex/p01th09r01-skillskmdirtaskdirroutingsync`; no push |
 | `019f3393-3a08-78b3-8082-6af9e68d1dda` | `DIR SKILL` | `DIR_ROUTING_SYNC_CLEANUP_REVALIDATION_RECEIPT` | verified clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` at commit `24bc7bb`, removed it with `git worktree remove`, then reran `validate_project.py` and `git diff --check` PASS |
+| `019f339a-6907-7ff3-9dfc-2457e7a8db29` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_SYNC_RECEIPT` | adopted as local commit `e4066fc`; this is the current cross-project evidence sync/adoption commit; previous self-hardening remains `a822df2` |
+| `019f33a3-a120-70d1-af52-d3739df4395d` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_ADOPTION_VALIDATION_RECEIPT` | corrected handoff/adoption validation thread for `e4066fc`; adopted and archived |
+| `019f33a8-9dd3-7741-ab18-025a657c025a` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_REBUTTAL_REVIEW_RECEIPT` | verdict `NEEDS_HUMAN`; adopted as blocking evidence because receipt evidence was stale at `a822df2`, cross-project checks were too hard-coded, and README still showed the old English startup example |
 
 Automation receipt:
 

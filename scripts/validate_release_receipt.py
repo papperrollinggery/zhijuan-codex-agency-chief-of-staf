@@ -11,6 +11,11 @@ UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 CONVERGED_VERDICTS = {"PASS", "CONVERGED", "conditional-go", "go"}
 REVIEW_TYPES = {"cold_review", "domain_review", "rebuttal_review", "domain_rebuttal_review"}
 TERMINAL_CLEANUP = {"archived", "cleanup_blocked"}
+SKILL_PREVIOUS_SELF_HARDENING_COMMIT = "a822df2"
+SKILL_LATEST_ADOPTION_COMMIT = "e4066fc"
+SKILL_LATEST_ADOPTION_WORKER_THREAD_ID = "019f339a-6907-7ff3-9dfc-2457e7a8db29"
+SKILL_LATEST_ADOPTION_VALIDATION_THREAD_ID = "019f33a3-a120-70d1-af52-d3739df4395d"
+SKILL_REBUTTAL_REVIEW_THREAD_ID = "019f33a8-9dd3-7741-ab18-025a657c025a"
 
 
 def fail(message: str) -> None:
@@ -232,6 +237,9 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
         "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
         "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
         "019f3393-3a08-78b3-8082-6af9e68d1dda",
+        SKILL_LATEST_ADOPTION_WORKER_THREAD_ID,
+        SKILL_LATEST_ADOPTION_VALIDATION_THREAD_ID,
+        SKILL_REBUTTAL_REVIEW_THREAD_ID,
     ]:
         if thread_id not in row_ids:
             fail(f"cross-project sync evidence missing unified table row for {thread_id}")
@@ -239,7 +247,7 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
     projects = require_list(evidence.get("projects"), "cross_project_sync_evidence.projects")
     projects_by_name = {str(project.get("project")): project for project in projects if isinstance(project, dict)}
     expected_commits = {
-        "zhijuan-codex-agency-chief-of-staf": "a822df2",
+        "zhijuan-codex-agency-chief-of-staf": SKILL_LATEST_ADOPTION_COMMIT,
         "ad-creative-orchestrator": "9f2ae62",
         "DIR SKILL": "24bc7bb",
     }
@@ -255,8 +263,27 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
             fail(f"{project} DOMAIN_DELIVERABLE_RECEIPT must be not_applicable")
 
     skill = projects_by_name["zhijuan-codex-agency-chief-of-staf"]
+    if skill.get("previous_self_hardening_commit") != SKILL_PREVIOUS_SELF_HARDENING_COMMIT:
+        fail("skill previous_self_hardening_commit must preserve a822df2")
+    latest_relation = skill.get("latest_evidence_relation")
+    if not isinstance(latest_relation, dict):
+        fail("skill latest_evidence_relation must be an object")
+    expected_relation = {
+        "previous_self_hardening_commit": SKILL_PREVIOUS_SELF_HARDENING_COMMIT,
+        "adoption_commit": SKILL_LATEST_ADOPTION_COMMIT,
+        "adoption_worker_thread_id": SKILL_LATEST_ADOPTION_WORKER_THREAD_ID,
+        "handoff_adoption_validation_thread_id": SKILL_LATEST_ADOPTION_VALIDATION_THREAD_ID,
+        "rebuttal_review_thread_id": SKILL_REBUTTAL_REVIEW_THREAD_ID,
+        "rebuttal_verdict": "NEEDS_HUMAN",
+    }
+    for field, expected in expected_relation.items():
+        if latest_relation.get(field) != expected:
+            fail(f"skill latest_evidence_relation {field} must be {expected}")
+    if "cross-project evidence sync/adoption commit" not in str(latest_relation.get("adoption_commit_role", "")):
+        fail("skill latest_evidence_relation must describe e4066fc as cross-project evidence sync/adoption commit")
     require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "validate_release_receipt.py", "skill validation_chain")
     require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "validate_activation_contract.py", "skill validation_chain")
+    require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "evals/activation_contract.fixture.json", "skill validation_chain")
     require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "quality_gate.sh", "skill validation_chain")
     require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "release_smoke.sh", "skill validation_chain")
     require_marker(require_list(skill.get("validation_chain"), "skill validation_chain"), "git diff --check", "skill validation_chain")
@@ -265,8 +292,9 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
     if worker_ids != {
         "019f3382-2e19-7300-af88-2adf22eddbc0",
         "019f3387-af55-7522-a24a-18a86ebe9885",
+        SKILL_LATEST_ADOPTION_WORKER_THREAD_ID,
     }:
-        fail("skill worker_threads must record SKM and REV worker ids")
+        fail("skill worker_threads must record self-hardening SKM/REV ids and latest adoption SKM worker id")
     for worker in workers:
         if not isinstance(worker, dict):
             fail("skill worker_threads entries must be objects")
@@ -275,6 +303,27 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
             fail("skill worker cleanup_status must be archived")
         if worker.get("adoption_status") != "adopted":
             fail("skill worker adoption_status must be adopted")
+    validation_threads = require_list(skill.get("validation_threads"), "skill validation_threads")
+    validation_ids = {str(thread.get("thread_id")) for thread in validation_threads if isinstance(thread, dict)}
+    if SKILL_LATEST_ADOPTION_VALIDATION_THREAD_ID not in validation_ids:
+        fail("skill validation_threads must record corrected handoff/adoption validation thread")
+    for thread in validation_threads:
+        if not isinstance(thread, dict):
+            fail("skill validation_threads entries must be objects")
+        require_uuid(str(thread.get("thread_id")), "skill validation thread_id")
+        if thread.get("cleanup_status") != "archived":
+            fail("skill validation thread cleanup_status must be archived")
+        if thread.get("adoption_status") != "adopted":
+            fail("skill validation thread adoption_status must be adopted")
+    rebuttal = skill.get("rebuttal_review")
+    if not isinstance(rebuttal, dict):
+        fail("skill rebuttal_review must be an object")
+    if rebuttal.get("thread_id") != SKILL_REBUTTAL_REVIEW_THREAD_ID:
+        fail("skill rebuttal_review thread_id mismatch")
+    if rebuttal.get("verdict") != "NEEDS_HUMAN":
+        fail("skill rebuttal_review verdict must remain NEEDS_HUMAN")
+    if rebuttal.get("adoption_status") != "adopted_as_blocking_evidence":
+        fail("skill rebuttal_review adoption_status must preserve blocking evidence")
 
     adco = projects_by_name["ad-creative-orchestrator"]
     require_uuid(str(adco.get("main_cos_thread_id")), "ADCO main_cos_thread_id")

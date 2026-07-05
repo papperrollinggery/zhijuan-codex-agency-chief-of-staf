@@ -42,8 +42,15 @@ if sync.get("remote_push") != "not_performed":
 text = json.dumps(sync, ensure_ascii=False)
 for marker in [
     "a822df2",
+    "e4066fc",
     "9f2ae62",
     "24bc7bb",
+    "019f339a-6907-7ff3-9dfc-2457e7a8db29",
+    "019f33a3-a120-70d1-af52-d3739df4395d",
+    "019f33a8-9dd3-7741-ab18-025a657c025a",
+    "previous_self_hardening_commit",
+    "cross-project evidence sync/adoption commit",
+    "handoff_adoption_validation_thread_id",
     "019f338d-cc9a-7fc2-a1c2-d90c572ce88d",
     "019f338d-3964-77f0-8a6f-4fa5d5c95ae5",
     "019f3393-3a08-78b3-8082-6af9e68d1dda",
@@ -54,6 +61,20 @@ for marker in [
 ]:
     if marker not in text:
         raise SystemExit(f"cross_project_sync_evidence missing marker: {marker}")
+PY
+python3 - <<'PY'
+from pathlib import Path
+
+readme = Path("README.md").read_text(encoding="utf-8")
+blocked = [
+    "Expected first visible marker",
+    "skill_loaded: true",
+    "trigger_type: explicit",
+    "thread_role: COS",
+]
+for marker in blocked:
+    if marker in readme:
+        raise SystemExit(f"README contains old English COS startup example marker: {marker}")
 PY
 activation_receipt="$TMP_ROOT/ACTIVATION_CONTRACT_RECEIPT.json"
 python3 scripts/validate_activation_contract.py . --receipt "$activation_receipt"

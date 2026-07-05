@@ -426,6 +426,51 @@
       "validated_commit": "24bc7bb",
       "cleanup_summary": "Found residual task-owned clean worktree /Users/jinjungao/.codex/worktrees/7298/DIR SKILL at the same commit 24bc7bb, then removed it with git worktree remove.",
       "receipt_summary": "Final DIR revalidation passed with PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py and git diff --check. DOMAIN_DELIVERABLE_RECEIPT is not_applicable; no push or remote CI verification was performed."
+    },
+    {
+      "thread_id": "019f339a-6907-7ff3-9dfc-2457e7a8db29",
+      "thread_class": "skill_maintainer_worker",
+      "deliverable": "COS release evidence sync adoption",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "adopted_commit": "e4066fc",
+      "previous_self_hardening_commit": "a822df2",
+      "receipt_summary": "Skill-maintainer worker recorded cross-project evidence sync and adoption as local commit e4066fc. The earlier a822df2 commit remains the previous self-hardening commit, not the latest release evidence commit."
+    },
+    {
+      "thread_id": "019f33a3-a120-70d1-af52-d3739df4395d",
+      "thread_class": "handoff_validation_worker",
+      "deliverable": "COS release evidence handoff/adoption validation",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "archived",
+      "review_verdict": "PASS",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "validated_commit": "e4066fc",
+      "receipt_summary": "Corrected handoff/adoption validation thread for the e4066fc cross-project evidence sync/adoption commit."
+    },
+    {
+      "thread_id": "019f33a8-9dd3-7741-ab18-025a657c025a",
+      "thread_class": "review_worker",
+      "deliverable": "COS release evidence hardening rebuttal review",
+      "wave": "post-stop-bounded",
+      "status": "blocking_findings_adopted",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_blocking_evidence",
+      "cleanup_status": "archived",
+      "review_verdict": "NEEDS_HUMAN",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt_summary": "Rebuttal review found release evidence still stale at a822df2, hard-coded cross-project checks, and an English README startup example. This finding is adopted as blocking evidence for the current hardening patch."
     }
   ],
   "release_decision": {
@@ -443,8 +488,19 @@
     "projects": [
       {
         "project": "zhijuan-codex-agency-chief-of-staf",
-        "local_commit": "a822df2",
-        "commit_subject": "Harden COS project-boundary enforcement",
+        "local_commit": "e4066fc",
+        "commit_subject": "Record cross-project COS routing evidence",
+        "previous_self_hardening_commit": "a822df2",
+        "previous_self_hardening_subject": "Harden COS project-boundary enforcement",
+        "latest_evidence_relation": {
+          "previous_self_hardening_commit": "a822df2",
+          "adoption_commit": "e4066fc",
+          "adoption_commit_role": "cross-project evidence sync/adoption commit",
+          "adoption_worker_thread_id": "019f339a-6907-7ff3-9dfc-2457e7a8db29",
+          "handoff_adoption_validation_thread_id": "019f33a3-a120-70d1-af52-d3739df4395d",
+          "rebuttal_review_thread_id": "019f33a8-9dd3-7741-ab18-025a657c025a",
+          "rebuttal_verdict": "NEEDS_HUMAN"
+        },
         "remote_push": "not_performed",
         "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable",
         "worker_threads": [
@@ -461,16 +517,40 @@
             "adoption_status": "adopted",
             "cleanup_status": "archived",
             "review_verdict": "PASS"
+          },
+          {
+            "thread_id": "019f339a-6907-7ff3-9dfc-2457e7a8db29",
+            "thread_class": "skill_maintainer_worker",
+            "adoption_status": "adopted",
+            "cleanup_status": "archived",
+            "review_verdict": "n/a"
           }
         ],
+        "validation_threads": [
+          {
+            "thread_id": "019f33a3-a120-70d1-af52-d3739df4395d",
+            "thread_class": "handoff_validation_worker",
+            "adoption_status": "adopted",
+            "cleanup_status": "archived",
+            "review_verdict": "PASS"
+          }
+        ],
+        "rebuttal_review": {
+          "thread_id": "019f33a8-9dd3-7741-ab18-025a657c025a",
+          "thread_class": "review_worker",
+          "verdict": "NEEDS_HUMAN",
+          "adoption_status": "adopted_as_blocking_evidence",
+          "cleanup_status": "archived"
+        },
         "validation_chain": [
           "python3 scripts/validate_release_receipt.py validation/release_receipt.json",
+          "python3 scripts/validate_activation_contract.py .",
           "python3 scripts/validate_activation_contract.py evals/activation_contract.fixture.json",
           "bash scripts/quality_gate.sh .",
           "bash scripts/release_smoke.sh .",
           "git diff --check"
         ],
-        "evidence_summary": "Self Skill hardening is already committed as a822df2 and the SKM/REV workers have converged and been archived."
+        "evidence_summary": "Previous self Skill hardening is committed as a822df2. Current cross-project evidence sync/adoption is local commit e4066fc, with SKM worker 019f339a-6907-7ff3-9dfc-2457e7a8db29 and handoff/adoption validation thread 019f33a3-a120-70d1-af52-d3739df4395d recorded."
       },
       {
         "project": "ad-creative-orchestrator",

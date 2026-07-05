@@ -100,13 +100,10 @@ Minimal prompt:
 使用 $zhijuan-codex-agency-chief-of-staf
 ```
 
-Expected first visible marker:
+Expected first visible output:
 
-```yaml
-COS_BOOT_RECEIPT:
-  skill_loaded: true
-  trigger_type: explicit
-  thread_role: COS
+```text
+COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。
 ```
 
 If you want natural-language prompts like “启动幕僚长 / 完整团队 / 真实 Codex Threads” to trigger automatically, keep `agents/openai.yaml` with `policy.allow_implicit_invocation: true` and use the routing snippet in [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) for projects where this workflow should be the default.
