@@ -269,6 +269,21 @@
         "adoption_status": "adopted_as_smoke_evidence",
         "cleanup_status": "archived",
         "receipt_summary": "temporary heartbeat cos-heartbeat-smoke-target-temporary fired at 2026-07-05T03:20:21Z, produced COS_BOOT_RECEIPT and HEARTBEAT_SMOKE_RECEIPT, changed_files empty, commands_run empty, DOMAIN_DELIVERABLE_RECEIPT not_applicable"
+      },
+      {
+        "thread_id": "019f3051-957a-76f1-8cd1-658620da147c",
+        "pending_worktree_id": "local:4f779988-f418-479b-bd19-86e3bad91a51",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "implementation_worker",
+        "expected_receipt": "ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT",
+        "dispatch_status": "dispatched_after_pending_worktree",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "cleanup_blocked",
+        "worktree": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+        "worktree_status": "exists_no_diff",
+        "blocker": "thread materialized and read_thread reported inProgress, but session JSONL contains only session_meta/task_started, no user task payload, no agent output, no worktree diff, and set_thread_archived returned No Codex thread found"
       }
     ],
     "commands_run": [
@@ -341,6 +356,11 @@
         "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
         "command": "git diff --check",
         "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+        "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; wc -l rollout JSONL; set_thread_archived 019f3051...",
+        "result": "THREAD_NOT_CONVERGED; no receipt, no diff, session JSONL has only 2 lines, cleanup_blocked because set_thread_archived could not find the thread"
       }
     ],
     "automation_receipts": [
@@ -393,6 +413,7 @@
       "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
       "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; no split adoption into main is claimed.",
       "ADCO split adoption current-state reviewer 019f3037-5b77-7773-a7c4-0461f2e6f5ce also exceeded the receipt budget and was archived/interrupted without ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT.",
+      "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c materialized with isolated worktree f7b3 but never received or recorded the task payload, produced no receipt and no diff, and could not be archived by set_thread_archived.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no ADCO split-adoption diff is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
       "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but the long-running six-hour cos automation has not yet naturally fired in the active 019f2354-f00c-7132-90d7-fb6c26ff2ecf thread after target correction."
@@ -400,7 +421,7 @@
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
       "create_thread returned a handler error while duplicate threads materialized; duplicate 019f3036-fe20-7a00-b5eb-14ea205bad24 was archived/interrupted and rejected as evidence.",
-      "A transient invalid placeholder THREAD_DISPATCH_RECEIPT with thread_id=pending was emitted during this continuation and is explicitly rejected as evidence; only 019f3048-3210-7f90-85aa-36f220371d68 is valid dispatch evidence.",
+      "Transient invalid placeholder THREAD_DISPATCH_RECEIPT rows with thread_id=pending or dispatch_pending were emitted during continuations and are explicitly rejected as evidence; only rows with a real thread_id or a non-empty pending_worktree_id are valid dispatch evidence.",
       "Project-main COS threads remain open by design; only completed worker/review threads should be archived."
     ]
   }
