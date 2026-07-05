@@ -54,7 +54,7 @@ Project-main thread status:
 |---|---|---|---|
 | `019f2e3c-93f6-7b40-8616-4945feb79c0d` | `DIR SKILL` | `DIR_CURRENT_STATE_RECEIPT` | received; customer-preview gate patch verified |
 | `019f2e3c-9a52-7d70-845a-9db49acbb7bf` | `ad-creative-orchestrator` | `ADCO_CURRENT_STATE_RECEIPT` | blocked then replaced; archived after `send_message_to_thread` returned `no active turn to steer` |
-| `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_PROJECT_COS_CURRENT_RECEIPT` | received; reviewer `019f3037...` marked `thread_not_converged` / archived / rejected evidence; split adoption still blocked; legacy dirty worktree kept open |
+| `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_PROJECT_COS_CURRENT_RECEIPT` | received; reviewer `019f3037...` marked `thread_not_converged` / archived / rejected evidence; later fork rescue adopted partial ThreadOps receipt fixture as `5101dbf`; legacy dirty worktree kept open |
 | `019f2e9c-dafb-7750-ac10-3fdcbf8669b5` | `ad-creative-orchestrator` | `ADCO_DIRTY_WORKTREE_REVIEW_RECEIPT` | received; split adoption recommended; archived |
 | `019f2ea1-bb8b-7da2-825e-dd4e496b292d` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | `thread_not_converged`; systemError; no receipt; archived; temporary worktree no longer present |
 | `019f2eab-ff09-7db3-ab78-16ae6dd383b4` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_RESCUE_RECEIPT` | rescue attempted; systemError; no receipt; archived; temporary worktree no longer present |
@@ -64,7 +64,8 @@ Project-main thread status:
 | `019f3037-5b77-7773-a7c4-0461f2e6f5ce` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT` | no receipt; archived/interrupted as `thread_not_converged`; rejected evidence |
 | `019f3048-3210-7f90-85aa-36f220371d68` | `zhijuan-codex-agency-chief-of-staf` | `HEARTBEAT_TRIGGER_AUDIT_RECEIPT` | received; adopted after heartbeat smoke evidence; archived |
 | `019f3049-354c-7031-a196-2d315e7f7a9f` | `zhijuan-codex-agency-chief-of-staf` | `HEARTBEAT_SMOKE_RECEIPT` | temporary heartbeat target; produced `COS_BOOT_RECEIPT` and `HEARTBEAT_SMOKE_RECEIPT`; archived |
-| `019f3051-957a-76f1-8cd1-658620da147c` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | retry materialized as worktree `f7b3`; no task payload/agent output/receipt/diff; cleanup blocked because archive tool could not find thread |
+| `019f3051-957a-76f1-8cd1-658620da147c` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | retry materialized as worktree `f7b3`; no task payload/agent output/receipt/diff; thread cleanup blocked because archive tool could not find thread; clean filesystem worktree removed |
+| `019f3058-9213-73b3-9c60-a6284b6b77e9` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_FORK_RESCUE_RECEIPT` | received; single-file ThreadOps receipt failure-path fixture adopted into ADCO main as `5101dbf`; archived; temporary worktree removed by archive |
 
 Automation receipt:
 
@@ -84,10 +85,11 @@ Current hard limits:
 - No remote push has been performed in this round.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - The old ADCO project-main thread could not be steered and was replaced by `019f2e9d-c7a1-7b83-9b24-05117432c52f`.
-- ADCO split adoption implementation and bounded rescue both failed with systemError before receipts; no split adoption into main is claimed.
+- ADCO split adoption implementation and early bounded rescue attempts failed with systemError before receipts; those failed threads are rejected as evidence.
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.
-- ADCO split-adoption retry worker `019f3051-957a-76f1-8cd1-658620da147c` materialized, but its rollout JSONL only contains `session_meta` and `task_started`; there is no task payload, receipt, or worktree diff. `set_thread_archived` could not find it, so cleanup is blocked.
-- After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no unreceived split-adoption diff is claimed.
+- ADCO split-adoption retry worker `019f3051-957a-76f1-8cd1-658620da147c` materialized, but its rollout JSONL only contains `session_meta` and `task_started`; there is no task payload, receipt, or worktree diff. `set_thread_archived` could not find it, so thread cleanup is blocked; the clean filesystem worktree `f7b3` was removed manually.
+- ADCO split-adoption fork rescue worker `019f3058-9213-73b3-9c60-a6284b6b77e9` produced a valid receipt. The bounded ThreadOps receipt fixture was adopted into ADCO main as commit `5101dbf Harden ThreadOps receipt gate fixtures`, with `python3 tools/check_gate_fixtures.py`, `python3 tools/run_checks.py`, `python3 tools/check_distribution.py`, and `git diff --check` all passing; its temporary worktree `f436` was removed by thread archive.
+- After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but the long-running six-hour `cos` automation has not yet naturally fired in active thread `019f2354-f00c-7132-90d7-fb6c26ff2ecf` after target correction.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

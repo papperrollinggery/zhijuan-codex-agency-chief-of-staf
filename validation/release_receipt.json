@@ -282,8 +282,27 @@
         "adoption_status": "rejected_evidence",
         "cleanup_status": "cleanup_blocked",
         "worktree": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
-        "worktree_status": "exists_no_diff",
-        "blocker": "thread materialized and read_thread reported inProgress, but session JSONL contains only session_meta/task_started, no user task payload, no agent output, no worktree diff, and set_thread_archived returned No Codex thread found"
+        "worktree_status": "removed_after_verified_no_diff",
+        "worktree_cleanup_status": "manual_removed_after_clean_status",
+        "blocker": "thread materialized and read_thread reported inProgress, but session JSONL contains only session_meta/task_started, no user task payload, no agent output, no worktree diff, and set_thread_archived returned No Codex thread found; filesystem worktree was later removed after git status confirmed no diff"
+      },
+      {
+        "thread_id": "019f3058-9213-73b3-9c60-a6284b6b77e9",
+        "pending_worktree_id": "local:8a4dca46-ed52-4c53-8f77-7a1d0572814a",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "fork_rescue_implementation_worker",
+        "expected_receipt": "ADCO_SPLIT_ADOPTION_FORK_RESCUE_RECEIPT",
+        "dispatch_status": "dispatched_after_pending_worktree",
+        "receipt_status": "received",
+        "status": "done",
+        "adoption_status": "adopted_after_validation",
+        "cleanup_status": "archived",
+        "worktree": "/Users/jinjungao/.codex/worktrees/f436/ad-creative-orchestrator",
+        "worktree_cleanup_status": "removed_by_thread_archive",
+        "adopted_commit": "5101dbf",
+        "receipt_summary": "Added a bounded ThreadOps receipt failure-path fixture in tools/check_gate_fixtures.py; ADCO main passed check_gate_fixtures, run_checks, check_distribution, and git diff --check; worker thread was archived after adoption.",
+        "adopted_from_legacy": "Split-adopted only the gate coverage direction: received execution worker receipts with placeholder proof must block until files_changed, validation_result, dirty_state_impact, adoption_decision, cleanup_actions, and evidence are concrete.",
+        "rejected_from_legacy": "No wholesale dirty worktree adoption; agency directory, broad template sync, README/package mirror changes, and client delivery logic were not copied."
       }
     ],
     "commands_run": [
@@ -358,21 +377,36 @@
         "result": "PASS"
       },
       {
+        "cwd": "/Users/jinjungao/.codex/worktrees/f436/ad-creative-orchestrator",
+        "command": "read_thread 019f3058-9213-73b3-9c60-a6284b6b77e9",
+        "result": "ADCO_SPLIT_ADOPTION_FORK_RESCUE_RECEIPT received; single-file patch validated in worker worktree"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "git apply worker diff; python3 tools/check_gate_fixtures.py; python3 tools/run_checks.py; python3 tools/check_distribution.py; git diff --check; git commit -m 'Harden ThreadOps receipt gate fixtures'",
+        "result": "PASS; committed as 5101dbf"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "set_thread_archived 019f3058-9213-73b3-9c60-a6284b6b77e9",
+        "result": "PASS; cleanup_status=archived; worktree /Users/jinjungao/.codex/worktrees/f436/ad-creative-orchestrator no longer exists"
+      },
+      {
         "cwd": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
-        "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; wc -l rollout JSONL; set_thread_archived 019f3051...",
-        "result": "THREAD_NOT_CONVERGED; no receipt, no diff, session JSONL has only 2 lines, cleanup_blocked because set_thread_archived could not find the thread"
+        "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; wc -l rollout JSONL; set_thread_archived 019f3051...; git worktree remove /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+        "result": "THREAD_NOT_CONVERGED; no receipt, no diff, session JSONL has only 2 lines, thread archive cleanup_blocked because set_thread_archived could not find the thread; filesystem worktree removed after clean status verification"
       }
     ],
     "automation_receipts": [
       {
         "automation_id": "cos",
         "kind": "heartbeat",
-        "name": "COS 三项目硬化收敛心跳",
+        "name": "COS \u4e09\u9879\u76ee\u786c\u5316\u6536\u655b\u5fc3\u8df3",
         "status": "ACTIVE",
         "rrule": "FREQ=HOURLY;INTERVAL=6",
         "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
         "target_thread_verified": true,
-        "target_thread_title": "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000",
+        "target_thread_title": "[P01-TH00-R00] \u5e55\u50da\u957f-COS\uff5c\u4e3b\u63a7\u6c9f\u901a\uff5cTASK-000\uff5cOUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "previous_target_thread_id": "019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
         "previous_target_thread_title": "Weekly Workflow Packaging Audit",
@@ -394,7 +428,7 @@
         "status": "deleted_after_pass",
         "rrule": "FREQ=MINUTELY;INTERVAL=1",
         "target_thread_id": "019f3049-354c-7031-a196-2d315e7f7a9f",
-        "target_thread_title": "[P03-TH15-R01] 心跳靶线程-HBT｜Heartbeat Smoke Target｜TASK-COS-HB｜OUT-SMOKE",
+        "target_thread_title": "[P03-TH15-R01] \u5fc3\u8df3\u9776\u7ebf\u7a0b-HBT\uff5cHeartbeat Smoke Target\uff5cTASK-COS-HB\uff5cOUT-SMOKE",
         "receipt_status": "received",
         "receipt": "HEARTBEAT_SMOKE_RECEIPT",
         "purpose": "Bounded smoke proving a heartbeat prompt that explicitly invokes this Skill produces COS_BOOT_RECEIPT in a target thread.",
@@ -411,10 +445,11 @@
       "Domain deliverable quality for creative/storyboard/proposal/copy/story artifacts remains not claimed without DOMAIN_DELIVERABLE_RECEIPT.",
       "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer.",
       "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
-      "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; no split adoption into main is claimed.",
+      "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; those threads are not adoption evidence.",
       "ADCO split adoption current-state reviewer 019f3037-5b77-7773-a7c4-0461f2e6f5ce also exceeded the receipt budget and was archived/interrupted without ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT.",
-      "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c materialized with isolated worktree f7b3 but never received or recorded the task payload, produced no receipt and no diff, and could not be archived by set_thread_archived.",
-      "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no ADCO split-adoption diff is claimed or adopted.",
+      "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c materialized with isolated worktree f7b3 but never received or recorded the task payload, produced no receipt and no diff, and could not be archived by set_thread_archived; its clean filesystem worktree was removed manually.",
+      "ADCO split adoption fork rescue worker 019f3058-9213-73b3-9c60-a6284b6b77e9 produced a valid receipt and the bounded gate fixture was adopted as 5101dbf, but this is a partial ThreadOps validation hardening, not a claim that all legacy dirty worktree material has been ported.",
+      "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
       "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but the long-running six-hour cos automation has not yet naturally fired in the active 019f2354-f00c-7132-90d7-fb6c26ff2ecf thread after target correction."
     ],
