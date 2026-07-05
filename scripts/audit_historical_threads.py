@@ -68,6 +68,64 @@ MISSING_CWD_TERMS = [
     "worktree no longer exists",
 ]
 
+TARGET_PROJECT_TERMS = [
+    "/Users/jinjungao/work/ad-creative-orchestrator",
+    "/Users/jinjungao/work/DIR SKILL",
+    "ad-creative-orchestrator",
+    "DIR SKILL",
+    "三项目",
+    "跨项目",
+]
+
+DIRECT_EXECUTION_TERMS = [
+    "commands_run:",
+    "changed_files:",
+    "tests_passed:",
+    "quality_gate.sh",
+    "release_smoke.sh",
+    "validate_project.py",
+    "check_gate_fixtures.py",
+    "check_distribution.py",
+    "run_checks.py",
+    "git diff --check",
+    "ps -",
+    "pgrep",
+    "kill ",
+    "pkill",
+    "我已实现",
+    "我已修复",
+    "我修改了",
+    "我跑了",
+    "我清理了",
+]
+
+AUTOMATION_LIFECYCLE_TERMS = [
+    "heartbeat",
+    "automation",
+    "自动化",
+    "心跳",
+    "due_now",
+    "overdue",
+    "automation_goal_status: complete",
+    "automation_complete: true",
+    "目标已完成",
+]
+
+NATURAL_TEST_GIVEAWAY_TERMS = [
+    "请派发 worker",
+    "派发 worker",
+    "worker thread",
+    "thread id",
+    "receipt",
+    "cleanup",
+    "COS_BOOT_RECEIPT",
+    "THREAD_DISPATCH_RECEIPT",
+    "$zhijuan-codex-agency-chief-of-staf",
+    "幕僚长",
+    "真实 Codex Threads",
+    "完整团队",
+]
+
 
 def read_text(path: Path, max_bytes: int) -> str:
     if not path.exists() or not path.is_file():
@@ -163,6 +221,52 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
         categories.append("title_receipt_metadata_requires_readback")
     if contains_any(text, SELF_EXECUTION_COMPLAINTS):
         categories.append("main_thread_self_execution_complaint")
+    if contains_any(text, DIRECT_EXECUTION_TERMS) and (
+        has_boot or contains_any(text, SKILL_TERMS) or contains_any(first_visible, ["COS", "幕僚长"])
+    ):
+        categories.append("cos_main_overexecution")
+    if contains_any(text, TARGET_PROJECT_TERMS) and contains_any(text, DIRECT_EXECUTION_TERMS):
+        categories.append("source_cos_direct_target_execution")
+    if contains_any(text, AUTOMATION_LIFECYCLE_TERMS):
+        has_run_receipt = "HEARTBEAT_RUN_RECEIPT" in text or "COS_HEARTBEAT_RUN_RECEIPT" in text
+        has_dispatch_outcome = "dispatch_outcome:" in text
+        has_self_recycle = "self_recycle_status:" in text
+        complete_claim = contains_any(
+            text,
+            [
+                "automation_goal_status: complete",
+                "automation_complete: true",
+                "目标已完成",
+                "automation lifecycle complete",
+                "自动化已完成",
+            ],
+        )
+        complete_has_recycle = re.search(r"self_recycle_status:\s*(deleted|paused)", text)
+        due_claim = contains_any(text, ["due_now", "overdue", "到期", "已到期"])
+        due_has_action = contains_any(
+            text,
+            [
+                "dispatch_outcome: dispatched",
+                "dispatch_outcome: dispatch_pending",
+                "dispatch_outcome: tool_blocked",
+                "dispatch_outcome: thread_not_converged",
+                "TOOL_BLOCKED",
+                "THREAD_DISPATCH_RECEIPT",
+            ],
+        )
+        if (
+            not has_run_receipt
+            or not has_dispatch_outcome
+            or not has_self_recycle
+            or (complete_claim and not complete_has_recycle)
+            or (due_claim and not due_has_action)
+        ):
+            categories.append("automation_lifecycle_missing_evidence")
+    if contains_any(first_visible, ["自然测试", "自然业务测试", "blackbox", "黑盒"]) and contains_any(
+        first_visible + "\n" + text,
+        NATURAL_TEST_GIVEAWAY_TERMS,
+    ):
+        categories.append("natural_test_prompt_overdisclosure")
     if contains_any(text, HISTORY_AUDIT_CHALLENGES) and not contains_any(
         text,
         [

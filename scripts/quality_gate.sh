@@ -168,6 +168,10 @@ required = {
     "cross_project_routing_requires_agents_snippet",
     "main_thread_self_execution_complaint",
     "history_audit_not_triggered",
+    "source_cos_direct_target_execution",
+    "cos_main_overexecution",
+    "automation_lifecycle_missing_evidence",
+    "natural_test_prompt_overdisclosure",
 }
 missing = required - categories
 if missing:
