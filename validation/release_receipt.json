@@ -167,6 +167,19 @@
       "cleanup_status": "archived",
       "review_verdict": "n/a",
       "receipt_summary": "Temporary heartbeat run receipt smoke fired twice and produced COS_HEARTBEAT_RUN_RECEIPT, but the receipt used root thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf instead of smoke target 019f3090-c370-7952-91a9-ce3ca910e4ee, with target_thread_verified=false. Rejected as progress evidence and adopted only as a regression fixture."
+    },
+    {
+      "thread_id": "019f30a0-cf3c-77a1-8681-4609c1927c0f",
+      "thread_class": "heartbeat_smoke_target",
+      "deliverable": "strict heartbeat run receipt target verification",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "heartbeat_triggered",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_strict_smoke_evidence",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "receipt_summary": "Strict temporary heartbeat target emitted COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f30a0-cf3c-77a1-8681-4609c1927c0f, target_thread_verified=true, matching title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, and HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT. Temporary automation was deleted and the target thread archived. This proves the stricter prompt shape can produce valid run evidence, but does not replace the long-running cos natural-fire acceptance."
     }
   ],
   "release_decision": {
@@ -432,6 +445,19 @@
       "review_verdict": "n/a",
       "receipt_quality_note": "Temporary heartbeat run receipt smoke fired twice, but the emitted COS_HEARTBEAT_RUN_RECEIPT used root thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf as target_thread_id while the actual smoke target was 019f3090-c370-7952-91a9-ce3ca910e4ee, and it explicitly set target_thread_verified=false.",
       "receipt_summary": "Rejected as heartbeat run evidence; adopted only as a regression fixture and validator hardening so target_thread_verified=false or unverified target readback is now invalid."
+    },
+    {
+      "thread_id": "019f30a0-cf3c-77a1-8681-4609c1927c0f",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "thread_class": "heartbeat_run_receipt_smoke_target",
+      "expected_receipt": "COS_HEARTBEAT_RUN_RECEIPT",
+      "dispatch_status": "heartbeat_triggered",
+      "receipt_status": "received",
+      "status": "done",
+      "adoption_status": "adopted_as_strict_smoke_evidence",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "receipt_summary": "Temporary strict heartbeat run receipt smoke produced COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true and matching target id/title/cwd. It was explicitly thread-forbidden, so dispatch_required=false and dispatch_outcome=not_required_user_forbid_threads are expected for this smoke only."
     }
   ],
     "commands_run": [
@@ -581,6 +607,11 @@
         "result": "PASS; cos heartbeat target remains 019f2354-f00c-7132-90d7-fb6c26ff2ecf, prompt now explicitly requires COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true and target id/title/cwd, updated_at 2026-07-05T12:49:24.944+08:00, next natural due 2026-07-05T18:49:24.944+08:00"
       },
       {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "create_thread 019f30a0-cf3c-77a1-8681-4609c1927c0f; set_thread_title; create temporary heartbeat cos-heartbeat-strict-run-receipt-smoke-temporary; wait one trigger; read_thread 019f30a0-cf3c-77a1-8681-4609c1927c0f; delete temporary heartbeat; set_thread_archived",
+        "result": "PASS; target emitted COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true, matching target id/title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT status done; temporary automation deleted and target thread archived"
+      },
+      {
         "cwd": "/Users/jinjungao/work/DIR SKILL",
         "command": "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py; git diff --check; git status --short --branch",
         "result": "PASS; working tree clean; main...origin/main ahead 1"
@@ -664,6 +695,28 @@
           "codex_app.set_thread_archived 019f3090-c370-7952-91a9-ce3ca910e4ee",
           "python3 scripts/validate_activation_contract.py ."
         ]
+      },
+      {
+        "automation_id": "cos-heartbeat-strict-run-receipt-smoke-temporary",
+        "kind": "heartbeat",
+        "name": "COS heartbeat strict run receipt smoke temporary",
+        "status": "deleted_after_pass",
+        "rrule": "FREQ=MINUTELY;INTERVAL=1",
+        "target_thread_id": "019f30a0-cf3c-77a1-8681-4609c1927c0f",
+        "target_thread_title": "[P03-TH21-R01] 心跳靶线程-HBT｜Strict Run Receipt Smoke｜TASK-HB-RUN2｜OUT-SMOKE",
+        "receipt_status": "received",
+        "receipt": "COS_HEARTBEAT_RUN_RECEIPT",
+        "purpose": "Bounded positive smoke for the stricter heartbeat run receipt contract with explicit target id/title/cwd.",
+        "observed_result": "The heartbeat output used target_thread_id 019f30a0-cf3c-77a1-8681-4609c1927c0f, target_thread_verified=true, matching target title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, and emitted HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT.",
+        "adoption": "adopted_as_strict_smoke_evidence; does_not_replace_natural_cos_heartbeat_acceptance",
+        "verified_by": [
+          "codex_app.create_thread 019f30a0-cf3c-77a1-8681-4609c1927c0f",
+          "codex_app.set_thread_title 019f30a0-cf3c-77a1-8681-4609c1927c0f",
+          "codex_app.automation_update create cos-heartbeat-strict-run-receipt-smoke-temporary",
+          "codex_app.read_thread 019f30a0-cf3c-77a1-8681-4609c1927c0f",
+          "codex_app.automation_update delete cos-heartbeat-strict-run-receipt-smoke-temporary",
+          "codex_app.set_thread_archived 019f30a0-cf3c-77a1-8681-4609c1927c0f"
+        ]
       }
     ],
     "hard_blocks": [
@@ -681,6 +734,7 @@
       "Bounded rescue reviewer 019f3075-a3e9-7660-9813-dc39a8cb0d04 was dispatched after adding COS_WORKER_BYPASS and did not emit COS_BOOT_RECEIPT. It was initially interrupted by coordinator error while active, then unarchived and resumed; it produced THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT with complete_ready=false.",
       "Skill-maintainer worker 019f3084-0e9b-7900-8724-6db0121cf919 added heartbeat run receipt hardening, but its self-reported thread_id was unknown; adoption used controller readback for the real thread id and main-worktree validation.",
       "Temporary heartbeat run receipt smoke target 019f3090-c370-7952-91a9-ce3ca910e4ee fired twice but emitted target_thread_verified=false and used root thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf instead of the actual target; it is rejected as progress evidence and now covered by heartbeat-run-target-unverified-invalid.",
+      "Strict heartbeat run receipt smoke target 019f30a0-cf3c-77a1-8681-4609c1927c0f produced a valid COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true after the prompt included explicit target id/title/cwd, but this remains a bounded smoke and does not prove the long-running cos automation naturally fired in the root COS thread.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
       "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T12:33:00+08:00 the long-running six-hour cos automation is not due until 2026-07-05T17:18:47.347+08:00, so natural-fire completion remains unproven rather than failed."
@@ -690,6 +744,7 @@
       "COS_WORKER_BYPASS is now encoded in the Skill, AGENTS routing snippet, role prompts, and activation fixtures. The live rescue reviewer verified the direction by not emitting COS_BOOT_RECEIPT and later returning a readiness receipt, but the receipt still blocks goal completion on natural heartbeat, ADCO legacy dirty evidence, and missing domain receipts.",
       "HEARTBEAT_RUN_RECEIPT/COS_HEARTBEAT_RUN_RECEIPT hardens future heartbeat runs, but the current six-hour cos natural fire is still not proven until the next due window is read back from the target thread.",
       "The new heartbeat run receipt smoke proves the stronger receipt marker can be emitted, but it also proved unverified target readback can be misreported by the model. Release evidence therefore requires validator-enforced target_thread_verified=true and target metadata readback, not self-report alone.",
+      "The strict positive smoke used an explicit target id/title/cwd in the automation prompt, so it verifies the prompt shape and receipt schema rather than independently proving the model can discover target metadata without being given it.",
       "create_thread returned a handler error while duplicate threads materialized; duplicate 019f3036-fe20-7a00-b5eb-14ea205bad24 was archived/interrupted and rejected as evidence.",
       "Transient invalid placeholder THREAD_DISPATCH_RECEIPT rows with thread_id=pending or dispatch_pending were emitted during continuations and are explicitly rejected as evidence; only rows with a real thread_id or a non-empty pending_worktree_id are valid dispatch evidence.",
       "Project-main COS threads remain open by design; only completed worker/review threads should be archived."
