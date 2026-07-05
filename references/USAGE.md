@@ -63,6 +63,7 @@ Codex automation heartbeat 只执行 automation prompt。若自动化 prompt 没
 
 - 需要 COS heartbeat 时，automation prompt 必须保留 `使用 $zhijuan-codex-agency-chief-of-staf`，或目标上下文必须有 AGENTS routing shim；输出应先出现 `COS_BOOT_RECEIPT`。
 - T4/T5 heartbeat 不能只在同线程“检查一下”；必须真实派发 worker，或在缺工具时输出 `TOOL_BLOCKED`。
+- 到期 heartbeat 是硬门槛：必须真实派发、`dispatch_pending`、`TOOL_BLOCKED` 或 `thread_not_converged`；运行中发现失败模式必须进入 bounded self-improvement/SKM patch path；目标完成后必须 delete 或 pause automation 并记录 self-recycle evidence。
 - 只发送固定一句话的 heartbeat 是 plain emitter，不需要也不应出现 `COS_BOOT_RECEIPT`。
 - 声称 Heartbeat/Automation 已启用时，必须给出 `automation_prompt` 文本/路径加 `prompt_contains_skill_invocation: true`，或明确的 `agents_routing_evidence` / `AGENTS routing shim`；裸 `AGENTS.md` 提及、未检查 AGENTS.md、没有 prompt evidence 的启用声称按 invalid 处理。
 - 声称 Heartbeat/Automation 已启用时，还必须给出 `target_thread_id` 和目标线程读回证据（如 `target_thread_verified: true`、`target_thread_title`、`target_thread_cwd`）。目标指向旧线程或无关项目时，即使 prompt 含 `$zhijuan-codex-agency-chief-of-staf` 也按配置错误处理。

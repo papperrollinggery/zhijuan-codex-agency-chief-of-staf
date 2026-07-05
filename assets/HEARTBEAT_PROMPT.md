@@ -13,6 +13,7 @@ Automation activation contract:
 - Any claim that Heartbeat/Automation is enabled must cite evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`; a bare `AGENTS.md` mention is not evidence.
 - Any claim that Heartbeat/Automation is enabled must also cite target readback: `target_thread_id`, `target_thread_verified: true`, and at least one readback field such as `target_thread_title` or `target_thread_cwd`. A heartbeat aimed at an unrelated historical thread is misconfigured even when the prompt invokes the Skill.
 - Enabling automation is not run evidence. Every T4/T5 heartbeat run must output `COS_HEARTBEAT_RUN_RECEIPT` or `HEARTBEAT_RUN_RECEIPT` with `target_thread_id` readback, `current_due_status`, `dispatch_required`, `dispatch_outcome`, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and `next_due_or_next_check`.
+- Automation lifecycle is a hard gate: when the heartbeat is due, it must either produce real dispatch evidence or `TOOL_BLOCKED`; when it finds a repeated failure mode during execution, it must enter bounded self-improvement through `assets/SELF_IMPROVEMENT_TEMPLATE.md`, `assets/PATCH_PROPOSAL_TEMPLATE.md`, or Skill维护-SKM; when the automation goal is complete, it must delete or pause itself and record self-recycle evidence.
 - `target_thread_verified: false`, `unknown`, or "未验证" is blocking evidence, not a partial pass. If the heartbeat run cannot verify its target thread, set `current_due_status: unknown | misconfigured` and a blocking `dispatch_outcome`; do not copy `source_thread_id` or a historical thread id into `target_thread_id`.
 - Natural heartbeat acceptance must compare current time with `next_natural_due_at_local`. Before the due time, the verdict is `NOT_DUE`; do not treat an in-progress or user-triggered target turn as heartbeat `FAIL`.
 
@@ -61,9 +62,14 @@ COS_HEARTBEAT_RUN_RECEIPT:
   target_thread_cwd: ""
   current_due_status: due_now | not_due | overdue | misconfigured | unknown
   dispatch_required: true | false
-  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_not_due | not_required_goal_complete | not_required_user_forbid_threads
   thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
   stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  self_improvement_status: not_needed | needed | patch_proposed | patched | blocked
+  self_improvement_path: not_applicable | assets/SELF_IMPROVEMENT_TEMPLATE.md | assets/PATCH_PROPOSAL_TEMPLATE.md | Skill维护-SKM | TOOL_BLOCKED
+  self_improvement_evidence: ""
+  self_recycle_status: not_complete | deleted | paused | blocked
+  self_recycle_evidence: ""
   next_due_or_next_check: ""
 
 ## Heartbeat

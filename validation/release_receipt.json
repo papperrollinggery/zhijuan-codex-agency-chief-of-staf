@@ -281,6 +281,34 @@
       "receipt_summary": "DIR natural test triggered COS, execution, review, bounded fix, and second review. The content can be used as a quality clue, but the worker identity contract gap prevents counting it as completion evidence under the hardened release rules.",
       "controller_validation": "Controller read DIR main, execution worker, and review worker, archived both workers, and added hard validation for worker_prompt_identity_contract plus dispatch prompt identity text.",
       "content_clue_status": "usable_after_independent_verification_only"
+    },
+    {
+      "thread_id": "019f335a-217c-7c93-b847-281bf29d5021",
+      "thread_class": "review_worker",
+      "deliverable": "2026-07-06 three-project heartbeat audit",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "archived",
+      "review_verdict": "NEEDS_HUMAN",
+      "receipt_summary": "COS_HEARTBEAT_THREE_PROJECT_AUDIT_RECEIPT used the correct worker thread id. It verified COS, DIR, and ADCO local gates/status, found DIR still lacks live-user-acceptance evidence, ADCO remote CI/fresh-clone remains unverified in this turn, and natural heartbeat completion is not enough to close the full long goal.",
+      "controller_validation": "Controller read back the worker thread, adopted the current blocking gaps, and did not claim domain/client-ready completion."
+    },
+    {
+      "thread_id": "019f335b-4d64-7e42-839b-1d3bc411c7d9",
+      "thread_class": "implementation_worker",
+      "deliverable": "automation lifecycle hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_after_validation",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "receipt_summary": "SKM_AUTOMATION_LIFECYCLE_HARDENING_RECEIPT used the correct worker thread id and added heartbeat lifecycle gates: due heartbeat dispatch requirement, bounded self-improvement/SKM path for in-flight failure fixes, and delete/pause self-recycle evidence for completed automations.",
+      "controller_validation": "Controller read back the worker receipt, applied the 9-file diff to main, and independently reran validate_activation_contract.py and quality_gate.sh."
     }
   ],
   "release_decision": {

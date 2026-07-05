@@ -160,13 +160,20 @@ COS_HEARTBEAT_RUN_RECEIPT:
   target_thread_cwd: ""
   current_due_status: due_now | not_due | overdue | misconfigured | unknown
   dispatch_required: true | false
-  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_not_due | not_required_goal_complete | not_required_user_forbid_threads
   thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
   stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  self_improvement_status: not_needed | needed | patch_proposed | patched | blocked
+  self_improvement_path: not_applicable | assets/SELF_IMPROVEMENT_TEMPLATE.md | assets/PATCH_PROPOSAL_TEMPLATE.md | Skill维护-SKM | TOOL_BLOCKED
+  self_improvement_evidence: ""
+  self_recycle_status: not_complete | deleted | paused | blocked
+  self_recycle_evidence: ""
   next_due_or_next_check: ""
 ```
 
 启用 automation 只证明定时器或配置存在，不证明本次已推进、已派发或已收敛。每次 T4/T5 heartbeat run 必须输出 `HEARTBEAT_RUN_RECEIPT` 或 `COS_HEARTBEAT_RUN_RECEIPT`，并记录目标线程 readback、当前 due 状态、是否需要派发、派发结果、`THREAD_DISPATCH_RECEIPT` 或 `TOOL_BLOCKED`、卡住/救援判断、下一次 due 或检查时间。如果 `dispatch_required: true` 但没有真实派发回执，必须写 `dispatch_outcome: tool_blocked` + `TOOL_BLOCKED`，或写 `dispatch_outcome: thread_not_converged` + `thread_not_converged`；不得只说 heartbeat active / enabled / will arrange workers。
+
+Automation 生命周期是硬门槛：`current_due_status: due_now | overdue` 时必须真实 dispatch / `dispatch_pending` / `TOOL_BLOCKED` / `thread_not_converged`，不能写成普通检查；执行期间发现重复失败、routing 漏洞、receipt 漏字段、worker 身份错误等失败模式时，必须记录 `self_improvement_status` 并进入有界 self-improvement/SKM patch path（`assets/SELF_IMPROVEMENT_TEMPLATE.md`、`assets/PATCH_PROPOSAL_TEMPLATE.md` 或 Skill维护-SKM），不能只说“后续优化”；目标完成后必须自我回收 automation，记录 `self_recycle_status: deleted | paused` 与 `self_recycle_evidence`（automation id、delete/pause 回执或配置读回）。声称 automation complete 但没有 delete/pause evidence 的回执无效。
 
 `target_thread_verified: false`、`unknown`、空值或标题里写“未验证”不能作为 heartbeat run 证据。无法通过当前上下文或 thread readback 核验目标线程时，必须把本次 run 记为 `current_due_status: unknown | misconfigured`，并输出阻断状态；不得把 `source_thread_id`、历史主线程 ID、或猜测 ID 填进 `target_thread_id` 后声称本次 run 已收敛。
 

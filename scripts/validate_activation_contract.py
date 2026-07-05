@@ -299,6 +299,9 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
         "current_due_status",
         "dispatch_required",
         "dispatch_outcome",
+        "self_improvement_status",
+        "self_improvement_path",
+        "self_recycle_status",
         "stuck_rescue_decision",
         "next_due_or_next_check",
     }
@@ -316,6 +319,10 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
 
     dispatch_required = first_field_value(output, "dispatch_required").lower()
     dispatch_outcome = first_field_value(output, "dispatch_outcome").lower()
+    due_status = first_field_value(output, "current_due_status").lower()
+    self_improvement_status = first_field_value(output, "self_improvement_status").lower()
+    self_improvement_path = first_field_value(output, "self_improvement_path")
+    self_recycle_status = first_field_value(output, "self_recycle_status").lower()
     if target_verified and target_verified != "true" and dispatch_outcome in {
         "dispatched",
         "dispatch_pending",
@@ -347,6 +354,47 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
         "not_required_user_forbid_threads",
     }:
         reasons.append("heartbeat run receipt dispatch_outcome is not actionable")
+    if due_status in {"due_now", "overdue"} and dispatch_outcome not in {
+        "dispatched",
+        "dispatch_pending",
+        "thread_dispatched",
+        "tool_blocked",
+        "blocked",
+        "thread_not_converged",
+    }:
+        reasons.append("due heartbeat must dispatch or TOOL_BLOCKED/thread_not_converged")
+    if due_status in {"due_now", "overdue"} and dispatch_required != "true":
+        reasons.append("due heartbeat cannot mark dispatch_required false")
+    failure_mode_markers = [
+        "failure_mode_detected: true",
+        "failure_mode:",
+        "运行中修复",
+        "in-flight fix",
+        "running fix",
+        "self-improvement required",
+    ]
+    if any(marker in output for marker in failure_mode_markers):
+        if self_improvement_status not in {"needed", "patch_proposed", "patched", "blocked"}:
+            reasons.append("heartbeat failure-mode fix lacks self_improvement_status")
+        if self_improvement_path in {"", "not_applicable"}:
+            reasons.append("heartbeat failure-mode fix lacks bounded self-improvement path")
+    if self_improvement_status in {"needed", "patch_proposed", "patched"}:
+        if self_improvement_path in {"", "not_applicable"}:
+            reasons.append("self_improvement_status requires bounded self-improvement path")
+        if not has_nonempty_field(output, "self_improvement_evidence"):
+            reasons.append("self_improvement_status requires self_improvement_evidence")
+    complete_markers = [
+        "automation_goal_status: complete",
+        "automation_complete: true",
+        "automation lifecycle complete",
+        "自动化目标完成",
+        "自动化已完成",
+    ]
+    if any(marker in output for marker in complete_markers):
+        if self_recycle_status not in {"deleted", "paused"}:
+            reasons.append("automation complete requires self_recycle_status deleted or paused")
+        if not has_nonempty_field(output, "self_recycle_evidence"):
+            reasons.append("automation complete requires self_recycle_evidence")
     return reasons
 
 
@@ -705,6 +753,10 @@ def validate_activation_fixture(root: Path) -> dict:
         "automation-enabled-with-target-thread-valid",
         "heartbeat-active-no-run-receipt-invalid",
         "heartbeat-run-target-unverified-invalid",
+        "heartbeat-due-no-dispatch-invalid",
+        "heartbeat-running-fix-no-self-improvement-invalid",
+        "automation-complete-no-self-recycle-invalid",
+        "automation-lifecycle-complete-valid",
         "role-worker-bypass-valid",
         "role-worker-bypass-source-thread-id-invalid",
         "natural-heartbeat-before-due-fail-invalid",

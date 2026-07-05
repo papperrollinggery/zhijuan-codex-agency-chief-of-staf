@@ -80,12 +80,14 @@ Project-main thread status:
 | `019f3182-c1c7-7fd2-8f0e-75a73cbc5c7a` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_REVIEW_RECEIPT` | natural ADCO test dispatched a worker, but receipt copied main thread `019f2e9d...`; archived and rejected as completion evidence; adopted only as worker prompt identity hardening input |
 | `019f3184-c626-73b0-9757-72bc3d0e48cf` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_RESCUE_RECEIPT` | bounded rescue receipt used the correct worker thread id after the prompt explicitly named it; archived; adopted for routing-test evidence only, not client-ready creative output |
 | `019f3183-1cb6-7d72-99f5-1be8dfab4096` | `DIR SKILL` | `DOMAIN_DELIVERABLE_RECEIPT` | natural DIR test dispatched execution/review/fix threads, but dispatch receipts lacked `worker_prompt_identity_contract` and the domain receipt omitted worker self `thread_id`; archived and rejected as completion evidence while content remains clue-only |
+| `019f335a-217c-7c93-b847-281bf29d5021` | `zhijuan-codex-agency-chief-of-staf` | `COS_HEARTBEAT_THREE_PROJECT_AUDIT_RECEIPT` | received with correct worker id; adopted as current blocking evidence: three local project gates/status pass, but DIR still lacks live-user acceptance, ADCO remote CI/fresh-clone is not verified in this turn, and the full long goal remains open |
+| `019f335b-4d64-7e42-839b-1d3bc411c7d9` | `zhijuan-codex-agency-chief-of-staf` | `SKM_AUTOMATION_LIFECYCLE_HARDENING_RECEIPT` | received with correct worker id; adopted after controller validation; adds hard gates for due heartbeat dispatch, bounded self-improvement/SKM path during execution, and delete/pause self-recycle evidence when automation goals complete |
 
 Automation receipt:
 
 | Automation | Kind | Status | Target thread | Purpose |
 |---|---|---|---|---|
-| `cos` | heartbeat | ACTIVE | `019f2354-f00c-7132-90d7-fb6c26ff2ecf` | continue three-project COS hardening every 6 hours with current-state checks, gates/tests, receipt cleanup, and no remote push |
+| `cos` | heartbeat | ACTIVE | `019f2354-f00c-7132-90d7-fb6c26ff2ecf` | continue three-project COS hardening every 6 hours with current-state checks, gates/tests, dispatch evidence, bounded self-improvement, receipt cleanup, self-recycle on goal completion, and no remote push |
 
 Natural heartbeat acceptance:
 
@@ -106,6 +108,7 @@ Automation target audit:
 - Installed copy drift was resolved with `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json`, followed by `bash scripts/release_smoke.sh .` passing without `SKIP_INSTALLED_COPY_DIFF`.
 - Heartbeat run evidence is now hardened with `COS_HEARTBEAT_RUN_RECEIPT` / `HEARTBEAT_RUN_RECEIPT`: automation enablement alone no longer counts as a run; every T4/T5 heartbeat must record target readback, due status, dispatch requirement/outcome, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and next due/check.
 - `target_thread_verified: false`, `unknown`, or unverified target text is now a hard validation failure for heartbeat run receipts; the regression fixture is `heartbeat-run-target-unverified-invalid`.
+- Automation lifecycle is now a hard gate: due heartbeats must dispatch, dispatch pending, report `TOOL_BLOCKED`, or record `thread_not_converged`; in-flight failure-mode fixes must name a bounded self-improvement/SKM patch path; completed automations must delete or pause themselves and record self-recycle evidence.
 
 Current hard limits:
 

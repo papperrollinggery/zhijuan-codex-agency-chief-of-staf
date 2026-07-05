@@ -275,6 +275,9 @@ grep -q "T4/T5 heartbeat COS output lacks HEARTBEAT_RUN_RECEIPT/COS_HEARTBEAT_RU
 grep -q "heartbeat run receipt missing dispatch_outcome" scripts/validate_activation_contract.py
 grep -q "heartbeat run receipt target_thread_verified is not true" scripts/validate_activation_contract.py
 grep -q "unverified heartbeat target cannot have a non-blocking dispatch_outcome" scripts/validate_activation_contract.py
+grep -q "due heartbeat must dispatch or TOOL_BLOCKED/thread_not_converged" scripts/validate_activation_contract.py
+grep -q "heartbeat failure-mode fix lacks bounded self-improvement path" scripts/validate_activation_contract.py
+grep -q "automation complete requires self_recycle_evidence" scripts/validate_activation_contract.py
 grep -q "worker_receipt_poll_limit" SKILL.md
 grep -q "worker_receipt_poll_interval_seconds" SKILL.md
 grep -q "worker_startup_grace_seconds" SKILL.md
@@ -300,6 +303,14 @@ grep -q "target_thread_verified" assets/HEARTBEAT_PROMPT.md
 grep -q "COS_HEARTBEAT_RUN_RECEIPT" assets/HEARTBEAT_PROMPT.md
 grep -q "COS_HEARTBEAT_RUN_RECEIPT" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
 grep -q "dispatch_outcome" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
+grep -q "self_improvement_status" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
+grep -q "self_recycle_status" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
+grep -q "Automation lifecycle is a release gate" README.md
+grep -q "Automation 生命周期是硬门槛" SKILL.md
+grep -q "heartbeat-due-no-dispatch-invalid" evals/activation_contract.fixture.json
+grep -q "heartbeat-running-fix-no-self-improvement-invalid" evals/activation_contract.fixture.json
+grep -q "automation-complete-no-self-recycle-invalid" evals/activation_contract.fixture.json
+grep -q "automation-lifecycle-complete-valid" evals/activation_contract.fixture.json
 grep -q "bare \`AGENTS.md\` mention is not evidence" README.md
 grep -q "Automation enablement is not proof that a heartbeat advanced work" README.md
 grep -q "Every T4/T5 heartbeat run must output" references/ACTIVATION_PROTOCOL.md

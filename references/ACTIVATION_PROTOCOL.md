@@ -124,6 +124,7 @@ Heartbeat/Automation contract:
 7. If `dispatch_required: true` but the heartbeat cannot dispatch a worker, the run receipt must say `dispatch_outcome: tool_blocked` with `TOOL_BLOCKED`, or `dispatch_outcome: thread_not_converged` with `thread_not_converged`. "Heartbeat active" without run receipt and dispatch outcome is invalid.
 8. `target_thread_verified: false`, `unknown`, blank values, or "未验证" text are invalid run evidence. If the heartbeat cannot verify the target thread, record `current_due_status: unknown | misconfigured` and a blocking outcome instead of filling `target_thread_id` with a `source_thread_id`, historical main thread id, or guess.
 9. Natural heartbeat acceptance must respect the due window. If `current_time` is before the configured `next_natural_due_at_local`, the acceptance verdict is `NOT_DUE`; do not classify a user-triggered or in-progress target-thread turn as heartbeat `FAIL`. Only after the due window may missing `COS_HEARTBEAT_RUN_RECEIPT` become `FAIL` / `thread_not_converged`.
+10. Automation lifecycle is part of the run contract. A due heartbeat must dispatch, dispatch pending, report `TOOL_BLOCKED`, or record `thread_not_converged`; a due heartbeat with no dispatch is invalid. If the run finds a repeated failure mode or claims an in-flight fix, it must record a bounded self-improvement/SKM patch path. If the automation goal is complete, it must delete or pause the automation and record self-recycle evidence.
 
 Machine-readable heartbeat run receipt:
 
@@ -135,9 +136,14 @@ COS_HEARTBEAT_RUN_RECEIPT:
   target_thread_cwd: ""
   current_due_status: due_now | not_due | overdue | misconfigured | unknown
   dispatch_required: true | false
-  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_not_due | not_required_goal_complete | not_required_user_forbid_threads
   thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
   stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  self_improvement_status: not_needed | needed | patch_proposed | patched | blocked
+  self_improvement_path: not_applicable | assets/SELF_IMPROVEMENT_TEMPLATE.md | assets/PATCH_PROPOSAL_TEMPLATE.md | Skill维护-SKM | TOOL_BLOCKED
+  self_improvement_evidence: ""
+  self_recycle_status: not_complete | deleted | paused | blocked
+  self_recycle_evidence: ""
   next_due_or_next_check: ""
 ```
 
