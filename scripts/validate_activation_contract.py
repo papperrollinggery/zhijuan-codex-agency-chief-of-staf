@@ -104,6 +104,52 @@ def is_plain_one_line_emitter(text: str) -> bool:
     ) or any(marker in text for marker in ["只发送一句话", "只发一句话", "其他什么都不要做"])
 
 
+def is_role_worker_bypass_prompt(text: str) -> bool:
+    role_markers = [
+        "审查官-REV",
+        "执行线程",
+        "开发执行-DEV",
+        "技能侦察-SKS",
+        "Agent侦察-AGS",
+        "救援官-RSC",
+        "合成官-SYN",
+        "Skill维护-SKM",
+        "review_worker",
+        "implementation_worker",
+        "rescue_worker",
+        "scout_worker",
+    ]
+    bypass_markers = [
+        "COS_WORKER_BYPASS: true",
+        "不要加载或扮演完整幕僚长-COS Skill",
+        "不要扮演幕僚长",
+        "do not act as Chief-of-Staff",
+        "do not re-dispatch",
+        "do not redispatch",
+    ]
+    direct_output_markers = [
+        "输出 Review Packet",
+        "输出 Result Packet",
+        "输出指定 receipt",
+        "output the requested packet",
+        "output the requested receipt",
+        "_RECEIPT",
+    ]
+    return (
+        any(marker in text for marker in role_markers)
+        and any(marker in text for marker in bypass_markers)
+        and any(marker in text for marker in direct_output_markers)
+    )
+
+
+def expected_worker_receipt_marker(case: dict, prompt: str) -> str:
+    explicit = str(case.get("expected_worker_receipt", "")).strip()
+    if explicit:
+        return explicit
+    match = re.search(r"\b([A-Z][A-Z0-9_]{3,}_RECEIPT)\b", prompt)
+    return match.group(1) if match else ""
+
+
 def claims_heartbeat_automation_enabled(output: str) -> bool:
     return bool(
         re.search(
@@ -172,11 +218,24 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         and is_plain_one_line_emitter(prompt)
         and not has_explicit_skill_invocation(prompt)
     )
+    worker_bypass = bool(case.get("worker_bypass")) or is_role_worker_bypass_prompt(prompt)
     if "requires_cos_boot" in case:
         requires_cos_boot = bool(case.get("requires_cos_boot"))
     else:
-        requires_cos_boot = not plain_one_line_heartbeat
+        requires_cos_boot = not plain_one_line_heartbeat and not worker_bypass
     reasons: list[str] = []
+    if worker_bypass:
+        if requires_cos_boot:
+            reasons.append("role-specific worker bypass cannot require COS boot")
+        if "COS_BOOT_RECEIPT" in output:
+            reasons.append("role-specific worker bypass must not emit COS_BOOT_RECEIPT")
+        receipt_marker = expected_worker_receipt_marker(case, prompt)
+        if receipt_marker and receipt_marker not in output:
+            reasons.append(f"role-specific worker bypass missing expected receipt: {receipt_marker}")
+        elif not receipt_marker and not any(
+            marker in output for marker in ["REVIEW_PACKET", "RESULT_PACKET", "_RECEIPT"]
+        ):
+            reasons.append("role-specific worker bypass missing packet or receipt output")
     if explicit_skill_heartbeat and not requires_cos_boot:
         reasons.append("heartbeat automation prompt explicitly invokes Skill but fixture marks COS boot optional")
         requires_cos_boot = True
@@ -370,6 +429,8 @@ def validate_activation_fixture(root: Path) -> dict:
         "automation-enabled-bare-agents-md-invalid",
         "automation-enabled-no-target-thread-evidence-invalid",
         "automation-enabled-with-target-thread-valid",
+        "role-worker-bypass-valid",
+        "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",
         "valid-pending-worktree-dispatch",
     }
@@ -534,9 +595,24 @@ def main() -> int:
         fail("thread dispatch receipt template missing marker")
 
     routing = read(root / "references/AGENTS_ROUTING_SNIPPET.md")
-    for phrase in ["真实 Codex Threads", "TOOL_BLOCKED", "COS_BOOT_RECEIPT"]:
+    for phrase in ["真实 Codex Threads", "TOOL_BLOCKED", "COS_BOOT_RECEIPT", "COS_WORKER_BYPASS"]:
         if phrase not in routing:
             fail(f"AGENTS routing snippet missing {phrase}")
+    role_prompt_files = [
+        "assets/AGENT_SCOUT_PROMPT.md",
+        "assets/ARCHIVIST_PROMPT.md",
+        "assets/EXECUTOR_PROMPT.md",
+        "assets/GOAL_STEWARD_PROMPT.md",
+        "assets/PLANNER_PROMPT.md",
+        "assets/RESCUE_PROMPT.md",
+        "assets/REVIEWER_PROMPT.md",
+        "assets/SKILL_MAINTAINER_PROMPT.md",
+        "assets/SKILL_SCOUT_PROMPT.md",
+        "assets/SYNTHESIZER_PROMPT.md",
+    ]
+    for rel in role_prompt_files:
+        if "COS_WORKER_BYPASS: true" not in read(root / rel):
+            fail(f"{rel} missing COS_WORKER_BYPASS marker")
 
     eval_path = root / "evals/activation.prompts.csv"
     rows = list(csv.DictReader(eval_path.open(encoding="utf-8", newline="")))

@@ -20,6 +20,7 @@ Release review budget:
 - `review_receipt_poll_limit`: 3
 - Every added review wave requires `add_review_wave_reason`.
 - After one cold review and one domain or rebuttal review converge, stop adding reviewers unless `additional_review_wave_reason` explains why the current evidence is insufficient.
+- Post-stop bounded goal-readiness audit reason: user challenged whether the long-running three-project goal was actually complete after prior evidence showed unverified natural heartbeat and worker-routing failures. This audit is bounded evidence collection, not open-ended release reviewer expansion.
 
 Stuck review rule:
 
@@ -67,6 +68,8 @@ Project-main thread status:
 | `019f3051-957a-76f1-8cd1-658620da147c` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | retry materialized as worktree `f7b3`; no task payload/agent output/receipt/diff; thread cleanup blocked because archive tool could not find thread; clean filesystem worktree removed |
 | `019f3058-9213-73b3-9c60-a6284b6b77e9` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_FORK_RESCUE_RECEIPT` | received; single-file ThreadOps receipt failure-path fixture adopted into ADCO main as `5101dbf`; archived; temporary worktree removed by archive |
 | `019f3065-dd2a-7df0-beaf-8f9fbc780742` | `ad-creative-orchestrator` | `ADCO_LEGACY_DIRTY_DIFF_DISPOSITION_RECEIPT_CORRECTED` | received after correcting thread id; legacy branch has no commits ahead of main; `adopt_now=none`; disposition `evidence_only_keep_open`; archived |
+| `019f306b-5652-7322-9ac2-ecdd651fae2f` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` | no receipt; booted COS/no_dispatch despite role-specific reviewer prompt; archived as `thread_not_converged`; rejected evidence; rescued by `019f3075...` |
+| `019f3075-a3e9-7660-9813-dc39a8cb0d04` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` | received after unarchive/convergence follow-up; did not emit `COS_BOOT_RECEIPT`; verdict `complete_ready=false`; archived; adopted after current-fact correction |
 
 Automation receipt:
 
@@ -98,6 +101,8 @@ Current hard limits:
 - ADCO split-adoption retry worker `019f3051-957a-76f1-8cd1-658620da147c` materialized, but its rollout JSONL only contains `session_meta` and `task_started`; there is no task payload, receipt, or worktree diff. `set_thread_archived` could not find it, so thread cleanup is blocked; the clean filesystem worktree `f7b3` was removed manually.
 - ADCO split-adoption fork rescue worker `019f3058-9213-73b3-9c60-a6284b6b77e9` produced a valid receipt. The bounded ThreadOps receipt fixture was adopted into ADCO main as commit `5101dbf Harden ThreadOps receipt gate fixtures`, with `python3 tools/check_gate_fixtures.py`, `python3 tools/run_checks.py`, `python3 tools/check_distribution.py`, and `git diff --check` all passing; its temporary worktree `f436` was removed by thread archive.
 - ADCO legacy dirty disposition reviewer `019f3065-dd2a-7df0-beaf-8f9fbc780742` concluded `adopt_now=none`: the legacy branch has no commits ahead of main, main is ahead by 3 commits, and the remaining dirty diff is `evidence_only_keep_open` rather than safe migration material. The first receipt had a self-id mismatch and was corrected before adoption as evidence.
+- Goal-readiness reviewer `019f306b-5652-7322-9ac2-ecdd651fae2f` did not produce `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT`; it emitted COS boot/no-dispatch behavior instead of executing the review worker task. This is now covered by `COS_WORKER_BYPASS` rules and activation fixtures, but the original thread is rejected evidence.
+- Bounded rescue reviewer `019f3075-a3e9-7660-9813-dc39a8cb0d04` was dispatched after updating the project routing block and did not emit `COS_BOOT_RECEIPT`, confirming the bypass direction. It was initially interrupted by coordinator error while active, then unarchived and resumed; it produced `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` with `complete_ready=false` and was archived.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T11:47:27+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T17:18:47.347+08:00`, so natural-fire completion remains unproven rather than failed.

@@ -71,6 +71,31 @@ If a tool returns only `pendingWorktreeId`, record `status: dispatch_pending` an
 
 Do not fabricate placeholder ids. `thread_id: "pending"`, `thread_id: "unknown"`, `thread_id: "TBD"`, `thread_id: "same-thread"`, and empty placeholder ids are invalid dispatch evidence. If a title update has not happened yet, record `title_update_blocked`; do not invent `dispatcher_set_pending` or `title_pending`.
 
+## Role-Specific Worker Bypass
+
+Chief-of-Staff routing must not consume the workers it creates.
+
+If the current prompt is explicitly addressed to a role-specific worker such as 审查官-REV, 执行线程/开发执行-DEV, 技能侦察-SKS, Agent侦察-AGS, 救援官-RSC, 合成官-SYN, or Skill维护-SKM, and it contains `COS_WORKER_BYPASS: true` or equivalent instructions like "do not act as Chief-of-Staff", "do not re-dispatch", and "output the requested packet/receipt directly", then this is not a Chief-of-Staff activation.
+
+Required worker behavior:
+
+1. Do not output `COS_BOOT_RECEIPT`.
+2. Do not re-classify the task.
+3. Do not create more threads unless the worker role explicitly requires a Delegation Packet.
+4. Run the requested read/write/check work within its scope.
+5. Output the requested Result Packet, Review Packet, or named `*_RECEIPT`.
+
+If a role-specific worker only emits `COS_BOOT_RECEIPT` or stops at `thread_dispatch_decision: no_dispatch` without the requested worker receipt, the coordinator must record:
+
+```yaml
+thread_not_converged:
+  reason: role_specific_worker_booted_cos_instead_of_executing
+adoption_status: rejected_evidence
+cleanup_status: archived | cleanup_blocked
+```
+
+Then dispatch a bounded rescue worker with the same bypass marker, or report `TOOL_BLOCKED` / `NEEDS_HUMAN` if rescue also fails.
+
 Heartbeat note: Codex automations execute the automation prompt. They do not automatically load this Skill just because the Skill contains Heartbeat rules. To make a heartbeat run the Chief-of-Staff flow, include `使用 $zhijuan-codex-agency-chief-of-staf` in the automation prompt or install the AGENTS routing shim in the heartbeat target project/thread context. A prompt that says "do nothing else" must not be rewritten by the Skill into a COS run.
 
 Heartbeat/Automation contract:

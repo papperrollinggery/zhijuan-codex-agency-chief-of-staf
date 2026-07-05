@@ -114,6 +114,24 @@
     "output": "Heartbeat automation active.\nautomation_prompt_path: /Users/example/.codex/automations/cos/automation.toml\nprompt_contains_skill_invocation: true\ntarget_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\ntarget_thread_verified: true\ntarget_thread_title: \"[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000\"\ntarget_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\n"
   },
   {
+    "id": "role-worker-bypass-valid",
+    "expected_valid": true,
+    "requires_cos_boot": false,
+    "worker_bypass": true,
+    "expected_worker_receipt": "THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT",
+    "prompt": "你是审查官-REV。\nCOS_WORKER_BYPASS: true\n不要加载或扮演完整幕僚长-COS Skill，不要重分级，不要再派发。请直接读取证据并输出 THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT。",
+    "output": "THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT:\n  thread_id: \"019f306b-5652-7322-9ac2-ecdd651fae2f\"\n  status: done\n  commands_run:\n    - git status --short --branch\n  complete_ready: false\n  blocking_gaps:\n    - natural heartbeat not due yet\n  recommended_next_action: wait for natural heartbeat due window\n  DOMAIN_DELIVERABLE_RECEIPT: not_applicable\n"
+  },
+  {
+    "id": "role-worker-bypass-cos-only-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "worker_bypass": true,
+    "expected_worker_receipt": "THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT",
+    "prompt": "你是审查官-REV。\nCOS_WORKER_BYPASS: true\n不要加载或扮演完整幕僚长-COS Skill，不要重分级，不要再派发。请直接读取证据并输出 THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T1\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Read-only worker should not dispatch.\"\n"
+  },
+  {
     "id": "valid-real-dispatch",
     "expected_valid": true,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Complex review requires a real worker.\"\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2d92-193e-7a12-8c12-4e19d4c5e264\"\n  thread_class: review_worker\n  read_scope: README.md\n  write_scope: none\n  expected_receipt: WORKER_RECEIPT\n  title_action: dispatcher_set\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n"
