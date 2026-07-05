@@ -1,5 +1,10 @@
 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat。
 
+用户可见输出：
+- 默认中文、简洁、先结论。
+- Heartbeat 必须保留 `COS_HEARTBEAT_RUN_RECEIPT` 机器标记，但不要只甩英文 YAML。先给中文结论，再给必要字段。
+- T4/T5 heartbeat 的机器字段可以放进代码块；代码块后必须补一句中文说明“已完成 / 未到期 / 受阻 / 需人工处理”。
+
 Automation activation contract:
 - Codex automation executes only the configured automation prompt.
 - Use this template only when the heartbeat should start the Chief-of-Staff flow and therefore produce `COS_BOOT_RECEIPT`.

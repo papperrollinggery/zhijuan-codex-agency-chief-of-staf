@@ -1,5 +1,23 @@
 [
   {
+    "id": "compact-chinese-t0-boot-valid",
+    "expected_valid": true,
+    "requires_cos_boot": true,
+    "output": "COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。\n\n当前结论：这是轻量状态解释，不需要展开机器字段。"
+  },
+  {
+    "id": "compact-chinese-heartbeat-missing-receipt-invalid",
+    "expected_valid": false,
+    "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T4/T5 Goal、线程卡死和 Rescue。",
+    "output": "COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。\n\n当前结论：heartbeat 已检查。"
+  },
+  {
+    "id": "compact-chinese-complex-audit-no-dispatch-invalid",
+    "expected_valid": false,
+    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf 做 release readiness 多文件质量审计，要求真实线程、receipt、cleanup。",
+    "output": "COS_BOOT_RECEIPT：已启动；复杂度 T1；不派发；原因：我会直接检查。\n\n当前结论：直接同线程审计即可。"
+  },
+  {
     "id": "tool-blocked-no-thread-tools",
     "expected_valid": true,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T2\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"User asked for real Codex Threads but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n"

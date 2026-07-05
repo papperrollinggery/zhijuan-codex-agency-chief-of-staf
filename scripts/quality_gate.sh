@@ -191,6 +191,8 @@ grep -q "Codex Threads 不是 subagent" SKILL.md
 grep -q "TOOL_BLOCKED" SKILL.md
 grep -q "set_thread_title" SKILL.md
 grep -q "COS_BOOT_RECEIPT" SKILL.md
+grep -q "用户可见输出规范" SKILL.md
+grep -q "中文紧凑版" SKILL.md
 grep -q "THREAD_DISPATCH_RECEIPT" SKILL.md
 grep -q "thread_dispatch_decision" SKILL.md
 grep -q "dispatcher_set" SKILL.md
@@ -202,6 +204,7 @@ grep -q "dispatcher_set" references/THREAD_NAMING.md
 grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/EXECUTOR_PROMPT.md
 grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/REVIEWER_PROMPT.md
 grep -q "COS_BOOT_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "中文紧凑版" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
 grep -q "max_review_waves" assets/CHIEF_OF_STAFF_PROMPT.md
@@ -289,6 +292,9 @@ grep -q "bare \`AGENTS.md\` mention is not evidence" README.md
 grep -q "Automation enablement is not proof that a heartbeat advanced work" README.md
 grep -q "Every T4/T5 heartbeat run must output" references/ACTIVATION_PROTOCOL.md
 grep -q "heartbeat-explicit-skill-valid" evals/activation_contract.fixture.json
+grep -q "compact-chinese-t0-boot-valid" evals/activation_contract.fixture.json
+grep -q "compact-chinese-heartbeat-missing-receipt-invalid" evals/activation_contract.fixture.json
+grep -q "compact-chinese-complex-audit-no-dispatch-invalid" evals/activation_contract.fixture.json
 grep -q "heartbeat-explicit-t5-no-dispatch-invalid" evals/activation_contract.fixture.json
 grep -q "heartbeat-active-no-run-receipt-invalid" evals/activation_contract.fixture.json
 grep -q "heartbeat-run-target-unverified-invalid" evals/activation_contract.fixture.json

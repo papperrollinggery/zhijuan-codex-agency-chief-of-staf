@@ -64,6 +64,56 @@ def first_field_value(output: str, field: str) -> str:
     return values[0] if values else ""
 
 
+def has_compact_chinese_boot(output: str) -> bool:
+    """Allow terse user-facing boot receipts for T0/T1/status responses."""
+    for line in output.splitlines():
+        if "COS_BOOT_RECEIPT" not in line:
+            continue
+        if "已启动" not in line:
+            continue
+        if "复杂度 T0" not in line and "复杂度 T1" not in line:
+            continue
+        if not any(marker in line for marker in ["不派发", "无需派发", "no_dispatch"]):
+            continue
+        if "原因" not in line:
+            continue
+        return True
+    return False
+
+
+def compact_boot_requires_full_receipt(prompt: str, output: str) -> bool:
+    """Compact visible boot is only for lightweight non-thread/non-release status replies."""
+    context = "\n".join([prompt, output.replace("COS_BOOT_RECEIPT", "")]).lower()
+    markers = [
+        "heartbeat",
+        "heart beat",
+        "心跳",
+        "release readiness",
+        "release receipt",
+        "release",
+        "公开仓库",
+        "发布",
+        "放行",
+        "多文件",
+        "质量审计",
+        "真实 codex threads",
+        "真实线程",
+        "真实派发",
+        "worker",
+        "thread id",
+        "cleanup",
+        "归档",
+        "审查",
+        "receipt",
+        "回执",
+        "复杂度 t2",
+        "复杂度 t3",
+        "复杂度 t4",
+        "复杂度 t5",
+    ]
+    return any(marker in context for marker in markers)
+
+
 def case_prompt_text(case: dict) -> str:
     parts = [
         str(case.get("prompt", "")),
@@ -403,6 +453,7 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         else:
             reasons.append("missing COS_BOOT_RECEIPT")
     elif "COS_BOOT_RECEIPT" in output:
+        compact_chinese_boot = has_compact_chinese_boot(output)
         required_boot_fields = {
             "skill_loaded",
             "trigger_type",
@@ -416,11 +467,17 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             "worker_startup_grace_seconds",
             "reason",
         }
-        for field in sorted(required_boot_fields):
-            if not has_nonempty_field(output, field):
-                reasons.append(f"COS boot receipt missing {field}")
+        if not compact_chinese_boot:
+            for field in sorted(required_boot_fields):
+                if not has_nonempty_field(output, field):
+                    reasons.append(f"COS boot receipt missing {field}")
         dispatch_decision = first_field_value(output, "thread_dispatch_decision")
         complexity = first_field_value(output, "complexity")
+        if compact_chinese_boot:
+            if compact_boot_requires_full_receipt(prompt, output):
+                reasons.append("compact Chinese boot cannot replace full receipt for heartbeat/thread/release work")
+            dispatch_decision = "no_dispatch"
+            complexity = "T0" if "复杂度 T0" in output else "T1"
         if (
             explicit_skill_heartbeat
             and complexity in {"T4", "T5"}
@@ -571,6 +628,9 @@ def validate_activation_fixture(root: Path) -> dict:
     if not isinstance(cases, list) or len(cases) < 4:
         fail("activation contract fixture must contain at least four cases")
     required_ids = {
+        "compact-chinese-t0-boot-valid",
+        "compact-chinese-heartbeat-missing-receipt-invalid",
+        "compact-chinese-complex-audit-no-dispatch-invalid",
         "tool-blocked-no-thread-tools",
         "pending-worktree-only-invalid",
         "same-thread-simulation-invalid",
@@ -737,6 +797,8 @@ def main() -> int:
         fail(f"description too long for reliable trigger scanning: {len(desc)} chars")
     if "COS_BOOT_RECEIPT" not in skill:
         fail("SKILL.md must define COS_BOOT_RECEIPT")
+    if "用户可见输出规范" not in skill or "中文紧凑版" not in skill:
+        fail("SKILL.md must define Chinese-first visible output rules")
     if "thread_dispatch_decision" not in skill:
         fail("SKILL.md must define thread_dispatch_decision")
     if "THREAD_DISPATCH_RECEIPT" not in skill:
@@ -760,6 +822,8 @@ def main() -> int:
     for rel in required_boot_files:
         if "COS_BOOT_RECEIPT" not in read(root / rel):
             fail(f"{rel} must mention COS_BOOT_RECEIPT")
+    if "中文紧凑版" not in read(root / "assets/CHIEF_OF_STAFF_PROMPT.md"):
+        fail("chief prompt must define compact Chinese boot output")
     if "THREAD_DISPATCH_RECEIPT" not in read(root / "assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml"):
         fail("thread dispatch receipt template missing marker")
 

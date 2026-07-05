@@ -1,3 +1,5 @@
+# 用户可见轻量版: COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。
+# 机器证据版:
 COS_BOOT_RECEIPT:
   skill_loaded: true
   trigger_type: explicit # explicit | implicit

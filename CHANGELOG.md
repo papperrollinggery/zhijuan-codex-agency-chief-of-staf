@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added Chinese-first compact visible output rules so light `COS_BOOT_RECEIPT` responses stay readable while machine receipts remain available for dispatch, heartbeat, and release evidence.
 - Added explicit installer support for project/global `AGENTS.md` routing shims without making the default install silently modify user rules.
 - Hardened the dispatch handshake so `thread_dispatch_decision: dispatch` must immediately converge to `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`.
 - Added bounded worker receipt polling so dispatched workers that do not return receipts are marked `thread_not_converged` and rescued instead of passively waited on.
