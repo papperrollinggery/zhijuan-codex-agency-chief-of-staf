@@ -105,6 +105,24 @@ Heartbeat/Automation contract:
 3. A plain emitter heartbeat such as "Send exactly one plain text message ... Do nothing else" is not a COS activation and should not emit `COS_BOOT_RECEIPT`.
 4. A claim that Heartbeat/Automation is enabled must include evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`. A bare `AGENTS.md` mention, or "未检查 AGENTS.md / 没有 prompt evidence", is invalid.
 5. A claim that Heartbeat/Automation is enabled must also verify the target context: include `target_thread_id` and a readback such as `target_thread_verified: true`, `target_thread_title`, or `target_thread_cwd`. If the target points at an unrelated historical thread, the heartbeat is misconfigured even when the prompt itself invokes this Skill.
+6. Automation enablement is not run evidence. Every T4/T5 heartbeat run must output `HEARTBEAT_RUN_RECEIPT` or `COS_HEARTBEAT_RUN_RECEIPT` with target thread id/readback, `current_due_status`, `dispatch_required`, `dispatch_outcome`, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and `next_due_or_next_check`.
+7. If `dispatch_required: true` but the heartbeat cannot dispatch a worker, the run receipt must say `dispatch_outcome: tool_blocked` with `TOOL_BLOCKED`, or `dispatch_outcome: thread_not_converged` with `thread_not_converged`. "Heartbeat active" without run receipt and dispatch outcome is invalid.
+
+Machine-readable heartbeat run receipt:
+
+```yaml
+COS_HEARTBEAT_RUN_RECEIPT:
+  target_thread_id: ""
+  target_thread_verified: true
+  target_thread_title: ""
+  target_thread_cwd: ""
+  current_due_status: due_now | not_due | overdue | misconfigured | unknown
+  dispatch_required: true | false
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
+  stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  next_due_or_next_check: ""
+```
 
 ## AGENTS.md Shim
 

@@ -63,7 +63,7 @@
     "id": "heartbeat-explicit-skill-valid",
     "expected_valid": true,
     "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T4/T5 Goal、线程卡死和 Rescue。若真实线程工具不可用，输出 TOOL_BLOCKED。",
-    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat automation explicitly invoked the Skill for a T4 check, but thread tools are unavailable.\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n  automation_prompt: \"使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat\"\n"
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: false\n  thread_dispatch_decision: tool_blocked\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat automation explicitly invoked the Skill for a T4 check, but thread tools are unavailable.\"\n\nCOS_HEARTBEAT_RUN_RECEIPT:\n  target_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\n  target_thread_verified: true\n  target_thread_title: \"[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000\"\n  target_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\n  current_due_status: due_now\n  dispatch_required: true\n  dispatch_outcome: tool_blocked\n  thread_dispatch_receipt: not_available_due_to_TOOL_BLOCKED\n  stuck_rescue_decision: not_started_due_to_tool_blocked\n  next_due_or_next_check: \"2026-07-05T13:00:00+08:00\"\n\nTOOL_BLOCKED:\n  required_tool: \"create_thread/read_thread/set_thread_archived\"\n  fallback_allowed: false\n  automation_prompt: \"使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat\"\n"
   },
   {
     "id": "heartbeat-explicit-t5-no-dispatch-invalid",
@@ -112,6 +112,12 @@
     "requires_cos_boot": false,
     "prompt": "Set up a recurring heartbeat automation and tell me if it will start the Chief-of-Staff flow.",
     "output": "Heartbeat automation active.\nautomation_prompt_path: /Users/example/.codex/automations/cos/automation.toml\nprompt_contains_skill_invocation: true\ntarget_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\ntarget_thread_verified: true\ntarget_thread_title: \"[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000\"\ntarget_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\n"
+  },
+  {
+    "id": "heartbeat-active-no-run-receipt-invalid",
+    "expected_valid": false,
+    "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat，检查 T4/T5 Goal、线程卡死和 Rescue。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: true\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat automation active and due now.\"\n\nautomation_prompt_path: /Users/example/.codex/automations/cos/automation.toml\nprompt_contains_skill_invocation: true\ntarget_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\ntarget_thread_verified: true\ntarget_thread_title: \"[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000\"\ntarget_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\nHeartbeat active; will arrange workers on this run.\n"
   },
   {
     "id": "role-worker-bypass-valid",

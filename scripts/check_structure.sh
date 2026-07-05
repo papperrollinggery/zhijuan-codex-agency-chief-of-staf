@@ -93,7 +93,8 @@ for f in \
   SYNTHESIZER_PROMPT.md \
   RESCUE_PROMPT.md \
   SKILL_MAINTAINER_PROMPT.md \
-  HEARTBEAT_PROMPT.md
+  HEARTBEAT_PROMPT.md \
+  HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
 do
   check_file "assets/$f"
 done

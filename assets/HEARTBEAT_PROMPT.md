@@ -7,6 +7,7 @@ Automation activation contract:
 - A plain emitter prompt such as "Send exactly one plain text message ... Do nothing else" must not use this template and must not be rewritten into a Chief-of-Staff heartbeat.
 - Any claim that Heartbeat/Automation is enabled must cite evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`; a bare `AGENTS.md` mention is not evidence.
 - Any claim that Heartbeat/Automation is enabled must also cite target readback: `target_thread_id` plus `target_thread_verified: true`, `target_thread_title`, or `target_thread_cwd`. A heartbeat aimed at an unrelated historical thread is misconfigured even when the prompt invokes the Skill.
+- Enabling automation is not run evidence. Every T4/T5 heartbeat run must output `COS_HEARTBEAT_RUN_RECEIPT` or `HEARTBEAT_RUN_RECEIPT` with `target_thread_id` readback, `current_due_status`, `dispatch_required`, `dispatch_outcome`, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and `next_due_or_next_check`.
 
 身份：
 幕僚长-COS 调度，但检查动作可以派发给专门线程。
@@ -46,6 +47,18 @@ Automation activation contract:
 
 输出：
 ```markdown
+COS_HEARTBEAT_RUN_RECEIPT:
+  target_thread_id: ""
+  target_thread_verified: true
+  target_thread_title: ""
+  target_thread_cwd: ""
+  current_due_status: due_now | not_due | overdue | misconfigured | unknown
+  dispatch_required: true | false
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
+  stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  next_due_or_next_check: ""
+
 ## Heartbeat
 
 状态：

@@ -141,6 +141,19 @@
       "cleanup_status": "archived",
       "review_verdict": "NEEDS_HUMAN",
       "receipt_summary": "After unarchive and a convergence follow-up, the worker produced THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT with complete_ready=false. Its earlier snapshot was stale for source dirty/install sync after the controller commit, so adoption is limited to the core findings: worker bypass avoided COS_BOOT_RECEIPT, 019f306b was not valid readiness evidence, natural heartbeat remains unverified, ADCO legacy dirty remains evidence_only_keep_open, and no domain deliverable receipt exists."
+    },
+    {
+      "thread_id": "019f3084-0e9b-7900-8724-6db0121cf919",
+      "thread_class": "skill_maintainer_worker",
+      "deliverable": "heartbeat run receipt hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched_after_pending_worktree",
+      "receipt_status": "received_with_quality_note",
+      "adoption_status": "adopted_after_controller_validation",
+      "cleanup_status": "archived",
+      "review_verdict": "n/a",
+      "receipt_summary": "SKM_HEARTBEAT_RUN_RECEIPT was produced from isolated worktree 29b5, but self-reported thread_id was unknown. Controller corrected the real thread id, adopted the patch after validation, and archived the worker. The patch adds COS_HEARTBEAT_RUN_RECEIPT/HEARTBEAT_RUN_RECEIPT rules, template, fixture coverage, and quality-gate checks so automation enablement is no longer counted as heartbeat run evidence."
     }
   ],
   "release_decision": {
@@ -376,6 +389,22 @@
         "cleanup_status": "archived",
         "complete_ready": false,
         "receipt_summary": "Created after adding COS_WORKER_BYPASS routing and updating project AGENTS.md; it did not emit COS_BOOT_RECEIPT and, after an unarchive/follow-up convergence prompt, produced THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT. Some snapshot facts were stale because the controller had since committed and synced install; adopted finding is complete_ready=false due to natural heartbeat unverified, ADCO legacy dirty evidence_only_keep_open, no domain deliverable receipt, and need for controller adoption/cleanup."
+      },
+      {
+        "thread_id": "019f3084-0e9b-7900-8724-6db0121cf919",
+        "pending_worktree_id": "local:94e66306-ffde-4b8d-9127-91da50771c59",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "skill_maintainer_worker",
+        "expected_receipt": "SKM_HEARTBEAT_RUN_RECEIPT",
+        "dispatch_status": "dispatched_after_pending_worktree",
+        "receipt_status": "received_with_quality_note",
+        "status": "done",
+        "adoption_status": "adopted_after_controller_validation",
+        "cleanup_status": "archived",
+        "worktree": "/Users/jinjungao/.codex/worktrees/29b5/zhijuan-codex-agency-chief-of-staf",
+        "worktree_cleanup_note": "temporary Codex worktree may be removed after archive; reopening the worker can show current working directory missing, which is expected for archived temporary workers and is not evidence that the main project path is missing.",
+        "receipt_quality_note": "Worker output self-reported thread_id unknown; controller corrected to 019f3084-0e9b-7900-8724-6db0121cf919 before adoption.",
+        "receipt_summary": "Added heartbeat run receipt template and activation contract fixtures/checks requiring target readback, due status, dispatch_required, dispatch_outcome, THREAD_DISPATCH_RECEIPT or TOOL_BLOCKED, stuck/rescue decision, and next due/check."
       }
     ],
     "commands_run": [
@@ -493,6 +522,36 @@
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "python3 scripts/validate_activation_contract.py .; bash scripts/check_structure.sh .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json",
         "result": "PASS after adding COS_WORKER_BYPASS rules, fixtures, and role prompt markers"
+      },
+      {
+        "cwd": "/Users/jinjungao/.codex/worktrees/29b5/zhijuan-codex-agency-chief-of-staf",
+        "command": "read_thread 019f3084-0e9b-7900-8724-6db0121cf919; python3 scripts/validate_activation_contract.py .; bash scripts/quality_gate.sh .; git diff --check",
+        "result": "SKM_HEARTBEAT_RUN_RECEIPT received with thread_id quality defect; worker validation passed; exact release_smoke failed only because installed copy was not synced from the isolated worktree"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "git apply worker diff from 019f3084 isolated worktree; python3 scripts/validate_activation_contract.py .; bash scripts/quality_gate.sh .; bash scripts/release_smoke.sh .",
+        "result": "Patch adopted; activation contract and quality gate passed; release_smoke initially failed at installed-copy diff pending install sync"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/install_skill.py --force --agents-routing project --project-root . --json; bash scripts/release_smoke.sh .; bash scripts/quality_gate.sh .; python3 scripts/validate_activation_contract.py .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json; git diff --check",
+        "result": "PASS after installing 117 files; release_smoke passed without SKIP_INSTALLED_COPY_DIFF; quality_gate passed"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/DIR SKILL",
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py; git diff --check; git status --short --branch",
+        "result": "PASS; working tree clean; main...origin/main ahead 1"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/ad-creative-orchestrator",
+        "command": "PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py; PYTHONDONTWRITEBYTECODE=1 python3 tools/run_checks.py; PYTHONDONTWRITEBYTECODE=1 python3 tools/check_distribution.py; git diff --check; git status --short --branch",
+        "result": "PASS; working tree clean; main...origin/main ahead 3"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "ps residual-process scan; find temp adco-check dirs; rm -rf scripts/__pycache__; find cache dirs",
+        "result": "No lingering gate/test/playwright/vite/npm processes found; no adco-check temp dirs remained; scripts/__pycache__ removed"
       }
     ],
     "automation_receipts": [
@@ -506,7 +565,7 @@
         "target_thread_verified": true,
         "last_config_update_at_local": "2026-07-05T11:18:47.347+08:00",
         "next_natural_due_at_local": "2026-07-05T17:18:47.347+08:00",
-        "natural_fire_status": "not_due_yet_as_of_2026-07-05T11:47:27+08:00",
+        "natural_fire_status": "not_due_yet_as_of_2026-07-05T12:33:00+08:00",
         "natural_fire_acceptance_criteria": "After next_natural_due_at_local, read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf must show a heartbeat-created turn containing COS_BOOT_RECEIPT; otherwise record thread_not_converged or tool_blocked rather than claiming completion.",
         "target_thread_title": "[P01-TH00-R00] \u5e55\u50da\u957f-COS\uff5c\u4e3b\u63a7\u6c9f\u901a\uff5cTASK-000\uff5cOUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -551,16 +610,19 @@
       "ADCO split adoption current-state reviewer 019f3037-5b77-7773-a7c4-0461f2e6f5ce also exceeded the receipt budget and was archived/interrupted without ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT.",
       "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c materialized with isolated worktree f7b3 but never received or recorded the task payload, produced no receipt and no diff, and could not be archived by set_thread_archived; its clean filesystem worktree was removed manually.",
       "ADCO split adoption fork rescue worker 019f3058-9213-73b3-9c60-a6284b6b77e9 produced a valid receipt and the bounded gate fixture was adopted as 5101dbf, but this is a partial ThreadOps validation hardening, not a claim that all legacy dirty worktree material has been ported.",
+      "Archived temporary ADCO worker worktrees such as d6f2, 0e1f, f436, and f7b3 can show 'current working directory missing' when reopened in Codex; the ADCO main path /Users/jinjungao/work/ad-creative-orchestrator and retained legacy dirty evidence worktree remain verified separately.",
       "ADCO legacy dirty disposition reviewer 019f3065-dd2a-7df0-beaf-8f9fbc780742 concluded adopt_now=none: the legacy branch has no commits ahead of main, main is ahead by 3 commits, and the remaining dirty diff is evidence-only keep_open rather than safe migration material.",
       "Goal-readiness reviewer 019f306b-5652-7322-9ac2-ecdd651fae2f did not produce THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT; it booted COS/no_dispatch despite being a role-specific worker, so it is rejected evidence and was archived.",
       "Bounded rescue reviewer 019f3075-a3e9-7660-9813-dc39a8cb0d04 was dispatched after adding COS_WORKER_BYPASS and did not emit COS_BOOT_RECEIPT. It was initially interrupted by coordinator error while active, then unarchived and resumed; it produced THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT with complete_ready=false.",
+      "Skill-maintainer worker 019f3084-0e9b-7900-8724-6db0121cf919 added heartbeat run receipt hardening, but its self-reported thread_id was unknown; adoption used controller readback for the real thread id and main-worktree validation.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
-      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T11:47:27+08:00 the long-running six-hour cos automation is not due until 2026-07-05T17:18:47.347+08:00, so natural-fire completion remains unproven rather than failed."
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T12:33:00+08:00 the long-running six-hour cos automation is not due until 2026-07-05T17:18:47.347+08:00, so natural-fire completion remains unproven rather than failed."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
       "COS_WORKER_BYPASS is now encoded in the Skill, AGENTS routing snippet, role prompts, and activation fixtures. The live rescue reviewer verified the direction by not emitting COS_BOOT_RECEIPT and later returning a readiness receipt, but the receipt still blocks goal completion on natural heartbeat, ADCO legacy dirty evidence, and missing domain receipts.",
+      "HEARTBEAT_RUN_RECEIPT/COS_HEARTBEAT_RUN_RECEIPT hardens future heartbeat runs, but the current six-hour cos natural fire is still not proven until the next due window is read back from the target thread.",
       "create_thread returned a handler error while duplicate threads materialized; duplicate 019f3036-fe20-7a00-b5eb-14ea205bad24 was archived/interrupted and rejected as evidence.",
       "Transient invalid placeholder THREAD_DISPATCH_RECEIPT rows with thread_id=pending or dispatch_pending were emitted during continuations and are explicitly rejected as evidence; only rows with a real thread_id or a non-empty pending_worktree_id are valid dispatch evidence.",
       "Project-main COS threads remain open by design; only completed worker/review threads should be archived."

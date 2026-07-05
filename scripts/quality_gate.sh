@@ -236,6 +236,8 @@ grep -q "T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED" scripts/validate_act
 grep -q "plain heartbeat prompt must not emit COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
 grep -q "heartbeat/automation enablement claim lacks automation_prompt+prompt_contains_skill_invocation or explicit AGENTS routing shim evidence" scripts/validate_activation_contract.py
 grep -q "heartbeat/automation enablement claim lacks verified target_thread_id/title/cwd readback evidence" scripts/validate_activation_contract.py
+grep -q "T4/T5 heartbeat COS output lacks HEARTBEAT_RUN_RECEIPT/COS_HEARTBEAT_RUN_RECEIPT" scripts/validate_activation_contract.py
+grep -q "heartbeat run receipt missing dispatch_outcome" scripts/validate_activation_contract.py
 grep -q "worker_receipt_poll_limit" SKILL.md
 grep -q "worker_receipt_poll_interval_seconds" SKILL.md
 grep -q "worker_startup_grace_seconds" SKILL.md
@@ -258,9 +260,15 @@ grep -q "target_thread_verified" README.md
 grep -q "Automation activation contract" assets/HEARTBEAT_PROMPT.md
 grep -q "Any claim that Heartbeat/Automation is enabled must cite evidence" assets/HEARTBEAT_PROMPT.md
 grep -q "target_thread_verified" assets/HEARTBEAT_PROMPT.md
+grep -q "COS_HEARTBEAT_RUN_RECEIPT" assets/HEARTBEAT_PROMPT.md
+grep -q "COS_HEARTBEAT_RUN_RECEIPT" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
+grep -q "dispatch_outcome" assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml
 grep -q "bare \`AGENTS.md\` mention is not evidence" README.md
+grep -q "Automation enablement is not proof that a heartbeat advanced work" README.md
+grep -q "Every T4/T5 heartbeat run must output" references/ACTIVATION_PROTOCOL.md
 grep -q "heartbeat-explicit-skill-valid" evals/activation_contract.fixture.json
 grep -q "heartbeat-explicit-t5-no-dispatch-invalid" evals/activation_contract.fixture.json
+grep -q "heartbeat-active-no-run-receipt-invalid" evals/activation_contract.fixture.json
 grep -q "plain-one-line-heartbeat-no-cos-valid" evals/activation_contract.fixture.json
 grep -q "automation-enabled-no-evidence-invalid" evals/activation_contract.fixture.json
 grep -q "automation-created-before-keyword-no-evidence-invalid" evals/activation_contract.fixture.json

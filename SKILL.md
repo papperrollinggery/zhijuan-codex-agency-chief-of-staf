@@ -127,6 +127,24 @@ COS_BOOT_RECEIPT:
 9. `THREAD_DISPATCH_RECEIPT.thread_id` 不允许写 `pending`、`unknown`、`TBD`、`same-thread` 或空占位；未拿到真实线程时只能用非空 `pending_worktree_id` + `status: dispatch_pending`。`title_action` 只允许模板枚举值，不允许 `dispatcher_set_pending` 等临时状态。
 10. 被派发的角色专用 worker 如果只输出 `COS_BOOT_RECEIPT`、重分级或再次等待调度，而没有执行任务并输出 expected receipt/artifact，幕僚长必须把它记为 `thread_not_converged` / `rejected_evidence`，不得把该 `COS_BOOT_RECEIPT` 当作 worker receipt。
 
+Heartbeat 自动化硬证据：
+
+```yaml
+COS_HEARTBEAT_RUN_RECEIPT:
+  target_thread_id: ""
+  target_thread_verified: true
+  target_thread_title: ""
+  target_thread_cwd: ""
+  current_due_status: due_now | not_due | overdue | misconfigured | unknown
+  dispatch_required: true | false
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
+  stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  next_due_or_next_check: ""
+```
+
+启用 automation 只证明定时器或配置存在，不证明本次已推进、已派发或已收敛。每次 T4/T5 heartbeat run 必须输出 `HEARTBEAT_RUN_RECEIPT` 或 `COS_HEARTBEAT_RUN_RECEIPT`，并记录目标线程 readback、当前 due 状态、是否需要派发、派发结果、`THREAD_DISPATCH_RECEIPT` 或 `TOOL_BLOCKED`、卡住/救援判断、下一次 due 或检查时间。如果 `dispatch_required: true` 但没有真实派发回执，必须写 `dispatch_outcome: tool_blocked` + `TOOL_BLOCKED`，或写 `dispatch_outcome: thread_not_converged` + `thread_not_converged`；不得只说 heartbeat active / enabled / will arrange workers。
+
 ---
 
 ## 0. 第一性原理

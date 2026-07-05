@@ -209,6 +209,56 @@ def has_heartbeat_target_evidence(output: str) -> bool:
     return has_target_id and has_target_readback
 
 
+def has_heartbeat_run_receipt(output: str) -> bool:
+    return "HEARTBEAT_RUN_RECEIPT" in output or "COS_HEARTBEAT_RUN_RECEIPT" in output
+
+
+def validate_heartbeat_run_receipt(output: str) -> list[str]:
+    reasons: list[str] = []
+    required_fields = {
+        "target_thread_id",
+        "current_due_status",
+        "dispatch_required",
+        "dispatch_outcome",
+        "stuck_rescue_decision",
+        "next_due_or_next_check",
+    }
+    for field in sorted(required_fields):
+        if not has_nonempty_field(output, field):
+            reasons.append(f"heartbeat run receipt missing {field}")
+    if not has_heartbeat_target_evidence(output):
+        reasons.append("heartbeat run receipt missing target_thread_id/readback evidence")
+
+    dispatch_required = first_field_value(output, "dispatch_required").lower()
+    dispatch_outcome = first_field_value(output, "dispatch_outcome").lower()
+    if dispatch_required == "true" and not dispatch_outcome:
+        reasons.append("heartbeat run receipt missing dispatch_outcome for required dispatch")
+    if dispatch_required == "true" and dispatch_outcome in {"tool_blocked", "blocked"}:
+        if "TOOL_BLOCKED" not in output:
+            reasons.append("heartbeat run receipt dispatch_outcome tool_blocked without TOOL_BLOCKED")
+    if dispatch_required == "true" and dispatch_outcome in {
+        "dispatched",
+        "dispatch_pending",
+        "thread_dispatched",
+    }:
+        if (
+            "THREAD_DISPATCH_RECEIPT" not in output
+            and not has_nonempty_field(output, "thread_dispatch_receipt")
+        ):
+            reasons.append("heartbeat run receipt dispatch_outcome lacks thread_dispatch_receipt")
+    if dispatch_required == "true" and dispatch_outcome not in {
+        "dispatched",
+        "dispatch_pending",
+        "thread_dispatched",
+        "tool_blocked",
+        "blocked",
+        "thread_not_converged",
+        "not_required_user_forbid_threads",
+    }:
+        reasons.append("heartbeat run receipt dispatch_outcome is not actionable")
+    return reasons
+
+
 def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     output = str(case.get("output", ""))
     prompt = case_prompt_text(case)
@@ -271,6 +321,8 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             and dispatch_decision not in {"dispatch", "tool_blocked"}
         ):
             reasons.append("T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED")
+        if explicit_skill_heartbeat and complexity in {"T4", "T5"} and not has_heartbeat_run_receipt(output):
+            reasons.append("T4/T5 heartbeat COS output lacks HEARTBEAT_RUN_RECEIPT/COS_HEARTBEAT_RUN_RECEIPT")
         explicit_no_thread_markers = [
             "用户明确禁止创建子线程",
             "user explicitly prohibited threads",
@@ -284,6 +336,8 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             reasons.append("T2+ COS task cannot use no_dispatch without explicit user thread prohibition")
     if "thread_dispatch_decision: tool_blocked" in output and "TOOL_BLOCKED" not in output:
         reasons.append("tool_blocked decision without TOOL_BLOCKED marker")
+    if has_heartbeat_run_receipt(output):
+        reasons.extend(validate_heartbeat_run_receipt(output))
     if (
         "thread_dispatch_decision: dispatch" in output
         and "THREAD_DISPATCH_RECEIPT" not in output
@@ -429,6 +483,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "automation-enabled-bare-agents-md-invalid",
         "automation-enabled-no-target-thread-evidence-invalid",
         "automation-enabled-with-target-thread-valid",
+        "heartbeat-active-no-run-receipt-invalid",
         "role-worker-bypass-valid",
         "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",
@@ -641,6 +696,7 @@ def main() -> int:
             "assets/CHIEF_OF_STAFF_PROMPT.md",
             "assets/COS_BOOT_RECEIPT_TEMPLATE.yaml",
             "assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml",
+            "assets/HEARTBEAT_RUN_RECEIPT_TEMPLATE.yaml",
             "references/ACTIVATION_PROTOCOL.md",
             "references/AGENTS_ROUTING_SNIPPET.md",
             "references/DELEGATION_CHAIN.md",

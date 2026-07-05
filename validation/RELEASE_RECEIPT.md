@@ -70,6 +70,7 @@ Project-main thread status:
 | `019f3065-dd2a-7df0-beaf-8f9fbc780742` | `ad-creative-orchestrator` | `ADCO_LEGACY_DIRTY_DIFF_DISPOSITION_RECEIPT_CORRECTED` | received after correcting thread id; legacy branch has no commits ahead of main; `adopt_now=none`; disposition `evidence_only_keep_open`; archived |
 | `019f306b-5652-7322-9ac2-ecdd651fae2f` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` | no receipt; booted COS/no_dispatch despite role-specific reviewer prompt; archived as `thread_not_converged`; rejected evidence; rescued by `019f3075...` |
 | `019f3075-a3e9-7660-9813-dc39a8cb0d04` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` | received after unarchive/convergence follow-up; did not emit `COS_BOOT_RECEIPT`; verdict `complete_ready=false`; archived; adopted after current-fact correction |
+| `019f3084-0e9b-7900-8724-6db0121cf919` | `zhijuan-codex-agency-chief-of-staf` | `SKM_HEARTBEAT_RUN_RECEIPT` | received from isolated Skill-maintainer worker; original receipt self-reported `thread_id: unknown`; controller corrected real thread id, adopted heartbeat run receipt hardening after validation, and archived |
 
 Automation receipt:
 
@@ -79,7 +80,7 @@ Automation receipt:
 
 Natural heartbeat acceptance:
 
-- Current check time: `2026-07-05T11:47:27+08:00`
+- Current check time: `2026-07-05T12:33:00+08:00`
 - Last config update: `2026-07-05T11:18:47.347+08:00`
 - Next six-hour due time: `2026-07-05T17:18:47.347+08:00`
 - Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT`; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
@@ -90,6 +91,7 @@ Automation target audit:
 - Current target is verified as `019f2354-f00c-7132-90d7-fb6c26ff2ecf`, title `[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000`, cwd `/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf`.
 - A bounded temporary heartbeat `cos-heartbeat-smoke-target-temporary` was attached to idle target thread `019f3049-354c-7031-a196-2d315e7f7a9f`; it fired at `2026-07-05T03:20:21Z` and produced both `COS_BOOT_RECEIPT` and `HEARTBEAT_SMOKE_RECEIPT`. The temporary automation was deleted and the thread was archived.
 - Installed copy drift was resolved with `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json`, followed by `bash scripts/release_smoke.sh .` passing without `SKIP_INSTALLED_COPY_DIFF`.
+- Heartbeat run evidence is now hardened with `COS_HEARTBEAT_RUN_RECEIPT` / `HEARTBEAT_RUN_RECEIPT`: automation enablement alone no longer counts as a run; every T4/T5 heartbeat must record target readback, due status, dispatch requirement/outcome, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and next due/check.
 
 Current hard limits:
 
@@ -100,10 +102,13 @@ Current hard limits:
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.
 - ADCO split-adoption retry worker `019f3051-957a-76f1-8cd1-658620da147c` materialized, but its rollout JSONL only contains `session_meta` and `task_started`; there is no task payload, receipt, or worktree diff. `set_thread_archived` could not find it, so thread cleanup is blocked; the clean filesystem worktree `f7b3` was removed manually.
 - ADCO split-adoption fork rescue worker `019f3058-9213-73b3-9c60-a6284b6b77e9` produced a valid receipt. The bounded ThreadOps receipt fixture was adopted into ADCO main as commit `5101dbf Harden ThreadOps receipt gate fixtures`, with `python3 tools/check_gate_fixtures.py`, `python3 tools/run_checks.py`, `python3 tools/check_distribution.py`, and `git diff --check` all passing; its temporary worktree `f436` was removed by thread archive.
+- Archived temporary ADCO worker worktrees such as `d6f2`, `0e1f`, `f436`, and `f7b3` can show "current working directory missing" when reopened in Codex; the ADCO main path `/Users/jinjungao/work/ad-creative-orchestrator` and retained legacy dirty evidence worktree remain verified separately.
 - ADCO legacy dirty disposition reviewer `019f3065-dd2a-7df0-beaf-8f9fbc780742` concluded `adopt_now=none`: the legacy branch has no commits ahead of main, main is ahead by 3 commits, and the remaining dirty diff is `evidence_only_keep_open` rather than safe migration material. The first receipt had a self-id mismatch and was corrected before adoption as evidence.
 - Goal-readiness reviewer `019f306b-5652-7322-9ac2-ecdd651fae2f` did not produce `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT`; it emitted COS boot/no-dispatch behavior instead of executing the review worker task. This is now covered by `COS_WORKER_BYPASS` rules and activation fixtures, but the original thread is rejected evidence.
 - Bounded rescue reviewer `019f3075-a3e9-7660-9813-dc39a8cb0d04` was dispatched after updating the project routing block and did not emit `COS_BOOT_RECEIPT`, confirming the bypass direction. It was initially interrupted by coordinator error while active, then unarchived and resumed; it produced `THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT` with `complete_ready=false` and was archived.
+- Skill-maintainer worker `019f3084-0e9b-7900-8724-6db0121cf919` added heartbeat run receipt hardening; because its own receipt used `thread_id: unknown`, adoption uses controller readback for the real thread id plus main-worktree validation rather than the self-id claim.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
-- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T11:47:27+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T17:18:47.347+08:00`, so natural-fire completion remains unproven rather than failed.
+- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T12:33:00+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T17:18:47.347+08:00`, so natural-fire completion remains unproven rather than failed.
+- Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes; no `adco-check-*` temp dirs remained; `scripts/__pycache__` was removed.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

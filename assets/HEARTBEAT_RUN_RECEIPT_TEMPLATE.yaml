@@ -1,0 +1,11 @@
+COS_HEARTBEAT_RUN_RECEIPT:
+  target_thread_id: ""
+  target_thread_verified: true
+  target_thread_title: ""
+  target_thread_cwd: ""
+  current_due_status: due_now | not_due | overdue | misconfigured | unknown
+  dispatch_required: true | false
+  dispatch_outcome: dispatched | dispatch_pending | tool_blocked | thread_not_converged | not_required_user_forbid_threads
+  thread_dispatch_receipt: THREAD_DISPATCH_RECEIPT | not_applicable | not_available_due_to_TOOL_BLOCKED
+  stuck_rescue_decision: none | monitor_next_check | dispatch_rescue | rescue_blocked | not_started_due_to_tool_blocked
+  next_due_or_next_check: ""
