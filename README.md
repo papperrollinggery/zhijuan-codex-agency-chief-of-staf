@@ -224,7 +224,7 @@ evals/                   Activation and dispatch regression prompts
 
 ## Status
 
-Current status: open-source-ready package with local release checks.
+Current status: local-hardened release-candidate package. Public release is not complete until it has explicit authorization, a remote push with current-head CI evidence, fresh-clone validation against the current HEAD, natural heartbeat due-window/self-recycle evidence, and domain deliverable boundary evidence for any ADCO/DIR customer-facing claims.
 
 The skill has an install script, deterministic pilot artifacts, real ThreadOps receipt notes, explicit thread rescue rules, and a release quality gate. Each public release should be paired with a committed tag, passing CI, and fresh-clone validation.
 

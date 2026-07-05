@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added project-state convergence receipts and field-level `release_receipt` gates so release status claims must match explicit receipt fields.
+- Clarified README release status wording so the package is described as local-hardened release-candidate quality instead of over-claiming open-source-ready publication.
 - Added a required Chinese `THREAD_DISPATCH_RECEIPT` dispatch summary card so worker dispatches are readable before any machine YAML appears.
 - Added Chinese-first compact visible output rules so light `COS_BOOT_RECEIPT` responses stay readable while machine receipts remain available for dispatch, heartbeat, and release evidence.
 - Added the same Chinese-first output rule to the project/global `AGENTS.md` routing shim and validation gates so cross-project COS starts do not regress to English-heavy receipts.
