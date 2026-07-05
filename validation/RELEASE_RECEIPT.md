@@ -82,14 +82,16 @@ Automation receipt:
 Natural heartbeat acceptance:
 
 - Current check time: `2026-07-05T12:33:00+08:00`
-- Last config update: `2026-07-05T11:18:47.347+08:00`
-- Next six-hour due time: `2026-07-05T17:18:47.347+08:00`
-- Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT`; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
+- Latest check time: `2026-07-05T12:49:33+08:00`
+- Last config update: `2026-07-05T12:49:24.944+08:00`
+- Next six-hour due time: `2026-07-05T18:49:24.944+08:00`
+- Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT` and `COS_HEARTBEAT_RUN_RECEIPT` with `target_thread_verified=true`, correct target id/title/cwd, due status, dispatch outcome, rescue decision, and next check; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
 
 Automation target audit:
 
 - Previous target `019f17c2-b4f2-7a93-aa9a-a0c124b1545d` was read back as `Weekly Workflow Packaging Audit`; the `cos` heartbeat fired there at `2026-07-05T01:30:51Z` and reported `TOOL_BLOCKED`, which explains why the active COS project thread did not visibly advance.
 - Current target is verified as `019f2354-f00c-7132-90d7-fb6c26ff2ecf`, title `[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000`, cwd `/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf`.
+- The live `cos` automation prompt was updated through `codex_app.automation_update` to explicitly require `COS_HEARTBEAT_RUN_RECEIPT` and to carry the expected target id/title/cwd. This reset the six-hour natural due window to `2026-07-05T18:49:24.944+08:00`.
 - A bounded temporary heartbeat `cos-heartbeat-smoke-target-temporary` was attached to idle target thread `019f3049-354c-7031-a196-2d315e7f7a9f`; it fired at `2026-07-05T03:20:21Z` and produced both `COS_BOOT_RECEIPT` and `HEARTBEAT_SMOKE_RECEIPT`. The temporary automation was deleted and the thread was archived.
 - A later bounded heartbeat run receipt smoke `cos-heartbeat-run-receipt-smoke-temporary` targeted `019f3090-c370-7952-91a9-ce3ca910e4ee`; it fired twice and emitted `COS_HEARTBEAT_RUN_RECEIPT`, but the receipt copied root/source thread `019f2354...` into `target_thread_id` and set `target_thread_verified=false`. The temporary automation was deleted, the target thread was archived, and this is rejected as progress evidence.
 - Installed copy drift was resolved with `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json`, followed by `bash scripts/release_smoke.sh .` passing without `SKIP_INSTALLED_COPY_DIFF`.
