@@ -29,6 +29,22 @@ python3 scripts/validate_release_receipt.py validation/release_receipt.json
 python3 scripts/validate_release_receipt.py evals/release_receipt.valid_no_stuck_review.json
 python3 scripts/validate_release_receipt.py evals/release_receipt.invalid_extra_wave_no_reason.json --expect-invalid
 python3 scripts/validate_release_receipt.py evals/release_receipt.invalid_stuck_review_no_rescue.json --expect-invalid
+grep -q "validate_latest_project_state_convergence" scripts/validate_release_receipt.py
+grep -q "latest_project_state_convergence.round_id" scripts/validate_release_receipt.py
+grep -q "public_release_complete" scripts/validate_release_receipt.py
+grep -q "three_project_objective_complete" scripts/validate_release_receipt.py
+grep -q "remote_push_performed" scripts/validate_release_receipt.py
+grep -q "client_ready_claim" scripts/validate_release_receipt.py
+grep -q "automation_self_recycle_complete" scripts/validate_release_receipt.py
+grep -q "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT" scripts/validate_release_receipt.py
+grep -q "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT" scripts/validate_release_receipt.py
+grep -q "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT" scripts/validate_release_receipt.py
+grep -q "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac" scripts/validate_release_receipt.py
+grep -q "019f33e7-68eb-76c0-9317-8c81b958c57a" scripts/validate_release_receipt.py
+grep -q "019f33e6-3a59-79a1-bf0c-226261faeb13" scripts/validate_release_receipt.py
+grep -q "remote/GitHub CI current HEAD not verified" scripts/validate_release_receipt.py
+grep -q "draft is not client/PPT deliverable" scripts/validate_release_receipt.py
+grep -q "requires_final_due_window_evidence_before_completion_or_cancellation" scripts/validate_release_receipt.py
 python3 - <<'PY'
 import json
 from pathlib import Path

@@ -70,7 +70,47 @@
     "cold_review_converged": true,
     "domain_or_rebuttal_review_converged": true,
     "stop_more_reviewers": true,
-    "additional_review_wave_reason": ""
+    "additional_review_wave_reason": "",
+    "latest_project_state_convergence": {
+      "round_id": "fixture-project-state-and-automation-update",
+      "public_release_complete": false,
+      "three_project_objective_complete": false,
+      "remote_push_performed": false,
+      "client_ready_claim": false,
+      "automation_self_recycle_complete": false,
+      "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "worker_thread_id": "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac",
+        "local_commit": "24bc7bb",
+        "DOMAIN_DELIVERABLE_RECEIPT": "not_applicable"
+      },
+      "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT": {
+        "main_cos_thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "worker_thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
+        "local_commit": "e7f3fd4",
+        "artifact_adoption": "adopted_as_evidence_only",
+        "hard_blockers": [
+          "remote/GitHub CI current HEAD not verified",
+          "draft is not client/PPT deliverable",
+          "double review incomplete"
+        ]
+      },
+      "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT": {
+        "worker_thread_id": "019f33e6-3a59-79a1-bf0c-226261faeb13",
+        "automation_status": "ACTIVE",
+        "rrule": "FREQ=HOURLY;INTERVAL=6",
+        "cleanup_decision": "do_not_delete_or_pause",
+        "status": "requires_final_due_window_evidence_before_completion_or_cancellation"
+      },
+      "still_blocked": [
+        "public release remains incomplete",
+        "three-project objective remains incomplete",
+        "remote CI for current HEAD remains unverified",
+        "ADCO evidence draft remains non-client-ready",
+        "DOMAIN_DELIVERABLE_RECEIPT is still missing for client-ready deliverables",
+        "automation self-recycle remains blocked until final due-window evidence"
+      ]
+    }
   },
   "additional_review_waves_after_stop": false
 }

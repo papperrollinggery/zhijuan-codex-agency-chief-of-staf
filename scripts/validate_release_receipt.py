@@ -16,6 +16,13 @@ SKILL_LATEST_ADOPTION_COMMIT = "e4066fc"
 SKILL_LATEST_ADOPTION_WORKER_THREAD_ID = "019f339a-6907-7ff3-9dfc-2457e7a8db29"
 SKILL_LATEST_ADOPTION_VALIDATION_THREAD_ID = "019f33a3-a120-70d1-af52-d3739df4395d"
 SKILL_REBUTTAL_REVIEW_THREAD_ID = "019f33a8-9dd3-7741-ab18-025a657c025a"
+LATEST_DIR_MAIN_COS_THREAD_ID = "019f2e3c-93f6-7b40-8616-4945feb79c0d"
+LATEST_DIR_WORKER_THREAD_ID = "019f33e7-5fb2-7ea2-91a6-7b7bafd9d3ac"
+LATEST_DIR_LOCAL_COMMIT = "24bc7bb"
+LATEST_ADCO_MAIN_COS_THREAD_ID = "019f2e9d-c7a1-7b83-9b24-05117432c52f"
+LATEST_ADCO_WORKER_THREAD_ID = "019f33e7-68eb-76c0-9317-8c81b958c57a"
+LATEST_ADCO_LOCAL_COMMIT = "e7f3fd4"
+LATEST_OPS_WORKER_THREAD_ID = "019f33e6-3a59-79a1-bf0c-226261faeb13"
 
 
 def fail(message: str) -> None:
@@ -43,6 +50,16 @@ def require_marker(values: list[Any], marker: str, label: str) -> None:
     marker_lower = marker.lower()
     if not any(marker_lower in str(value).lower() for value in values):
         fail(f"{label} missing marker: {marker}")
+
+
+def require_text_marker(value: Any, marker: str, label: str) -> None:
+    if marker.lower() not in str(value).lower():
+        fail(f"{label} missing marker: {marker}")
+
+
+def require_equal(container: dict[str, Any], field: str, expected: Any, label: str) -> None:
+    if container.get(field) != expected:
+        fail(f"{label}.{field} must be {expected!r}")
 
 
 def load(path: Path) -> dict[str, Any]:
@@ -214,6 +231,75 @@ def validate_release_decision(data: dict[str, Any], cold: bool, domain: bool) ->
         fail("must stop adding reviewers after cold + domain/rebuttal reviews converge")
     if cold and domain and data.get("additional_review_waves_after_stop") and not decision.get("additional_review_wave_reason"):
         fail("extra review waves after stop condition require additional_review_wave_reason")
+    validate_latest_project_state_convergence(decision)
+
+
+def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
+    convergence = decision.get("latest_project_state_convergence")
+    if not isinstance(convergence, dict):
+        fail("release_decision.latest_project_state_convergence must be an object")
+    if not str(convergence.get("round_id", "")).strip():
+        fail("release_decision.latest_project_state_convergence.round_id must be present")
+    for field in [
+        "public_release_complete",
+        "three_project_objective_complete",
+        "remote_push_performed",
+        "client_ready_claim",
+        "automation_self_recycle_complete",
+    ]:
+        if as_bool(convergence.get(field), f"latest_project_state_convergence.{field}") is not False:
+            fail(f"latest_project_state_convergence.{field} must be false")
+
+    dir_receipt = convergence.get("DIR_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    if not isinstance(dir_receipt, dict):
+        fail("latest_project_state_convergence.DIR_PROJECT_STATE_CONVERGENCE_RECEIPT must be an object")
+    require_equal(dir_receipt, "main_cos_thread_id", LATEST_DIR_MAIN_COS_THREAD_ID, "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_equal(dir_receipt, "worker_thread_id", LATEST_DIR_WORKER_THREAD_ID, "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_equal(dir_receipt, "local_commit", LATEST_DIR_LOCAL_COMMIT, "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_equal(dir_receipt, "DOMAIN_DELIVERABLE_RECEIPT", "not_applicable", "DIR_PROJECT_STATE_CONVERGENCE_RECEIPT")
+
+    adco_receipt = convergence.get("ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    if not isinstance(adco_receipt, dict):
+        fail("latest_project_state_convergence.ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT must be an object")
+    require_equal(adco_receipt, "main_cos_thread_id", LATEST_ADCO_MAIN_COS_THREAD_ID, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_equal(adco_receipt, "worker_thread_id", LATEST_ADCO_WORKER_THREAD_ID, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_equal(adco_receipt, "local_commit", LATEST_ADCO_LOCAL_COMMIT, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT")
+    require_text_marker(adco_receipt.get("artifact_adoption"), "evidence_only", "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.artifact_adoption")
+    adco_hard_blockers = require_list(
+        adco_receipt.get("hard_blockers"),
+        "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.hard_blockers",
+    )
+    for marker in [
+        "remote/GitHub CI current HEAD not verified",
+        "draft is not client/PPT deliverable",
+        "double review incomplete",
+    ]:
+        require_marker(adco_hard_blockers, marker, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.hard_blockers")
+
+    ops_receipt = convergence.get("COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
+    if not isinstance(ops_receipt, dict):
+        fail("latest_project_state_convergence.COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT must be an object")
+    require_equal(ops_receipt, "worker_thread_id", LATEST_OPS_WORKER_THREAD_ID, "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
+    require_equal(ops_receipt, "automation_status", "ACTIVE", "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
+    require_equal(ops_receipt, "rrule", "FREQ=HOURLY;INTERVAL=6", "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
+    require_equal(ops_receipt, "cleanup_decision", "do_not_delete_or_pause", "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
+    require_equal(
+        ops_receipt,
+        "status",
+        "requires_final_due_window_evidence_before_completion_or_cancellation",
+        "COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT",
+    )
+
+    still_blocked = require_list(convergence.get("still_blocked"), "latest_project_state_convergence.still_blocked")
+    for marker in [
+        "public release",
+        "three-project objective",
+        "remote CI",
+        "ADCO evidence draft",
+        "DOMAIN_DELIVERABLE_RECEIPT",
+        "automation self-recycle",
+    ]:
+        require_marker(still_blocked, marker, "latest_project_state_convergence.still_blocked")
 
 
 def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
