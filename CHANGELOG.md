@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a required Chinese `THREAD_DISPATCH_RECEIPT` dispatch summary card so worker dispatches are readable before any machine YAML appears.
 - Added Chinese-first compact visible output rules so light `COS_BOOT_RECEIPT` responses stay readable while machine receipts remain available for dispatch, heartbeat, and release evidence.
 - Added the same Chinese-first output rule to the project/global `AGENTS.md` routing shim and validation gates so cross-project COS starts do not regress to English-heavy receipts.
 - Added explicit installer support for project/global `AGENTS.md` routing shims without making the default install silently modify user rules.

@@ -144,6 +144,18 @@ def full_machine_boot_allowed(prompt: str, output: str) -> bool:
     return compact_boot_requires_full_receipt(prompt, "")
 
 
+def has_human_dispatch_summary(output: str) -> bool:
+    """Dispatch receipts must be readable for humans before the machine fields."""
+    marker_index = output.find("THREAD_DISPATCH_RECEIPT")
+    if marker_index < 0:
+        return True
+    window = output[max(0, marker_index - 200) : marker_index + 1400]
+    if not re.search(r"THREAD_DISPATCH_RECEIPT：|派发摘要|派发卡片", window):
+        return False
+    required_labels = ["工作线程", "职责", "读取范围", "写入范围", "预期回执", "身份契约", "收尾方式", "当前状态"]
+    return all(label in window for label in required_labels)
+
+
 def case_prompt_text(case: dict) -> str:
     parts = [
         str(case.get("prompt", "")),
@@ -651,6 +663,8 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     if re.search(r"same-thread|同线程|simulate|模拟", output, re.I) and "THREAD_DISPATCH_RECEIPT" in output:
         reasons.append("same-thread simulation cannot satisfy THREAD_DISPATCH_RECEIPT")
     if "THREAD_DISPATCH_RECEIPT" in output:
+        if not has_human_dispatch_summary(output):
+            reasons.append("dispatch receipt must include Chinese human-readable dispatch summary before machine fields")
         required_dispatch_fields = {
             "thread_class",
             "read_scope",
@@ -934,6 +948,11 @@ def main() -> int:
         fail("thread dispatch receipt template missing marker")
     if "worker_prompt_identity_contract" not in dispatch_template:
         fail("thread dispatch receipt template missing worker prompt identity contract")
+    if "派发摘要" not in dispatch_template:
+        fail("thread dispatch receipt template must include Chinese human-readable dispatch summary guidance")
+    for rel in ["SKILL.md", "assets/CHIEF_OF_STAFF_PROMPT.md", "references/ACTIVATION_PROTOCOL.md", "README.md"]:
+        if "派发摘要" not in read(root / rel):
+            fail(f"{rel} must require Chinese human-readable dispatch summaries")
 
     routing = read(root / "references/AGENTS_ROUTING_SNIPPET.md")
     for phrase in [

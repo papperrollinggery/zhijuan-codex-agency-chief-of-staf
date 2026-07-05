@@ -41,6 +41,37 @@ Then `thread_dispatch_decision` must be `dispatch` or `tool_blocked`. It must no
 
 An output that says `thread_dispatch_decision: dispatch` but never emits `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED` is `thread_not_converged` evidence, not a successful activation.
 
+## Dispatch Visibility Rule
+
+`THREAD_DISPATCH_RECEIPT` is both evidence and user-facing status. Do not show it as a raw English/YAML field dump.
+
+Every visible dispatch must start with a Chinese dispatch card before the machine fields:
+
+````markdown
+THREAD_DISPATCH_RECEIPT：已派发真实执行线程
+
+派发摘要
+| 项目 | 内容 |
+|---|---|
+| 工作线程 | `019f...` |
+| 职责 | 开发执行 / 审查 / 救援 / 侦察 worker |
+| 读取范围 | 中文说明 |
+| 写入范围 | 中文说明 |
+| 预期回执 | `WORKER_RECEIPT` |
+| 身份契约 | 已写入 worker 自己的 thread_id |
+| 收尾方式 | 回执后归档 / 保留原因 / cleanup 阻塞 |
+| 当前状态 | 已派发 / 等待 worktree 创建 |
+
+机器凭证：
+```yaml
+THREAD_DISPATCH_RECEIPT:
+  thread_id: "019f..."
+  ...
+```
+````
+
+The machine-readable YAML can stay, but only after the Chinese card and under a "机器凭证" label. If the output only shows fields such as `thread_id`, `thread_class`, `read_scope`, `write_scope`, `expected_receipt`, and `status`, it is not human-readable enough even when the receipt is technically valid.
+
 Every dispatched worker must then enter bounded receipt polling:
 
 1. Default `worker_receipt_poll_limit: 3`.

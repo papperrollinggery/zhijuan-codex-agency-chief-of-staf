@@ -6,6 +6,7 @@
 3. `COS_BOOT_RECEIPT` 标记必须保留；T0/T1、状态说明、轻量答复、用户只是问“为什么/什么情况/是否受阻/怎么显示”时，必须用中文紧凑版，例如：`COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。` 不要输出 `skill_loaded`、`trigger_type`、`thread_role` 这类英文键值表。
 4. 只有真实派发、TOOL_BLOCKED、heartbeat 验收、release receipt、失败诊断或用户要求机器字段时，才展开完整机器字段。
 5. 展开机器字段时，先用 1-3 行中文说明结论，再把字段放进代码块；字段名可以保持机器可读英文。
+6. 真实派发时，`THREAD_DISPATCH_RECEIPT` 不能只显示英文 YAML。必须先输出中文“派发摘要”卡片，再输出“机器凭证”。摘要卡至少写清：工作线程、职责、读取范围、写入范围、预期回执、身份契约、收尾方式、当前状态。
 
 线程名：
 
@@ -79,6 +80,21 @@ COS_BOOT_RECEIPT:
   worker_startup_grace_seconds: 120
   reason: ""
 
+THREAD_DISPATCH_RECEIPT：已派发真实执行线程
+
+派发摘要
+| 项目 | 内容 |
+|---|---|
+| 工作线程 | `019f...` |
+| 职责 | 开发执行 worker |
+| 读取范围 | 项目目录和临时验证目录 |
+| 写入范围 | 仅临时目录 |
+| 预期回执 | `WORKER_RECEIPT` |
+| 身份契约 | 已写入 worker 自己的 thread_id |
+| 收尾方式 | 回执后归档，或保留并写明原因 |
+| 当前状态 | 已派发，等待回执 |
+
+机器凭证：
 THREAD_DISPATCH_RECEIPT:
   thread_id: ""
   pending_worktree_id: ""

@@ -48,6 +48,8 @@ Current local validation evidence:
 | `ad-creative-orchestrator` | `python3 tools/run_checks.py` | PASS |
 | `ad-creative-orchestrator` | `python3 tools/check_distribution.py` | PASS |
 | `ad-creative-orchestrator` | `git diff --check` | PASS |
+| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/validate_activation_contract.py .; bash scripts/check_structure.sh .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json; bash scripts/quality_gate.sh .` | PASS after human-readable dispatch summary hardening |
+| `zhijuan-codex-agency-chief-of-staf` | `python3 scripts/install_skill.py --force --agents-routing project --project-root . --json; bash scripts/release_smoke.sh .; git diff --check` | PASS after installed-copy sync |
 
 Project-main thread status:
 
@@ -58,6 +60,8 @@ Project-main thread status:
 | `019f2e3c-9a52-7d70-845a-9db49acbb7bf` | `ad-creative-orchestrator` | `ADCO_CURRENT_STATE_RECEIPT` | blocked then replaced; archived after `send_message_to_thread` returned `no active turn to steer` |
 | `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_PROJECT_COS_CURRENT_RECEIPT` | received; reviewer `019f3037...` marked `thread_not_converged` / archived / rejected evidence; later fork rescue adopted partial ThreadOps receipt fixture as `5101dbf`; legacy dirty worktree kept open |
 | `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT` | received; local gates pass, but current HEAD `fa60638` lacks fresh-clone, installed-copy smoke, and remote CI evidence because `origin/main` is still `48f2193` |
+| `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_LOCAL_FRESH_CLONE_SMOKE_RECEIPT` | received; worker `019f3373-7500-7d32-9733-19dd046e146c` proved local fresh-clone and installed-copy smoke for `fa60638`; remote CI remains not checked |
+| `019f2354-f00c-7132-90d7-fb6c26ff2ecf` | `zhijuan-codex-agency-chief-of-staf` | `HUMAN_DISPATCH_SUMMARY_HARDENING` | local self-improvement patch adopted; raw English `THREAD_DISPATCH_RECEIPT` output is now blocked by validator and fixtures |
 | `019f2e9c-dafb-7750-ac10-3fdcbf8669b5` | `ad-creative-orchestrator` | `ADCO_DIRTY_WORKTREE_REVIEW_RECEIPT` | received; split adoption recommended; archived |
 | `019f2ea1-bb8b-7da2-825e-dd4e496b292d` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | `thread_not_converged`; systemError; no receipt; archived; temporary worktree no longer present |
 | `019f2eab-ff09-7db3-ab78-16ae6dd383b4` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_RESCUE_RECEIPT` | rescue attempted; systemError; no receipt; archived; temporary worktree no longer present |
@@ -117,7 +121,7 @@ Current hard limits:
 - No remote push has been performed in this round.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
-- ADCO remains blocked on current-HEAD release evidence: `ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT` confirms `fa60638` is ahead of `origin/main` and lacks fresh-clone, installed-copy smoke, and remote CI evidence.
+- ADCO local current-HEAD evidence improved: `ADCO_LOCAL_FRESH_CLONE_SMOKE_RECEIPT` confirms fresh-clone and installed-copy smoke pass for local `fa60638`, but remote CI is still not checked because no push was performed and `origin/main` remains `48f2193`.
 - The old ADCO project-main thread could not be steered and was replaced by `019f2e9d-c7a1-7b83-9b24-05117432c52f`.
 - ADCO split adoption implementation and early bounded rescue attempts failed with systemError before receipts; those failed threads are rejected as evidence.
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.
@@ -137,5 +141,6 @@ Current hard limits:
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-06T01:54:49+08:00` the long-running six-hour `cos` automation is not due until `2026-07-06T07:43:28.193+08:00`, so natural-fire completion remains unproven rather than failed.
+- Human-readable dispatch summary hardening is validated locally and installed-copy synced; it still needs to be observed in a future organic ADCO/DIR worker dispatch after this patch.
 - Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes from validation; no `adco-check-*` temp dirs remained; cache dirs were removed. Multiple stale `xcodebuildmcp` MCP server pairs were sleeping, so older duplicate pairs were terminated and the newest pair was left running.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

@@ -10,6 +10,8 @@ This skill helps Codex decide whether a request should be handled directly, plan
 
 用户可见输出默认中文、简洁、先结论。`COS_BOOT_RECEIPT` 作为自动化识别标记保留，但 T0/T1、状态说明、轻量答复、用户只是问“为什么/什么情况/是否受阻/怎么显示”时，必须用中文短句，例如：`COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。` 只有真实派发、阻断、heartbeat 验收、release receipt、失败诊断或用户明确要求机器字段时，才展开完整机器字段。
 
+真实派发时，`THREAD_DISPATCH_RECEIPT` 不能只显示英文 YAML。用户可见输出必须先给中文“派发摘要”卡片，写清工作线程、职责、读取范围、写入范围、预期回执、身份契约、收尾方式和当前状态；机器 YAML 只放在摘要后作为“机器凭证”。
+
 适合使用的场景：
 
 - 你要求“幕僚长 / Codex Agency / 完整团队 / 真实 Codex Threads / worker thread / receipt / cleanup”。
@@ -22,6 +24,7 @@ This skill helps Codex decide whether a request should be handled directly, plan
 - 安装 Skill 只让它可被选择；默认不会写入 `AGENTS.md`，也不能强制所有未来任务自动进入幕僚长流程。
 - 如果希望某个项目默认路由到幕僚长流程，需要把 [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) 合入该项目 `AGENTS.md`，或运行 `python3 scripts/install_skill.py --agents-routing project --project-root /path/to/project`。
 - 当用户明确要求真实线程时，必须输出真实 `THREAD_DISPATCH_RECEIPT`；没有真实线程工具时只能 `TOOL_BLOCKED`，不能用同线程角色扮演替代。
+- `THREAD_DISPATCH_RECEIPT` 必须先给中文派发摘要，再给机器凭证；不能只把 `thread_id/read_scope/write_scope/status` 这类英文键值表甩给用户。
 - 创意、分镜、提案、资料整理、文案、故事、执行规划等客户交付物，不能只凭 worker receipt、脚本 PASS 或 `VALIDATION=PASS` 宣称 `client-ready` / `可交付`；必须有 `DOMAIN_DELIVERABLE_RECEIPT`。
 
 ## Why Use It

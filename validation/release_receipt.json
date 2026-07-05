@@ -662,6 +662,16 @@
           }
         ],
         "hardening_adopted": "Dispatch prompts must include COS_WORKER_BYPASS, worker true thread id, receipt.thread_id equality, and THREAD_DISPATCH_RECEIPT.worker_prompt_identity_contract: included."
+      },
+      {
+        "thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "main_cos_self_improvement_controller",
+        "expected_receipt": "HUMAN_DISPATCH_SUMMARY_HARDENING",
+        "dispatch_status": "not_applicable_user_feedback_patch",
+        "receipt_status": "validated_by_local_gates",
+        "cleanup_status": "keep_open_with_reason",
+        "receipt_summary": "User screenshot showed THREAD_DISPATCH_RECEIPT as raw English/YAML fields. The Skill, prompts, routing snippet, template, README, validator, quality gate, and fixtures now require a Chinese dispatch summary card before machine YAML."
       }
     ],
     "commands_run": [
@@ -854,6 +864,16 @@
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "codex_app.send_message_to_thread 019f2e9d-c7a1-7b83-9b24-05117432c52f; wait bounded window; codex_app.read_thread 019f2e9d-c7a1-7b83-9b24-05117432c52f",
         "result": "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT received. ADCO project main verified local gates PASS, but local HEAD fa60638 is ahead 4 while origin/main is 48f2193; fresh clone, installed-copy smoke, and remote CI for current HEAD are not done."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/validate_activation_contract.py .; bash scripts/check_structure.sh .; python3 scripts/validate_domain_deliverable_contract.py .; python3 scripts/validate_release_receipt.py validation/release_receipt.json; bash scripts/quality_gate.sh .",
+        "result": "PASS after adding mandatory Chinese THREAD_DISPATCH_RECEIPT dispatch summary cards and a raw-dispatch-no-human-summary-invalid regression fixture."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/install_skill.py --force --agents-routing project --project-root . --json; bash scripts/release_smoke.sh .; git diff --check",
+        "result": "PASS after a second install sync; first release_smoke exposed installed AGENTS.md drift, the second install reported AGENTS.md unchanged and release_smoke passed."
       }
     ],
     "automation_receipts": [
@@ -971,7 +991,7 @@
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
       "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-06T01:54:49+08:00 the long-running six-hour cos automation is not due until 2026-07-06T07:43:28.193+08:00, so natural-fire completion remains unproven rather than failed.",
       "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT now confirms the DIR project remains NEEDS_USER for real live acceptance despite passing local validation.",
-      "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT now confirms ADCO current local HEAD fa60638 lacks fresh-clone, installed-copy smoke, and remote CI evidence because origin/main is still 48f2193."
+      "ADCO_LOCAL_FRESH_CLONE_SMOKE_RECEIPT now confirms local fresh-clone and installed-copy smoke pass for local HEAD fa60638; remote CI is still not checked because origin/main remains 48f2193 and no push was performed."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
@@ -981,7 +1001,8 @@
       "The strict positive smoke used an explicit target id/title/cwd in the automation prompt, so it verifies the prompt shape and receipt schema rather than independently proving the model can discover target metadata without being given it.",
       "create_thread returned a handler error while duplicate threads materialized; duplicate 019f3036-fe20-7a00-b5eb-14ea205bad24 was archived/interrupted and rejected as evidence.",
       "Transient invalid placeholder THREAD_DISPATCH_RECEIPT rows with thread_id=pending or dispatch_pending were emitted during continuations and are explicitly rejected as evidence; only rows with a real thread_id or a non-empty pending_worktree_id are valid dispatch evidence.",
-      "Project-main COS threads remain open by design; only completed worker/review threads should be archived."
+      "Project-main COS threads remain open by design; only completed worker/review threads should be archived.",
+      "Human-readable dispatch summary hardening is validated locally and installed-copy synced; it has not yet been observed in a future organic ADCO/DIR worker dispatch after this patch."
     ]
   }
 }

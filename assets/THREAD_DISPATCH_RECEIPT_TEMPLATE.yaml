@@ -1,3 +1,20 @@
+# 用户可见时必须先显示中文派发摘要卡，不能只显示下面的机器字段。
+# 示例:
+# THREAD_DISPATCH_RECEIPT：已派发真实执行线程
+#
+# 派发摘要
+# | 项目 | 内容 |
+# |---|---|
+# | 工作线程 | `019f...` |
+# | 职责 | 开发执行 worker |
+# | 读取范围 | 项目目录和临时验证目录 |
+# | 写入范围 | 仅临时目录 |
+# | 预期回执 | `WORKER_RECEIPT` |
+# | 身份契约 | 已写入 worker 自己的 thread_id |
+# | 收尾方式 | 回执后归档，或保留并写明原因 |
+# | 当前状态 | 已派发，等待回执 |
+#
+# 机器凭证:
 THREAD_DISPATCH_RECEIPT:
   thread_id: "" # required when status=dispatched
   pending_worktree_id: "" # allowed only when status=dispatch_pending

@@ -195,6 +195,7 @@ grep -q "set_thread_title" SKILL.md
 grep -q "COS_BOOT_RECEIPT" SKILL.md
 grep -q "用户可见输出规范" SKILL.md
 grep -q "中文紧凑版" SKILL.md
+grep -q "派发摘要" SKILL.md
 grep -q "THREAD_DISPATCH_RECEIPT" SKILL.md
 grep -q "thread_dispatch_decision" SKILL.md
 grep -q "dispatcher_set" SKILL.md
@@ -208,9 +209,11 @@ grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/REVIEWER_PROMPT.
 grep -q "COS_BOOT_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "中文紧凑版" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "派发摘要" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "worker_prompt_identity_contract" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "你的真实 thread_id 是" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
+grep -q "派发摘要" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
 grep -q "worker_prompt_identity_contract" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
 grep -q "max_review_waves" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "review_convergence_budget" validation/release_receipt.json

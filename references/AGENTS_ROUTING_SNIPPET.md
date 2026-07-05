@@ -17,5 +17,7 @@ For release/pre-release quality, public sharing, multi-file reliability, or mult
 
 If the user explicitly requests real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup, create real Codex Threads with thread tools and output `THREAD_DISPATCH_RECEIPT`. If those tools are unavailable, report `TOOL_BLOCKED`. Do not substitute subagents, role-play, or same-thread simulation.
 
+`THREAD_DISPATCH_RECEIPT` 用户可见时必须先输出中文“派发摘要”卡片，至少包含工作线程、职责、读取范围、写入范围、预期回执、身份契约、收尾方式、当前状态；机器 YAML 只能放在摘要之后并标注“机器凭证”。不要只展示英文键值表。
+
 For tiny direct-answer tasks, keep the result light. If the Skill was explicitly invoked, still output a compact `COS_BOOT_RECEIPT` and record `thread_dispatch_decision: no_dispatch`.
 ```
