@@ -825,6 +825,22 @@
         "dirty ADCO worktrees must be preserved or separately reviewed"
       ],
       "receipt_summary": "OPS process/cache sampling found no zombies and no safe cleanup candidates. PID 1233 app-server and PID 1514 renderer CPU ownership could not be proven, MCP/Node fanout is broad, five clean Skill worktrees need active-thread confirmation before rm, dirty ADCO worktrees are blocked, and tmp cache candidates are empty."
+    },
+    {
+      "thread_id": "019f3407-5e29-7351-b485-5586bbd0be0b",
+      "thread_class": "review_worker",
+      "deliverable": "rebuttal completion audit",
+      "wave": "post-stop-bounded",
+      "status": "blocking_findings_adopted",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NEEDS_HUMAN",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt": "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT",
+      "release_completion_allowed": false,
+      "receipt_summary": "Rebuttal completion audit used the correct worker thread id and kept release_completion_allowed=false. Local validators and project worktrees are clean, but release completion remains blocked by missing natural heartbeat due-window evidence, no push or remote CI proof, missing DIR live acceptance, ADCO not client/PPT-ready with incomplete double review, missing client-ready DOMAIN_DELIVERABLE_RECEIPT, automation self-recycle not complete, and no safe unconfirmed cleanup."
     }
   ],
   "release_decision": {
@@ -1026,6 +1042,44 @@
         "tmp_cache_candidates": [],
         "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
       },
+      "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT": {
+        "worker_thread_id": "019f3407-5e29-7351-b485-5586bbd0be0b",
+        "receipt": "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT",
+        "verdict": "NEEDS_HUMAN",
+        "release_completion_allowed": false,
+        "public_release_complete": false,
+        "three_project_objective_complete": false,
+        "remote_push_performed": false,
+        "automation_self_recycle_complete": false,
+        "audited_heads": {
+          "zhijuan-codex-agency-chief-of-staf": "5f05560",
+          "DIR SKILL": "24bc7bb",
+          "ad-creative-orchestrator": "e7f3fd4"
+        },
+        "still_blocking": [
+          "natural heartbeat due-window receipt is not available before 2026-07-06T07:43:28.193+08:00",
+          "no push or remote CI verification has been performed",
+          "DIR live user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
+          "automation self-recycle cannot run while objectives remain incomplete",
+          "old processes, worktrees, and caches have no safe unconfirmed cleanup action"
+        ],
+        "hard_gated_now": [
+          "worker bypass and worker self thread_id",
+          "dispatch receipt or TOOL_BLOCKED evidence",
+          "heartbeat receipt fields",
+          "release receipt incomplete boundary",
+          "domain receipt and client-ready claims"
+        ],
+        "still_convention_only": [
+          "future natural tasks still require per-run receipt proof",
+          "client-ready creative quality, live acceptance, and remote release are not proven by local gates",
+          "clean worktree cleanup still requires active-thread ownership confirmation"
+        ],
+        "recommended_next_dispatch": "Do not change rules now. After 2026-07-06T07:43:28.193+08:00, verify the natural heartbeat due-window receipt; if absent, dispatch bounded heartbeat rescue/OPS.",
+        "next_check": "2026-07-06T07:43:28.193+08:00"
+      },
       "still_blocked": [
         "public release is incomplete",
         "three-project objective is incomplete",
@@ -1033,7 +1087,8 @@
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
         "cos automation self-recycle must wait for final due-window evidence and objective completion",
-        "OPS process/cache sampling found no safe kill/rm action without user confirmation"
+        "OPS process/cache sampling found no safe kill/rm action without user confirmation",
+        "rebuttal completion audit keeps release_completion_allowed=false until natural heartbeat due-window evidence is checked"
       ]
     }
   },
@@ -1309,6 +1364,44 @@
         "tmp_cache_candidates": [],
         "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
       },
+      "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT": {
+        "worker_thread_id": "019f3407-5e29-7351-b485-5586bbd0be0b",
+        "receipt": "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT",
+        "verdict": "NEEDS_HUMAN",
+        "release_completion_allowed": false,
+        "public_release_complete": false,
+        "three_project_objective_complete": false,
+        "remote_push_performed": false,
+        "automation_self_recycle_complete": false,
+        "audited_heads": {
+          "zhijuan-codex-agency-chief-of-staf": "5f05560",
+          "DIR SKILL": "24bc7bb",
+          "ad-creative-orchestrator": "e7f3fd4"
+        },
+        "still_blocking": [
+          "natural heartbeat due-window receipt is not available before 2026-07-06T07:43:28.193+08:00",
+          "no push or remote CI verification has been performed",
+          "DIR live user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
+          "automation self-recycle cannot run while objectives remain incomplete",
+          "old processes, worktrees, and caches have no safe unconfirmed cleanup action"
+        ],
+        "hard_gated_now": [
+          "worker bypass and worker self thread_id",
+          "dispatch receipt or TOOL_BLOCKED evidence",
+          "heartbeat receipt fields",
+          "release receipt incomplete boundary",
+          "domain receipt and client-ready claims"
+        ],
+        "still_convention_only": [
+          "future natural tasks still require per-run receipt proof",
+          "client-ready creative quality, live acceptance, and remote release are not proven by local gates",
+          "clean worktree cleanup still requires active-thread ownership confirmation"
+        ],
+        "recommended_next_dispatch": "Do not change rules now. After 2026-07-06T07:43:28.193+08:00, verify the natural heartbeat due-window receipt; if absent, dispatch bounded heartbeat rescue/OPS.",
+        "next_check": "2026-07-06T07:43:28.193+08:00"
+      },
       "still_blocked": [
         "public release is incomplete",
         "three-project objective is incomplete",
@@ -1316,7 +1409,8 @@
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
         "cos automation self-recycle must wait for final due-window evidence and objective completion",
-        "OPS process/cache sampling found no safe kill/rm action without user confirmation"
+        "OPS process/cache sampling found no safe kill/rm action without user confirmation",
+        "rebuttal completion audit keeps release_completion_allowed=false until natural heartbeat due-window evidence is checked"
       ]
     }
   },
@@ -1344,6 +1438,10 @@
     {
       "topic": "OPS process and cache sampling",
       "summary": "OPS worker 019f33fd-5e5b-7d52-8ec8-c518cebec1bd sampled 2026-07-06 04:34:59-04:35:59 +0800: 278 related processes, no zombies, no tmp cache candidates, no safe cleanup without user confirmation. PID 1233/PID 1514 ownership was not proven, five clean Skill worktrees require active-thread confirmation before rm, and dirty ADCO worktrees must be preserved or separately reviewed."
+    },
+    {
+      "topic": "rebuttal completion audit",
+      "summary": "Review worker 019f3407-5e29-7351-b485-5586bbd0be0b returned COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT with verdict NEEDS_HUMAN and release_completion_allowed=false. Do not change rules now; wait until 2026-07-06T07:43:28.193+08:00 and then verify the natural heartbeat due-window receipt."
     }
   ],
   "cross_project_validation_round": {

@@ -53,6 +53,13 @@ Latest state-convergence update: `2026-07-06-project-state-and-automation-update
 | `ad-creative-orchestrator` | `ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT` | project COS `019f2e9d-c7a1-7b83-9b24-05117432c52f`; worker `019f33e7-68eb-76c0-9317-8c81b958c57a`; local commit `e7f3fd4 Adopt ADCO natural domain draft evidence`; final `## main...origin/main [ahead 6]`; worktree clean; local gate/distribution/diff checks passed | draft is evidence-only, not client/PPT-ready; remote/GitHub CI current HEAD and double review remain incomplete |
 | `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT` | OPS worker `019f33e6-3a59-79a1-bf0c-226261faeb13`; `cos` automation ACTIVE; `FREQ=HOURLY;INTERVAL=6`; target `019f2354-f00c-7132-90d7-fb6c26ff2ecf`; next natural due `2026-07-06T07:43:28.193+08:00` | do not delete or pause automation before final due-window evidence; PID `1233` is not task-owned; dirty worktree cleanup remains blocked |
 | `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT` | OPS worker `019f33fd-5e5b-7d52-8ec8-c518cebec1bd`; sampled `2026-07-06 04:34:59-04:35:59 +0800`; related processes `278`; zombies `0`; MCP/Node fanout recorded; tmp cache candidates empty | no direct `kill` or `rm`: PID `1233`/`1514` ownership unproven, five clean Skill worktrees require active-thread confirmation, dirty ADCO worktrees must be preserved or separately reviewed |
+| `zhijuan-codex-agency-chief-of-staf` | `COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT` | review worker `019f3407-5e29-7351-b485-5586bbd0be0b`; verdict `NEEDS_HUMAN`; `release_completion_allowed=false`; local receipt/gate evidence still passes | 不放行：自然 heartbeat due-window 未验收、未 push/远端 CI 未验证、DIR live acceptance 缺失、ADCO 不是 client/PPT-ready 且 double review incomplete、DIR/ADCO 仍缺客户级 `DOMAIN_DELIVERABLE_RECEIPT` |
+
+Latest rebuttal completion audit:
+
+- `019f3407-5e29-7351-b485-5586bbd0be0b` 已完成反驳审查，receipt.thread_id 正确，结论为 `NEEDS_HUMAN`。
+- 本轮只记录阻塞证据，不声明 release-ready；`public_release_complete=false`、`three_project_objective_complete=false`、`remote_push_performed=false`、`automation_self_recycle_complete=false` 继续保持。
+- 下一步不修规则、不清理旧进程或 worktree；只等 `2026-07-06T07:43:28.193+08:00` 后检查自然 heartbeat due-window 回执。到期仍无有效回执时，再派 bounded heartbeat rescue/OPS。
 
 Current local validation evidence:
 
@@ -159,6 +166,7 @@ OPS process/cache sampling:
 
 Current hard limits:
 
+- 最新反驳审查 `COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT` 明确不放行：当前只等待自然 heartbeat due-window 回执，不能把本地 gate 通过写成 release-ready。
 - No remote push has been performed in this round; no current local HEAD has remote CI proof from this evidence sync.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
