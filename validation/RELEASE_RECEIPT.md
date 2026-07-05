@@ -77,6 +77,9 @@ Project-main thread status:
 | `019f30b7-3879-76c2-87ab-76286de8142f` | `zhijuan-codex-agency-chief-of-staf` | `COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT` | receipt marker received but `thread_id` incorrectly copied source/main thread `019f2354...`; archived and rejected as completion evidence; adopted only as hardening input for `invalid_worker_thread_id` |
 | `019f30b4-34b3-79c1-9d8c-3b44d90571d0` | `zhijuan-codex-agency-chief-of-staf` | `COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT` | receipt marker received with correct worker id but verdict `FAIL` before next due; archived and rejected as acceptance evidence; adopted only as hardening input for due-window validation |
 | `019f30d1-5af7-7862-8e71-af63ca2765c0` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT` | received; correct worker id; archived; `complete_ready=false` because natural `cos` heartbeat is not due until `2026-07-05T18:49:24.944+08:00` |
+| `019f3182-c1c7-7fd2-8f0e-75a73cbc5c7a` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_REVIEW_RECEIPT` | natural ADCO test dispatched a worker, but receipt copied main thread `019f2e9d...`; archived and rejected as completion evidence; adopted only as worker prompt identity hardening input |
+| `019f3184-c626-73b0-9757-72bc3d0e48cf` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_RESCUE_RECEIPT` | bounded rescue receipt used the correct worker thread id after the prompt explicitly named it; archived; adopted for routing-test evidence only, not client-ready creative output |
+| `019f3183-1cb6-7d72-99f5-1be8dfab4096` | `DIR SKILL` | `DOMAIN_DELIVERABLE_RECEIPT` | natural DIR test dispatched execution/review/fix threads, but dispatch receipts lacked `worker_prompt_identity_contract` and the domain receipt omitted worker self `thread_id`; archived and rejected as completion evidence while content remains clue-only |
 
 Automation receipt:
 

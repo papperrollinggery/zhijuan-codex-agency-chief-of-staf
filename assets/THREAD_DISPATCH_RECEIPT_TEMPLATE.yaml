@@ -5,6 +5,7 @@ THREAD_DISPATCH_RECEIPT:
   read_scope: ""
   write_scope: ""
   expected_receipt: ""
+  worker_prompt_identity_contract: included # included | pending_until_thread_id_known
   title_action: dispatcher_set # self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
   cleanup_plan: archive_after_receipt # archive_after_receipt | keep_open_with_reason | cleanup_blocked
   status: dispatched # dispatched | dispatch_pending

@@ -30,7 +30,8 @@
 16. 轮询不能连续快速刷三次。默认 `worker_receipt_poll_interval_seconds: 60`，复杂任务默认 `worker_startup_grace_seconds: 120`；worker 仍在启动或有工具活动时写 `active_no_receipt_yet`，不要过早判 `thread_not_converged`。
 17. 如果 worker 显示“当前工作目录缺失”、`current working directory missing`、`cwd_missing`、`worktree_missing` 或其 `cwd`/worktree 已不存在，立即记录 `thread_cwd_missing`、`thread_not_converged`、`adoption_status: rejected_evidence`、`cleanup_status: archived | cleanup_blocked`；不要继续向该线程发消息，不要等待恢复，不要采用旧 diff。worker 不得自行创建、重建或 checkout 自己的缺失 worktree 后继续执行；这种 receipt 按无效证据拒绝。仍需推进时，在 live project-bound thread 或 fresh isolated worktree 重派。
 18. Worker Result Packet、Review Packet 或命名 `*_RECEIPT` 必须包含 worker 自己的真实 Codex `thread_id`。如果 receipt 误写 `source_thread_id`、主线程 ID、历史线程 ID 或猜测 ID，记录 `receipt_status: invalid_worker_thread_id` / `adoption_status: rejected_evidence`；内容只能作为线索，不能作为完成证据。
-19. 创意、分镜、提案、资料整理、文案、故事、执行规划或客户交付任务不能只靠 `WORKER_RECEIPT`、测试 PASS 或 release receipt 宣称可交付；若要声明 `client-ready` / `ready to send` / `可交付`，必须收敛 `DOMAIN_DELIVERABLE_RECEIPT`，包含 brief_trace、artifacts、passing domain_quality_gates、validation、`review_status: cold_reviewed_and_domain_reviewed`、verdict。
+19. 创建或复用 worker 后，发给 worker 的 prompt 必须显式包含：`COS_WORKER_BYPASS: true`、`你的真实 thread_id 是 <worker_thread_id>`、`receipt.thread_id 必须等于 <worker_thread_id>`、`不要填写 source_thread_id 或主线程 ID`。对应 `THREAD_DISPATCH_RECEIPT` 必须写 `worker_prompt_identity_contract: included`；如果 worker 回执仍写错 ID，拒绝采用并触发 bounded rescue 或 `TOOL_BLOCKED`。
+20. 创意、分镜、提案、资料整理、文案、故事、执行规划或客户交付任务不能只靠 `WORKER_RECEIPT`、测试 PASS 或 release receipt 宣称可交付；若要声明 `client-ready` / `ready to send` / `可交付`，必须收敛 `DOMAIN_DELIVERABLE_RECEIPT`，包含 brief_trace、artifacts、passing domain_quality_gates、validation、`review_status: cold_reviewed_and_domain_reviewed`、verdict。
 
 职责：
 1. 和用户沟通。
@@ -83,6 +84,7 @@ THREAD_DISPATCH_RECEIPT:
   read_scope: ""
   write_scope: ""
   expected_receipt: ""
+  worker_prompt_identity_contract: included | pending_until_thread_id_known
   title_action: self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
   cleanup_plan: archive_after_receipt | keep_open_with_reason | cleanup_blocked
   status: dispatched | dispatch_pending

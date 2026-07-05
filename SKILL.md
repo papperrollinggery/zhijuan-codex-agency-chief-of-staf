@@ -140,12 +140,13 @@ COS_BOOT_RECEIPT:
    - 调用真实 Codex Thread 工具并输出 `THREAD_DISPATCH_RECEIPT`。若已拿到真实线程，包含真实 `thread_id`；若工具只返回 `pendingWorktreeId`，状态只能是 `dispatch_pending`，不得算作完成派发。
    - 若一次工具发现后没有可用的 `create_thread` / `fork_thread` / `read_thread` / `set_thread_archived` 等真实线程工具，立即输出 `TOOL_BLOCKED`，把 `thread_dispatch_decision` 收敛为 `tool_blocked`，且不得继续同线程执行。
    `thread_dispatch_decision: dispatch` 后没有 `THREAD_DISPATCH_RECEIPT` 或 `TOOL_BLOCKED`，必须视为 `thread_not_converged` 和无效启动证据。
-7. 每个 `THREAD_DISPATCH_RECEIPT` 必须进入有界回执轮询：默认 `worker_receipt_poll_limit: 3`、`worker_receipt_poll_interval_seconds: 60`、复杂任务 `worker_startup_grace_seconds: 120`。幕僚长必须用 `read_thread` / `list_threads` 或等价元数据读回 worker，而不是只等待。轮询不能连续快速刷三次；在 worker 刚创建、仍在启动、或有新的 tool/search/build 活动时，先记录 `receipt_status: active_no_receipt_yet` 和剩余预算，不得立刻判死。若 worker 到达轮询上限且超过宽限/超时后仍没有 expected receipt 或 artifact，必须记录 `thread_not_converged`，归档该 worker 或记录 `cleanup_blocked`，并派发 bounded rescue worker；仅输出“仍在等待”不能作为收敛状态。若 bounded rescue worker 也未收敛，幕僚长不得改为当前 COS worktree / 主线程自己实现；只能继续有预算的新 rescue、降级为 `TOOL_BLOCKED` / `NEEDS_HUMAN`，或请求用户确认新的执行面。
-8. 当用户要求检查历史线程、所有项目或之前使用本 Skill 的失败案例时，不能只看 sidebar 标题或单个会话；必须交叉检查 `state_5.sqlite`、`session_index.jsonl`、rollout JSONL、thread metadata 和 worker receipts，并把 `pendingWorktreeId`、`thread_not_converged`、title 自述和 cleanup 自述当作待核验证据。
-9. 当用户问“为什么新线程提示当前工作目录缺失 / 此对话的工作目录已不存在”，或 `read_thread` / `list_threads` / Codex UI 显示 worker 的 `cwd` / worktree / 当前工作目录已经不存在时，自动进入 stale-thread cleanup 路径：先核验原项目目录是否仍存在，再核验该 thread 的 `cwd` 和 associated worktree 是否存在。缺失 worker 必须记录 `thread_cwd_missing`、`thread_not_converged`、`adoption_status: rejected_evidence`、`cleanup_status: archived | cleanup_blocked`；不得继续向该线程发送任务、不得等待它恢复、不得把它的旧 diff 或自述当作 adoption evidence。worker 也不得自行创建、重建或 checkout 自己的缺失 worktree 后继续执行；这种 receipt 必须按 `missing-cwd worker self-recreated` 拒绝。若工作仍需推进，必须由幕僚长在真实存在的项目目录或新的 isolated worktree 中重新派发 bounded worker。
-10. `THREAD_DISPATCH_RECEIPT.thread_id` 不允许写 `pending`、`unknown`、`TBD`、`same-thread` 或空占位；未拿到真实线程时只能用非空 `pending_worktree_id` + `status: dispatch_pending`。`title_action` 只允许模板枚举值，不允许 `dispatcher_set_pending` 等临时状态。
-11. 被派发的角色专用 worker 如果只输出 `COS_BOOT_RECEIPT`、重分级或再次等待调度，而没有执行任务并输出 expected receipt/artifact，幕僚长必须把它记为 `thread_not_converged` / `rejected_evidence`，不得把该 `COS_BOOT_RECEIPT` 当作 worker receipt。
-12. 被派发的角色专用 worker 如果输出了 expected receipt 但 `thread_id` 不是该 worker 自己的真实 Codex thread id，例如误写成 `source_thread_id` 或主控线程 ID，幕僚长必须把 receipt 记为 `invalid_worker_thread_id`。可以把其内容作为线索交叉验证，但不能作为 worker 完成证据采用。
+7. 当真实 worker `thread_id` 已知后，派发给 worker 的任务 prompt 必须显式写入：`COS_WORKER_BYPASS: true`、`你的真实 thread_id 是 <worker_thread_id>`、`receipt.thread_id 必须等于 <worker_thread_id>`、`不要填写 source_thread_id 或主线程 ID`。对应 `THREAD_DISPATCH_RECEIPT` 必须写 `worker_prompt_identity_contract: included`。如果调度层没有把 worker 自己的 thread id 写进任务 prompt，后续 receipt 只能按高风险证据处理；如果 worker 回执写错 thread_id，必须记录 `invalid_worker_thread_id` 并触发 bounded rescue 或 `TOOL_BLOCKED`。
+8. 每个 `THREAD_DISPATCH_RECEIPT` 必须进入有界回执轮询：默认 `worker_receipt_poll_limit: 3`、`worker_receipt_poll_interval_seconds: 60`、复杂任务 `worker_startup_grace_seconds: 120`。幕僚长必须用 `read_thread` / `list_threads` 或等价元数据读回 worker，而不是只等待。轮询不能连续快速刷三次；在 worker 刚创建、仍在启动、或有新的 tool/search/build 活动时，先记录 `receipt_status: active_no_receipt_yet` 和剩余预算，不得立刻判死。若 worker 到达轮询上限且超过宽限/超时后仍没有 expected receipt 或 artifact，必须记录 `thread_not_converged`，归档该 worker 或记录 `cleanup_blocked`，并派发 bounded rescue worker；仅输出“仍在等待”不能作为收敛状态。若 bounded rescue worker 也未收敛，幕僚长不得改为当前 COS worktree / 主线程自己实现；只能继续有预算的新 rescue、降级为 `TOOL_BLOCKED` / `NEEDS_HUMAN`，或请求用户确认新的执行面。
+9. 当用户要求检查历史线程、所有项目或之前使用本 Skill 的失败案例时，不能只看 sidebar 标题或单个会话；必须交叉检查 `state_5.sqlite`、`session_index.jsonl`、rollout JSONL、thread metadata 和 worker receipts，并把 `pendingWorktreeId`、`thread_not_converged`、title 自述和 cleanup 自述当作待核验证据。
+10. 当用户问“为什么新线程提示当前工作目录缺失 / 此对话的工作目录已不存在”，或 `read_thread` / `list_threads` / Codex UI 显示 worker 的 `cwd` / worktree / 当前工作目录已经不存在时，自动进入 stale-thread cleanup 路径：先核验原项目目录是否仍存在，再核验该 thread 的 `cwd` 和 associated worktree 是否存在。缺失 worker 必须记录 `thread_cwd_missing`、`thread_not_converged`、`adoption_status: rejected_evidence`、`cleanup_status: archived | cleanup_blocked`；不得继续向该线程发送任务、不得等待它恢复、不得把它的旧 diff 或自述当作 adoption evidence。worker 也不得自行创建、重建或 checkout 自己的缺失 worktree 后继续执行；这种 receipt 必须按 `missing-cwd worker self-recreated` 拒绝。若工作仍需推进，必须由幕僚长在真实存在的项目目录或新的 isolated worktree 中重新派发 bounded worker。
+11. `THREAD_DISPATCH_RECEIPT.thread_id` 不允许写 `pending`、`unknown`、`TBD`、`same-thread` 或空占位；未拿到真实线程时只能用非空 `pending_worktree_id` + `status: dispatch_pending`。`title_action` 只允许模板枚举值，不允许 `dispatcher_set_pending` 等临时状态。
+12. 被派发的角色专用 worker 如果只输出 `COS_BOOT_RECEIPT`、重分级或再次等待调度，而没有执行任务并输出 expected receipt/artifact，幕僚长必须把它记为 `thread_not_converged` / `rejected_evidence`，不得把该 `COS_BOOT_RECEIPT` 当作 worker receipt。
+13. 被派发的角色专用 worker 如果输出了 expected receipt 但 `thread_id` 不是该 worker 自己的真实 Codex thread id，例如误写成 `source_thread_id` 或主控线程 ID，幕僚长必须把 receipt 记为 `invalid_worker_thread_id`。可以把其内容作为线索交叉验证，但不能作为 worker 完成证据采用。
 
 Heartbeat 自动化硬证据：
 
@@ -444,6 +445,7 @@ THREAD_DISPATCH_RECEIPT:
   read_scope: ""
   write_scope: ""
   expected_receipt: ""
+  worker_prompt_identity_contract: included | pending_until_thread_id_known
   title_action: self_set | dispatcher_set | title_preserved_by_user | title_update_blocked
   cleanup_plan: archive_after_receipt | keep_open_with_reason | cleanup_blocked
   status: dispatched | dispatch_pending

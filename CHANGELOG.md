@@ -15,6 +15,7 @@
 - Tightened activation validation so UUID-only dispatch self-reports are invalid while legitimate `pending_worktree_id` + `dispatch_pending` receipts remain valid.
 - Added release convergence gates with `max_review_waves`, `max_parallel_reviewers_per_deliverable`, required `add_review_wave_reason`, and stuck-review bounded rescue validation.
 - Hardened worker receipt identity so role-specific worker packets must include the worker's own Codex `thread_id`; receipts that copy `source_thread_id` or the main thread id are now rejected as `invalid_worker_thread_id`.
+- Hardened worker dispatch prompts so the Chief-of-Staff must inject the worker's actual `thread_id` into the worker prompt and record `worker_prompt_identity_contract: included`; dispatch receipts missing this proof are blocked.
 - Hardened natural heartbeat acceptance so reviewers must return `NOT_DUE` before `next_natural_due_at_local` instead of misclassifying user-triggered in-progress turns as heartbeat failures.
 - Hardened missing-cwd worker handling so a worker cannot self-create or re-checkout its missing isolated worktree and then claim adopted execution evidence.
 - Added `validation/release_receipt.json` plus `scripts/validate_release_receipt.py` so dispatch, adoption/rejection, cleanup, and review verdicts converge into one machine-readable release artifact.

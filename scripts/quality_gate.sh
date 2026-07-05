@@ -208,7 +208,10 @@ grep -q "不要加载或扮演完整幕僚长-COS Skill" assets/REVIEWER_PROMPT.
 grep -q "COS_BOOT_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "中文紧凑版" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "worker_prompt_identity_contract" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "你的真实 thread_id 是" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "THREAD_DISPATCH_RECEIPT" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
+grep -q "worker_prompt_identity_contract" assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml
 grep -q "max_review_waves" assets/CHIEF_OF_STAFF_PROMPT.md
 grep -q "review_convergence_budget" validation/release_receipt.json
 grep -q "unified_release_thread_table" validation/release_receipt.json
@@ -238,6 +241,7 @@ grep -q "missing-cwd-thread-archived-valid" evals/activation_contract.fixture.js
 grep -q "role-worker-bypass-source-thread-id-invalid" evals/activation_contract.fixture.json
 grep -q "natural-heartbeat-before-due-fail-invalid" evals/activation_contract.fixture.json
 grep -q "complex-quality-audit-no-dispatch-invalid" evals/activation_contract.fixture.json
+grep -q "dispatch-worker-prompt-identity-contract-missing-invalid" evals/activation_contract.fixture.json
 grep -q "dispatch decision without THREAD_DISPATCH_RECEIPT or TOOL_BLOCKED" scripts/validate_activation_contract.py
 grep -q "COS boot receipt missing" scripts/validate_activation_contract.py
 grep -q "T2+ COS task cannot use no_dispatch" scripts/validate_activation_contract.py
@@ -249,6 +253,7 @@ grep -q "missing-cwd thread must be marked thread_not_converged" scripts/validat
 grep -q "missing-cwd worker cannot recreate its own worktree" scripts/validate_activation_contract.py
 grep -q "role-specific worker receipt copied source_thread_id instead of worker thread_id" scripts/validate_activation_contract.py
 grep -q "natural heartbeat before next_due must use verdict NOT_DUE" scripts/validate_activation_contract.py
+grep -q "dispatched worker receipt missing worker_prompt_identity_contract: included" scripts/validate_activation_contract.py
 grep -q "missing source_thread_id misuse warning" scripts/validate_activation_contract.py
 grep -q "thread_cwd_missing_requires_archive_or_rehome" scripts/audit_historical_threads.py
 grep -q "thread_cwd_missing" SKILL.md
@@ -256,7 +261,10 @@ grep -q "missing-cwd-worker-self-recreated-invalid" validation/release_receipt.j
 grep -q "不得自行创建、重建或 checkout worktree" assets/EXECUTOR_PROMPT.md
 grep -q "不得自行创建、重建或 checkout worktree" assets/REVIEWER_PROMPT.md
 grep -q "invalid_worker_thread_id" SKILL.md
+grep -q "worker_prompt_identity_contract" SKILL.md
 grep -q "invalid_worker_thread_id" references/ACTIVATION_PROTOCOL.md
+grep -q "worker_prompt_identity_contract" references/ACTIVATION_PROTOCOL.md
+grep -q "你的真实 thread_id 是" README.md
 grep -q "current working directory missing" references/ACTIVATION_PROTOCOL.md
 grep -q "heartbeat automation prompt explicitly invokes Skill but output lacks COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
 grep -q "T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED" scripts/validate_activation_contract.py

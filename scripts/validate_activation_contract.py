@@ -571,6 +571,7 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
             "read_scope",
             "write_scope",
             "expected_receipt",
+            "worker_prompt_identity_contract",
             "title_action",
             "cleanup_plan",
             "status",
@@ -590,6 +591,16 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         for thread_id in thread_ids:
             if not looks_like_thread_id(thread_id):
                 reasons.append("dispatch receipt thread_id is not a real-looking UUID")
+        identity_contracts = [
+            value.strip()
+            for value in field_values(output, "worker_prompt_identity_contract")
+            if value.strip()
+        ]
+        if "dispatched" in dispatch_statuses and "included" not in identity_contracts:
+            reasons.append("dispatched worker receipt missing worker_prompt_identity_contract: included")
+        for contract in identity_contracts:
+            if contract not in {"included", "pending_until_thread_id_known"}:
+                reasons.append("worker_prompt_identity_contract has invalid value")
     cos_overexecution_markers = [
         "changed_files:",
         "commands_run:",
@@ -661,6 +672,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "natural-heartbeat-before-due-fail-invalid",
         "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",
+        "dispatch-worker-prompt-identity-contract-missing-invalid",
         "valid-pending-worktree-dispatch",
     }
     seen = {str(case.get("id", "")) for case in cases}
@@ -824,8 +836,14 @@ def main() -> int:
             fail(f"{rel} must mention COS_BOOT_RECEIPT")
     if "中文紧凑版" not in read(root / "assets/CHIEF_OF_STAFF_PROMPT.md"):
         fail("chief prompt must define compact Chinese boot output")
-    if "THREAD_DISPATCH_RECEIPT" not in read(root / "assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml"):
+    chief_prompt = read(root / "assets/CHIEF_OF_STAFF_PROMPT.md")
+    if "worker_prompt_identity_contract" not in chief_prompt or "你的真实 thread_id 是" not in chief_prompt:
+        fail("chief prompt must require worker prompt identity contract")
+    dispatch_template = read(root / "assets/THREAD_DISPATCH_RECEIPT_TEMPLATE.yaml")
+    if "THREAD_DISPATCH_RECEIPT" not in dispatch_template:
         fail("thread dispatch receipt template missing marker")
+    if "worker_prompt_identity_contract" not in dispatch_template:
+        fail("thread dispatch receipt template missing worker prompt identity contract")
 
     routing = read(root / "references/AGENTS_ROUTING_SNIPPET.md")
     for phrase in [
