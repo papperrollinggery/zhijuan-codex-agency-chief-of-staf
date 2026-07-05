@@ -223,6 +223,19 @@
             "invalid_reason": "The worker read current_time 2026-07-05T13:16:01+08:00 and automation updated_at 2026-07-05T12:49:24.944+08:00, which implies next_natural_due_at_local 2026-07-05T18:49:24.944+08:00, but it still returned verdict FAIL instead of NOT_DUE and treated a user-triggered in-progress target turn as heartbeat failure.",
             "controller_validation": "Controller independently verified current time 2026-07-05T13:30:48+08:00, cos automation next due 2026-07-05T18:49:24.944+08:00, and added natural-heartbeat-before-due-fail-invalid activation fixture plus due-window validation.",
             "receipt_summary": "The receipt had the correct worker thread_id but an invalid due-window verdict. It is archived and rejected as acceptance evidence; its failure mode is adopted only as hardening input."
+        },
+        {
+            "thread_id": "019f30d1-5af7-7862-8e71-af63ca2765c0",
+            "thread_class": "review_worker",
+            "deliverable": "three-project natural heartbeat and release gap review",
+            "wave": "post-stop-bounded",
+            "status": "done",
+            "dispatch_status": "dispatched",
+            "receipt_status": "received",
+            "adoption_status": "adopted_as_current_blocking_evidence",
+            "cleanup_status": "archived",
+            "review_verdict": "NEEDS_HUMAN",
+            "receipt_summary": "Worker produced THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT with correct self thread_id. It confirmed current_time 2026-07-05T13:48:18+08:00 is before next_natural_due_at 2026-07-05T18:49:24.944+08:00, no natural COS_HEARTBEAT_RUN_RECEIPT can yet be accepted, COS/DIR/ADCO status is clean/ahead, and ADCO f7b3 remains rejected evidence."
         }
     ],
   "release_decision": {
@@ -516,6 +529,19 @@
                 "cleanup_status": "archived",
                 "review_verdict": "FAIL",
                 "receipt_summary": "Reviewer confirmed the ADCO missing-worktree symptom was only documented, not hard-blocked. Adopted fix adds thread_cwd_missing handling to rules, historical audit classification, output contract fixtures, history fixture, and quality-gate checks."
+            },
+            {
+                "thread_id": "019f30d1-5af7-7862-8e71-af63ca2765c0",
+                "project": "zhijuan-codex-agency-chief-of-staf",
+                "thread_class": "read_only_review_worker",
+                "expected_receipt": "THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT",
+                "dispatch_status": "dispatched",
+                "receipt_status": "received",
+                "status": "done",
+                "adoption_status": "adopted_as_current_blocking_evidence",
+                "cleanup_status": "archived",
+                "review_verdict": "NEEDS_HUMAN",
+                "receipt_summary": "Reviewer confirmed natural cos heartbeat is not due at 2026-07-05T13:48:18+08:00; next_due_at remains 2026-07-05T18:49:24.944+08:00, so complete_ready=false and recommended_next_action=wait_until_next_due."
             }
         ],
     "commands_run": [
@@ -693,6 +719,11 @@
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "list_threads query=adco; read_thread 019f3051-957a-76f1-8cd1-658620da147c; ls -ld /Users/jinjungao/work/ad-creative-orchestrator /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator; set_thread_archived 019f3051-957a-76f1-8cd1-658620da147c",
         "result": "Explained user screenshot: main ADCO path exists; worker was bound to temporary f7b3 worktree. The worker self-recreated a missing isolated worktree and produced dirty changes, so it was archived and rejected as evidence; activation contract now blocks this pattern."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "fork_thread same-directory -> 019f30d1; set_thread_title; send COS_WORKER_BYPASS review prompt; wait 65s; read_thread 019f30d1; set_thread_archived 019f30d1",
+        "result": "THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT received and archived; complete_ready=false because current_time 2026-07-05T13:48:18+08:00 is before cos next_due_at 2026-07-05T18:49:24.944+08:00; recommended_next_action=wait_until_next_due."
       }
     ],
     "automation_receipts": [
@@ -707,7 +738,7 @@
         "prompt_requires_cos_heartbeat_run_receipt": true,
         "last_config_update_at_local": "2026-07-05T12:49:24.944+08:00",
         "next_natural_due_at_local": "2026-07-05T18:49:24.944+08:00",
-        "natural_fire_status": "not_due_yet_as_of_2026-07-05T13:30:48+08:00",
+        "natural_fire_status": "not_due_yet_as_of_2026-07-05T13:48:18+08:00",
         "natural_fire_acceptance_criteria": "After next_natural_due_at_local, read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf must show a heartbeat-created turn containing COS_BOOT_RECEIPT and COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f2354-f00c-7132-90d7-fb6c26ff2ecf, target_thread_verified=true, target title/cwd readback, current_due_status, dispatch_required, dispatch_outcome, thread_dispatch_receipt or TOOL_BLOCKED, stuck_rescue_decision, and next_due_or_next_check; otherwise record thread_not_converged or tool_blocked rather than claiming completion.",
         "target_thread_title": "[P01-TH00-R00] \u5e55\u50da\u957f-COS\uff5c\u4e3b\u63a7\u6c9f\u901a\uff5cTASK-000\uff5cOUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -805,9 +836,10 @@
       "Strict heartbeat run receipt smoke target 019f30a0-cf3c-77a1-8681-4609c1927c0f produced a valid COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true after the prompt included explicit target id/title/cwd, but this remains a bounded smoke and does not prove the long-running cos automation naturally fired in the root COS thread.",
       "Stale-worktree incident reviewer 019f30b7-3879-76c2-87ab-76286de8142f emitted the expected COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT but copied the source/main thread id into receipt.thread_id; it is archived and rejected as completion evidence, and now covered by role-worker-bypass-source-thread-id-invalid plus invalid_worker_thread_id release validation.",
       "Natural heartbeat acceptance reviewer 019f30b4-34b3-79c1-9d8c-3b44d90571d0 emitted COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT with verdict FAIL before the configured next due time; it is archived and rejected as acceptance evidence, and now covered by natural-heartbeat-before-due-fail-invalid due-window validation.",
+      "Natural heartbeat and release-gap reviewer 019f30d1-5af7-7862-8e71-af63ca2765c0 produced a valid receipt with complete_ready=false; it confirms the current blocker is waiting for the natural due window rather than a newly failing gate.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
-      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T13:30:48+08:00 the long-running six-hour cos automation is not due until 2026-07-05T18:49:24.944+08:00, so natural-fire completion remains unproven rather than failed."
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T13:48:18+08:00 the long-running six-hour cos automation is not due until 2026-07-05T18:49:24.944+08:00, so natural-fire completion remains unproven rather than failed."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",

@@ -76,6 +76,7 @@ Project-main thread status:
 | `019f30ab-0554-7f60-a1ef-588f162a16e3` | `zhijuan-codex-agency-chief-of-staf` | `STALE_WORKTREE_THREAD_REVIEW_RECEIPT` | received; reviewer found missing-cwd worker handling was documented but not hard-blocked; adopted after adding `thread_cwd_missing` rules, audit category, activation fixtures, history fixture, and quality-gate checks; archived |
 | `019f30b7-3879-76c2-87ab-76286de8142f` | `zhijuan-codex-agency-chief-of-staf` | `COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT` | receipt marker received but `thread_id` incorrectly copied source/main thread `019f2354...`; archived and rejected as completion evidence; adopted only as hardening input for `invalid_worker_thread_id` |
 | `019f30b4-34b3-79c1-9d8c-3b44d90571d0` | `zhijuan-codex-agency-chief-of-staf` | `COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT` | receipt marker received with correct worker id but verdict `FAIL` before next due; archived and rejected as acceptance evidence; adopted only as hardening input for due-window validation |
+| `019f30d1-5af7-7862-8e71-af63ca2765c0` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT` | received; correct worker id; archived; `complete_ready=false` because natural `cos` heartbeat is not due until `2026-07-05T18:49:24.944+08:00` |
 
 Automation receipt:
 
@@ -85,8 +86,8 @@ Automation receipt:
 
 Natural heartbeat acceptance:
 
-- Current check time: `2026-07-05T13:30:48+08:00`
-- Latest check time: `2026-07-05T13:30:48+08:00`
+- Current check time: `2026-07-05T13:48:18+08:00`
+- Latest check time: `2026-07-05T13:48:18+08:00`
 - Last config update: `2026-07-05T12:49:24.944+08:00`
 - Next six-hour due time: `2026-07-05T18:49:24.944+08:00`
 - Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT` and `COS_HEARTBEAT_RUN_RECEIPT` with `target_thread_verified=true`, correct target id/title/cwd, due status, dispatch outcome, rescue decision, and next check; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
@@ -122,8 +123,9 @@ Current hard limits:
 - Strict heartbeat run receipt smoke target `019f30a0-cf3c-77a1-8681-4609c1927c0f` produced valid target readback when the prompt carried explicit target metadata; this is accepted as positive smoke evidence but does not replace natural `cos` heartbeat acceptance.
 - Stale-worktree incident reviewer `019f30b7-3879-76c2-87ab-76286de8142f` produced the expected receipt marker but filled `thread_id` with the source/main thread ID, so it is invalid worker receipt evidence. The failure mode is now covered by `role-worker-bypass-source-thread-id-invalid` and release validator status `invalid_worker_thread_id`.
 - Natural heartbeat acceptance reviewer `019f30b4-34b3-79c1-9d8c-3b44d90571d0` produced the expected receipt marker with the correct worker id but returned `FAIL` before the configured next due time. The failure mode is now covered by `natural-heartbeat-before-due-fail-invalid`; before due, the only valid acceptance verdict is `NOT_DUE`.
+- Natural heartbeat and release-gap reviewer `019f30d1-5af7-7862-8e71-af63ca2765c0` produced a valid receipt with `complete_ready=false`; it confirms the current blocker is waiting for the natural due window, not a new failing gate.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
-- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T13:30:48+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T18:49:24.944+08:00`, so natural-fire completion remains unproven rather than failed.
+- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T13:48:18+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T18:49:24.944+08:00`, so natural-fire completion remains unproven rather than failed.
 - Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes from validation; no `adco-check-*` temp dirs remained; cache dirs were removed. Multiple stale `xcodebuildmcp` MCP server pairs were sleeping, so older duplicate pairs were terminated and the newest pair was left running.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.
