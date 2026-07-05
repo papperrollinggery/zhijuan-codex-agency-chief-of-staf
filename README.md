@@ -108,6 +108,8 @@ COS_BOOT_RECEIPT:
 
 If you want natural-language prompts like “启动幕僚长 / 完整团队 / 真实 Codex Threads” to trigger automatically, keep `agents/openai.yaml` with `policy.allow_implicit_invocation: true` and use the routing snippet in [references/AGENTS_ROUTING_SNIPPET.md](references/AGENTS_ROUTING_SNIPPET.md) for projects where this workflow should be the default.
 
+That routing snippet also carries the Chinese-first visible-output rule, so project-level COS starts stay readable while preserving machine receipts for thread and release evidence.
+
 Realistic prompts:
 
 ```text

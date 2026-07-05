@@ -7,7 +7,9 @@ Exception: if the current prompt is a role-specific worker assignment for 审查
 
 If `$zhijuan-codex-agency-chief-of-staf` is used or clearly implied, the first visible output must include `COS_BOOT_RECEIPT` before any task execution.
 
-For release/pre-release quality, public sharing, multi-file reliability, or multi-risk project audits involving assets, stale files, browser-held evidence, customer-facing language, validation commands, or cleanup, classify the task as T3+ and set `thread_dispatch_decision: dispatch` unless the user explicitly forbids worker threads. Do not compress `COS_BOOT_RECEIPT`; include the full fields from the Skill template.
+用户可见输出必须中文优先、简洁、先给结论。保留 `COS_BOOT_RECEIPT` 机器标记；小型直接答复或状态说明任务使用中文紧凑行，例如：`COS_BOOT_RECEIPT：已启动；复杂度 T0；不派发；原因：状态说明。`
+
+For release/pre-release quality, public sharing, multi-file reliability, or multi-risk project audits involving assets, stale files, browser-held evidence, customer-facing language, validation commands, or cleanup, classify the task as T3+ and set `thread_dispatch_decision: dispatch` unless the user explicitly forbids worker threads. 这些高风险场景不要只用中文紧凑行；必须先用中文说明结论，再包含 Skill 模板里的完整机器字段。
 
 If the user explicitly requests real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup, create real Codex Threads with thread tools and output `THREAD_DISPATCH_RECEIPT`. If those tools are unavailable, report `TOOL_BLOCKED`. Do not substitute subagents, role-play, or same-thread simulation.
 

@@ -828,7 +828,14 @@ def main() -> int:
         fail("thread dispatch receipt template missing marker")
 
     routing = read(root / "references/AGENTS_ROUTING_SNIPPET.md")
-    for phrase in ["真实 Codex Threads", "TOOL_BLOCKED", "COS_BOOT_RECEIPT", "COS_WORKER_BYPASS"]:
+    for phrase in [
+        "真实 Codex Threads",
+        "TOOL_BLOCKED",
+        "COS_BOOT_RECEIPT",
+        "COS_WORKER_BYPASS",
+        "用户可见输出必须中文优先",
+        "中文紧凑行",
+    ]:
         if phrase not in routing:
             fail(f"AGENTS routing snippet missing {phrase}")
     role_prompt_files = [

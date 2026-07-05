@@ -38,6 +38,33 @@ Summary from `/tmp/HISTORICAL_THREAD_AUDIT_RECEIPT_current.json`:
 }
 ```
 
+Latest local refresh after cross-project Chinese routing sync:
+
+```json
+{
+  "generated_at": "2026-07-05T08:55:07Z",
+  "matching_threads": 91,
+  "cross_project_threads": 64,
+  "missing_cwd_threads": 28,
+  "issue_categories": {
+    "activation_missing_or_unproven": 6,
+    "cross_project_routing_requires_agents_snippet": 64,
+    "history_audit_not_triggered": 3,
+    "main_thread_self_execution_complaint": 29,
+    "nonconverged_evidence_must_be_rejected": 49,
+    "pending_worktree_not_thread_id": 90,
+    "thread_cwd_missing_requires_archive_or_rehome": 28,
+    "title_receipt_metadata_requires_readback": 90
+  },
+  "latest_review_thread": {
+    "thread_id": "019f317c-5ec1-7c42-b5bc-dfa4438f3bed",
+    "archived": true,
+    "receipt": "CROSS_PROJECT_ROUTING_REVIEW_RECEIPT",
+    "verdict": "PASS"
+  }
+}
+```
+
 Top matched projects:
 
 - `/Users/jinjungao/work/ad-creative-orchestrator`: 23 threads.

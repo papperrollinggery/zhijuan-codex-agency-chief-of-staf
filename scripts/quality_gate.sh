@@ -144,7 +144,9 @@ HOME="$routing_home" python3 scripts/install_skill.py \
   --json >"$TMP_ROOT/routing-install.json"
 grep -q "BEGIN zhijuan-codex-agency-chief-of-staf routing" "$routing_project/AGENTS.md"
 grep -q "COS_BOOT_RECEIPT" "$routing_project/AGENTS.md"
+grep -q "用户可见输出必须中文优先" "$routing_project/AGENTS.md"
 grep -q "THREAD_DISPATCH_RECEIPT" "$routing_home/.codex/AGENTS.md"
+grep -q "中文紧凑行" "$routing_home/.codex/AGENTS.md"
 HOME="$routing_home" python3 scripts/install_skill.py \
   --target-root "$TMP_ROOT/routing-skills" \
   --agents-routing both \
@@ -217,6 +219,8 @@ grep -q "stuck review row" scripts/validate_release_receipt.py
 grep -q "invalid thread row" scripts/validate_release_receipt.py
 grep -q "validate_release_receipt.py" scripts/release_smoke.sh
 grep -q "TOOL_BLOCKED" references/AGENTS_ROUTING_SNIPPET.md
+grep -q "用户可见输出必须中文优先" references/AGENTS_ROUTING_SNIPPET.md
+grep -q "中文紧凑行" references/AGENTS_ROUTING_SNIPPET.md
 grep -q "Historical Thread Audit" references/ACTIVATION_PROTOCOL.md
 grep -q "HISTORICAL_THREAD_AUDIT_RECEIPT" README.md
 grep -q "pending-worktree-only-invalid" evals/activation_contract.fixture.json
