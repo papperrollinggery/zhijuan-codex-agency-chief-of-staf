@@ -196,6 +196,54 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
     return sorted(set(categories)), markers
 
 
+def cleanup_status_for(thread: dict[str, Any], categories: list[str], repo_root: Path) -> dict[str, Any]:
+    """Return audit-only cleanup guidance; this script never deletes files or kills processes."""
+    try:
+        in_repo = Path(thread["cwd"]).resolve().is_relative_to(repo_root.resolve())
+    except Exception:
+        in_repo = False
+
+    if "thread_cwd_missing_requires_archive_or_rehome" in categories:
+        cwd_path = Path(thread["cwd"]).expanduser() if thread["cwd"] else None
+        cwd_exists = bool(cwd_path and cwd_path.exists())
+        if cwd_exists:
+            status = "cleanup_blocked_readback_required"
+            action = "verify_thread_metadata_before_archive_or_cleanup"
+        elif thread["archived"]:
+            status = "no_action_already_archived"
+            action = "none"
+        else:
+            status = "cleanup_candidate_archive_thread_only"
+            action = "archive_or_mark_cleanup_blocked_after_readback"
+        return {
+            "status": status,
+            "safe_action": action,
+            "delete_files_allowed": False,
+            "kill_process_allowed": False,
+            "rule": (
+                "Missing-cwd workers are rejected evidence. Archive the thread or record cleanup_blocked; "
+                "do not delete worktrees from this audit."
+            ),
+        }
+
+    if "cross_project_routing_requires_agents_snippet" in categories and not in_repo:
+        return {
+            "status": "cleanup_blocked_target_project_scope_required",
+            "safe_action": "rehome_or_dispatch_in_target_project",
+            "delete_files_allowed": False,
+            "kill_process_allowed": False,
+            "rule": "Cross-project entries require target-project adoption; source COS cannot clean them.",
+        }
+
+    return {
+        "status": "no_cleanup_candidate",
+        "safe_action": "none",
+        "delete_files_allowed": False,
+        "kill_process_allowed": False,
+        "rule": "No stale worktree/process/cache cleanup candidate was established by this audit.",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Audit local Codex history for COS skill activation and ThreadOps issues."
@@ -220,9 +268,12 @@ def main() -> int:
     category_counts: Counter[str] = Counter()
     cwd_counts: Counter[str] = Counter()
     audited = []
+    cleanup_counts: Counter[str] = Counter()
     for thread in threads:
         categories, markers = classify(thread, repo_root)
+        cleanup_status = cleanup_status_for(thread, categories, repo_root)
         category_counts.update(categories)
+        cleanup_counts.update([cleanup_status["status"]])
         cwd_counts.update([thread["cwd"] or "(unknown)"])
         entry = {
             "thread_id": thread["id"],
@@ -230,6 +281,7 @@ def main() -> int:
             "archived": bool(thread["archived"]),
             "categories": categories,
             "markers": markers,
+            "cleanup_status": cleanup_status,
         }
         if args.include_titles:
             entry["title"] = thread["title"][:160]
@@ -251,9 +303,16 @@ def main() -> int:
                 "thread_cwd_missing_requires_archive_or_rehome", 0
             ),
             "issue_categories": dict(sorted(category_counts.items())),
+            "cleanup_candidates": dict(sorted(cleanup_counts.items())),
             "top_cwds": dict(cwd_counts.most_common(12)),
         },
         "threads": audited,
+        "cleanup_safety_rules": [
+            "This audit is read-only; it must not delete worktrees, caches, user files, or kill processes.",
+            "Only archive a Codex worker thread after metadata/readback proves it is stale, missing cwd, or non-converged.",
+            "Delete a worktree only when a separate cleanup worker verifies it was created for the current task, has no unadopted content, and the user allowed cleanup.",
+            "For cross-project entries, source COS records cleanup_blocked and dispatches/re-homes into the target project instead of cleaning from the source project.",
+        ],
         "recommendations": [
             "Do not use sidebar title or worker self-report alone as evidence; read thread metadata and receipts.",
             "Treat pendingWorktreeId as dispatch_pending until a real thread_id is observed.",

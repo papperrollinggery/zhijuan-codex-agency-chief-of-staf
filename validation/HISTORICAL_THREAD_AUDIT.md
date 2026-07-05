@@ -79,6 +79,7 @@ Top matched projects:
 4. Missing `cwd` / removed worktree now appears as a first-class category. A Codex thread that shows "current working directory missing" must be archived or marked `cleanup_blocked`, rejected as evidence, and replaced in a live project/worktree if work remains.
 5. Cross-project usage is common. Installing the Skill globally does not guarantee a project will route through COS automatically; projects that need default routing must include `references/AGENTS_ROUTING_SNIPPET.md` in their `AGENTS.md`.
 6. The `ad-creative-orchestrator` history shows the realistic failure shape: the Skill can be used as orchestration guidance while the actual project still needs explicit local gates, worker scope, thread metadata, and adoption/cleanup proof.
+7. Cleanup findings are now audit candidates only. The audit records `cleanup_candidate_archive_thread_only` or `cleanup_blocked_target_project_scope_required`, and explicitly forbids file deletion or process kills from the history-audit path.
 
 ## Adopted Fix
 
@@ -88,6 +89,7 @@ Top matched projects:
 - Added historical audit rules to `SKILL.md` and `references/ACTIVATION_PROTOCOL.md`.
 - Added README usage so users can reproduce the audit without exposing raw thread text.
 - Added `thread_cwd_missing_requires_archive_or_rehome` classification, activation fixtures, and quality-gate checks after the ADCO missing-worktree screenshot exposed that archived temporary worker threads can look like broken projects when reopened.
+- Added cleanup safety fields to the historical audit receipt so stale worktree/process/cache cleanup is recorded as candidate/blocker evidence instead of being performed by the source COS.
 
 ## Adversarial Review
 

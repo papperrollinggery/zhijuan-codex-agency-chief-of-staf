@@ -63,6 +63,15 @@
     "rollout_text": "The worker cwd no longer exists, but the run did not archive it or mark rejected_evidence."
   },
   {
+    "id": "fixture-cross-project-live-cwd-cleanup-blocked",
+    "cwd": "/tmp",
+    "title": "跨项目 COS cleanup",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。请检查另一个项目的缓存和进程。",
+    "preview": "幕僚长",
+    "archived": 0,
+    "rollout_text": "Source COS noticed cross-project cleanup risk and must record cleanup_blocked instead of deleting files or killing processes."
+  },
+  {
     "id": "fixture-good",
     "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
     "title": "COS smoke",

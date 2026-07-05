@@ -172,6 +172,21 @@ required = {
 missing = required - categories
 if missing:
     raise SystemExit(f"historical audit fixture missed categories: {sorted(missing)}")
+cleanup = receipt.get("summary", {}).get("cleanup_candidates", {})
+if cleanup.get("cleanup_candidate_archive_thread_only", 0) < 1:
+    raise SystemExit("historical audit fixture missed archive-thread cleanup candidate")
+if cleanup.get("cleanup_blocked_target_project_scope_required", 0) < 1:
+    raise SystemExit("historical audit fixture missed cross-project cleanup_blocked candidate")
+if not receipt.get("cleanup_safety_rules"):
+    raise SystemExit("historical audit receipt missing cleanup_safety_rules")
+for thread in receipt.get("threads", []):
+    status = thread.get("cleanup_status", {})
+    if "delete_files_allowed" not in status or "kill_process_allowed" not in status:
+        raise SystemExit("historical audit thread missing cleanup safety flags")
+    if status.get("delete_files_allowed") is not False:
+        raise SystemExit("historical audit must not allow file deletion")
+    if status.get("kill_process_allowed") is not False:
+        raise SystemExit("historical audit must not allow process kills")
 PY
 
 python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >/dev/null
@@ -274,6 +289,11 @@ grep -q "validate_release_receipt.py" scripts/release_smoke.sh
 grep -q "TOOL_BLOCKED" references/AGENTS_ROUTING_SNIPPET.md
 grep -q "用户可见输出必须中文优先" references/AGENTS_ROUTING_SNIPPET.md
 grep -q "中文紧凑行" references/AGENTS_ROUTING_SNIPPET.md
+grep -q "Cleanup 生命周期也是硬边界" SKILL.md
+grep -q "cleanup_safety_rules" scripts/audit_historical_threads.py
+grep -q "cleanup_candidate_archive_thread_only" scripts/audit_historical_threads.py
+grep -q "Skill维护-SKM / DEV worker" references/SELF_IMPROVEMENT.md
+grep -q "automation_cleanup: delete_or_pause_only_with_receipt" assets/SELF_IMPROVEMENT_TEMPLATE.md
 grep -q "Historical Thread Audit" references/ACTIVATION_PROTOCOL.md
 grep -q "HISTORICAL_THREAD_AUDIT_RECEIPT" README.md
 grep -q "pending-worktree-only-invalid" evals/activation_contract.fixture.json
