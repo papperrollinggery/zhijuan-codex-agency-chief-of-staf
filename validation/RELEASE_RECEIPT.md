@@ -66,6 +66,7 @@ Project-main thread status:
 | `019f3049-354c-7031-a196-2d315e7f7a9f` | `zhijuan-codex-agency-chief-of-staf` | `HEARTBEAT_SMOKE_RECEIPT` | temporary heartbeat target; produced `COS_BOOT_RECEIPT` and `HEARTBEAT_SMOKE_RECEIPT`; archived |
 | `019f3051-957a-76f1-8cd1-658620da147c` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | retry materialized as worktree `f7b3`; no task payload/agent output/receipt/diff; thread cleanup blocked because archive tool could not find thread; clean filesystem worktree removed |
 | `019f3058-9213-73b3-9c60-a6284b6b77e9` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_FORK_RESCUE_RECEIPT` | received; single-file ThreadOps receipt failure-path fixture adopted into ADCO main as `5101dbf`; archived; temporary worktree removed by archive |
+| `019f3065-dd2a-7df0-beaf-8f9fbc780742` | `ad-creative-orchestrator` | `ADCO_LEGACY_DIRTY_DIFF_DISPOSITION_RECEIPT_CORRECTED` | received after correcting thread id; legacy branch has no commits ahead of main; `adopt_now=none`; disposition `evidence_only_keep_open`; archived |
 
 Automation receipt:
 
@@ -96,6 +97,7 @@ Current hard limits:
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.
 - ADCO split-adoption retry worker `019f3051-957a-76f1-8cd1-658620da147c` materialized, but its rollout JSONL only contains `session_meta` and `task_started`; there is no task payload, receipt, or worktree diff. `set_thread_archived` could not find it, so thread cleanup is blocked; the clean filesystem worktree `f7b3` was removed manually.
 - ADCO split-adoption fork rescue worker `019f3058-9213-73b3-9c60-a6284b6b77e9` produced a valid receipt. The bounded ThreadOps receipt fixture was adopted into ADCO main as commit `5101dbf Harden ThreadOps receipt gate fixtures`, with `python3 tools/check_gate_fixtures.py`, `python3 tools/run_checks.py`, `python3 tools/check_distribution.py`, and `git diff --check` all passing; its temporary worktree `f436` was removed by thread archive.
+- ADCO legacy dirty disposition reviewer `019f3065-dd2a-7df0-beaf-8f9fbc780742` concluded `adopt_now=none`: the legacy branch has no commits ahead of main, main is ahead by 3 commits, and the remaining dirty diff is `evidence_only_keep_open` rather than safe migration material. The first receipt had a self-id mismatch and was corrected before adoption as evidence.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
 - The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T11:47:27+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T17:18:47.347+08:00`, so natural-fire completion remains unproven rather than failed.
