@@ -232,6 +232,8 @@ grep -q "HISTORICAL_THREAD_AUDIT_RECEIPT" README.md
 grep -q "pending-worktree-only-invalid" evals/activation_contract.fixture.json
 grep -q "same-thread-simulation-invalid" evals/activation_contract.fixture.json
 grep -q "cos-main-overexecution-invalid" evals/activation_contract.fixture.json
+grep -q "cos-main-direct-three-project-gates-cleanup-invalid" evals/activation_contract.fixture.json
+grep -q "source-cos-direct-skill-target-edit-no-worker-invalid" evals/activation_contract.fixture.json
 grep -q "dispatch-decision-no-receipt-invalid" evals/activation_contract.fixture.json
 grep -q "passive-wait-no-rescue-invalid" evals/activation_contract.fixture.json
 grep -q "rescue-fallback-to-cos-implementation-invalid" evals/activation_contract.fixture.json
@@ -258,6 +260,12 @@ grep -q "role-specific worker receipt copied source_thread_id instead of worker 
 grep -q "natural heartbeat before next_due must use verdict NOT_DUE" scripts/validate_activation_contract.py
 grep -q "dispatched worker receipt missing worker_prompt_identity_contract: included" scripts/validate_activation_contract.py
 grep -q "missing source_thread_id misuse warning" scripts/validate_activation_contract.py
+grep -q "COS main thread cannot use direct execution evidence as completion evidence" scripts/validate_activation_contract.py
+grep -q "source COS cannot directly run target project gates" scripts/validate_activation_contract.py
+grep -q "Project-Bound Execution Rule" references/ACTIVATION_PROTOCOL.md
+grep -q "cos_main_overexecution" SKILL.md
+grep -q "target project-bound worker" assets/CHIEF_OF_STAFF_PROMPT.md
+grep -q "幕僚长主线程不是执行面" references/AGENTS_ROUTING_SNIPPET.md
 grep -q "thread_cwd_missing_requires_archive_or_rehome" scripts/audit_historical_threads.py
 grep -q "thread_cwd_missing" SKILL.md
 grep -q "missing-cwd-worker-self-recreated-invalid" validation/release_receipt.json

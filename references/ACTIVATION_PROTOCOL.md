@@ -104,6 +104,16 @@ If a tool returns only `pendingWorktreeId`, record `status: dispatch_pending` an
 
 Do not fabricate placeholder ids. `thread_id: "pending"`, `thread_id: "unknown"`, `thread_id: "TBD"`, `thread_id: "same-thread"`, and empty placeholder ids are invalid dispatch evidence. If a title update has not happened yet, record `title_update_blocked`; do not invent `dispatcher_set_pending` or `title_pending`.
 
+## Project-Bound Execution Rule
+
+The Chief-of-Staff thread is a coordinator, not an execution surface. Except for T0/T1 lightweight status replies, or a read-only task where the user explicitly forbids workers, the main COS must not run tests, gates, process cleanup, file edits, implementation work, or operational cleanup directly.
+
+Cross-project work must execute in the target project context. The source COS may dispatch, read back, adopt, reject, and archive, but it must not run target project gates or modify target project files from the source thread. Dispatch to the target project's main COS when that project already has one; otherwise dispatch a target project-bound worker with explicit read/write scope.
+
+Self-improvement of this Skill is also project-bound execution. Changes to `SKILL.md`, `assets/`, `references/`, `scripts/`, validation, tests, or release gates must be done by a Skill维护-SKM / DEV worker. The main COS can record the issue and adoption decision, but cannot self-patch.
+
+If the main COS has already produced direct execution evidence such as `commands_run`, `changed_files`, `git diff --check`, `quality_gate.sh`, `release_smoke.sh`, `validate_project.py`, `ps`, or `kill`, treat it as `cos_main_overexecution`. That evidence may guide a rescue worker, but it is not completion evidence unless a project-bound worker receipt and adoption/rejection record confirms it.
+
 ## Role-Specific Worker Bypass
 
 Chief-of-Staff routing must not consume the workers it creates.
@@ -214,6 +224,8 @@ Historical failure categories to look for:
 - `release_receipt_fragmented`: dispatch, adoption/rejection, cleanup, and review verdict were scattered across worker replies instead of a single release receipt.
 - `history_audit_not_triggered`: user challenged missing archive, fake execution, or skipped Skill flow, but the run did not enter historical thread audit.
 - `cross_project_routing_requires_agents_snippet`: the Skill was referenced from another project without a local routing shim.
+- `source_cos_direct_target_execution`: source COS ran target project gates or edits instead of dispatching to target project main COS / project-bound worker.
+- `cos_main_overexecution`: main COS produced `commands_run`, `changed_files`, process cleanup, or gate evidence and tried to count it as completion.
 - `thread_cwd_missing_requires_archive_or_rehome`: a thread's recorded cwd/worktree is gone or Codex reports "current working directory missing"; it must be archived or marked cleanup_blocked and replaced in a live project/worktree before work continues.
 
 For cross-project use, add `references/AGENTS_ROUTING_SNIPPET.md` to the project where the work actually runs, or install it with `scripts/install_skill.py --agents-routing project --project-root /path/to/project`. Installing the Skill bundle alone is not enough to guarantee that every future project route starts with the COS boot contract.

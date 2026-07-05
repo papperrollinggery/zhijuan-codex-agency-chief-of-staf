@@ -64,6 +64,45 @@ def first_field_value(output: str, field: str) -> str:
     return values[0] if values else ""
 
 
+def is_cos_coordinator_output(output: str) -> bool:
+    return "COS_BOOT_RECEIPT" in output or bool(re.search(r"(?m)^\s*thread_role:\s*COS\s*$", output))
+
+
+def has_worker_completion_or_adoption_evidence(output: str) -> bool:
+    worker_markers = [
+        "WORKER_RECEIPT",
+        "RESULT_PACKET",
+        "REVIEW_PACKET",
+        "worker_receipt",
+        "worker thread_id",
+    ]
+    adoption_markers = [
+        "adoption_status: adopted",
+        "adoption_status: adopted_after_fix",
+        "adoption_status: rejected",
+        "adoption_status: rejected_after_fix",
+        "adoption_status: rejected_evidence",
+        "adoption:",
+        "rejection:",
+    ]
+    negative_receipt_markers = [
+        "worker_receipt: missing",
+        "worker_receipt: not_applicable",
+        "worker_receipt: none",
+        "worker_receipt: no",
+        "active_no_receipt_yet",
+    ]
+    has_thread_id = bool(
+        re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", output)
+    )
+    has_positive_worker_marker = any(marker in output for marker in worker_markers) and not any(
+        marker in output for marker in negative_receipt_markers
+    )
+    return has_thread_id and (
+        has_positive_worker_marker or any(marker in output for marker in adoption_markers)
+    )
+
+
 def has_compact_chinese_boot(output: str) -> bool:
     """Allow terse user-facing boot receipts for T0/T1/status responses."""
     for line in output.splitlines():
@@ -706,24 +745,62 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         "tests_passed:",
         "diff --git",
         "git diff",
+        "git diff --check",
+        "python3 scripts/",
+        "bash scripts/",
+        "validate_project.py",
+        "quality_gate.sh",
+        "release_smoke.sh",
+        "check_gate_fixtures.py",
+        "check_distribution.py",
+        "run_checks.py",
+        "install_skill.py",
+        "ps -",
+        "ps ",
+        "pgrep",
+        "kill ",
+        "pkill",
         "我已实现",
         "我已修复",
         "我修改了",
+        "我跑了",
+        "我清理了",
     ]
-    worker_result_markers = [
-        "WORKER_RECEIPT",
-        "RESULT_PACKET",
-        "REVIEW_PACKET",
-        "worker_receipt",
-        "adoption:",
-        "rejection:",
+    cross_project_markers = [
+        "/Users/jinjungao/work/DIR SKILL",
+        "/Users/jinjungao/work/ad-creative-orchestrator",
+        "DIR SKILL",
+        "ad-creative-orchestrator",
+        "三项目",
+        "跨项目",
+    ]
+    cross_project_gate_markers = [
+        "validate_project.py",
+        "quality_gate.sh",
+        "release_smoke.sh",
+        "check_gate_fixtures.py",
+        "check_distribution.py",
+        "run_checks.py",
+        "git diff --check",
+        "ps -",
+        "kill ",
+        "pkill",
     ]
     if (
-        re.search(r"(?m)^\s*thread_role:\s*COS\s*$", output)
+        is_cos_coordinator_output(output)
         and any(marker in output for marker in cos_overexecution_markers)
-        and not any(marker in output for marker in worker_result_markers)
+        and not has_worker_completion_or_adoption_evidence(output)
     ):
-        reasons.append("COS main thread appears to claim direct execution")
+        reasons.append("COS main thread cannot use direct execution evidence as completion evidence")
+    if (
+        is_cos_coordinator_output(output)
+        and any(marker in "\n".join([prompt, output]) for marker in cross_project_markers)
+        and any(marker in output for marker in cross_project_gate_markers)
+        and not has_worker_completion_or_adoption_evidence(output)
+    ):
+        reasons.append(
+            "source COS cannot directly run target project gates; dispatch target project main COS or project-bound worker"
+        )
     heartbeat_enabled_claim = claims_heartbeat_automation_enabled(output)
     if heartbeat_enabled_claim and not has_heartbeat_activation_evidence(output):
         reasons.append("heartbeat/automation enablement claim lacks automation_prompt+prompt_contains_skill_invocation or explicit AGENTS routing shim evidence")
@@ -747,6 +824,8 @@ def validate_activation_fixture(root: Path) -> dict:
         "same-thread-simulation-invalid",
         "uuid-only-dispatch-receipt-invalid",
         "cos-main-overexecution-invalid",
+        "cos-main-direct-three-project-gates-cleanup-invalid",
+        "source-cos-direct-skill-target-edit-no-worker-invalid",
         "dispatch-decision-no-receipt-invalid",
         "passive-wait-no-rescue-invalid",
         "rescue-fallback-to-cos-implementation-invalid",

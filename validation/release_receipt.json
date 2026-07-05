@@ -339,6 +339,36 @@
       "cleanup_reason": "Project-main COS thread remains open by design; only completed workers are archived.",
       "receipt_summary": "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT verified local gates pass at local HEAD fa60638 while origin/main remains 48f2193 and the local branch is ahead 4. It concluded fresh_clone_current_head, installed_copy_smoke_current_head, and remote_ci_current_head are not done; the latest observed GitHub Actions success is on 48f2193, not fa60638.",
       "controller_validation": "Controller sent the bounded prompt to the ADCO replacement project-main COS thread and read back the completed receipt. Old invalid_worker_thread_id and thread_not_converged receipts remain rejected as completion evidence."
+    },
+    {
+      "thread_id": "019f3382-2e19-7300-af88-2adf22eddbc0",
+      "thread_class": "skill_maintainer_worker",
+      "deliverable": "COS project-boundary enforcement hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "PASS",
+      "cleanup_reason": "Worker cleanup is pending main controller archive; this worker cannot archive itself from inside the receipt.",
+      "receipt_summary": "PROJECT_BOUNDARY_COS_FIX_RECEIPT used the correct worker thread id and hardened COS project-boundary rules: main COS direct commands/changed_files/gates/process cleanup are invalid without worker receipt/adoption, cross-project gates must run in target project main COS or target project-bound worker, and Skill self-hardening must go through SKM/DEV worker.",
+      "controller_validation": "Validator, activation fixtures, quality gate, release smoke, installed-copy sync, and git diff whitespace check passed after the patch."
+    },
+    {
+      "thread_id": "019f3387-af55-7522-a24a-18a86ebe9885",
+      "thread_class": "review_worker",
+      "deliverable": "COS project-boundary enforcement hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "PASS",
+      "cleanup_reason": "Review worker cleanup is pending main controller archive; receipt was read back by main control.",
+      "receipt_summary": "PROJECT_BOUNDARY_PATCH_REVIEW_RECEIPT returned verdict PASS and confirmed the project-boundary hardening patch, validator, fixture, and quality_gate behavior.",
+      "controller_validation": "Main control read the independent review receipt and requested this SKM adoption/commit closeout."
     }
   ],
   "release_decision": {

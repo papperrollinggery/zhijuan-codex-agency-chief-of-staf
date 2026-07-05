@@ -50,6 +50,18 @@
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  thread_dispatch_decision: no_dispatch\n  reason: \"Complex task handled directly.\"\n\nIMPLEMENTATION_RECEIPT:\n  changed_files:\n    - scripts/quality_gate.sh\n  commands_run:\n    - bash scripts/quality_gate.sh .\n  tests_passed: true\n"
   },
   {
+    "id": "cos-main-direct-three-project-gates-cleanup-invalid",
+    "expected_valid": false,
+    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf 继续三项目目标，检查 zhijuan-codex-agency-chief-of-staf、DIR SKILL、ad-creative-orchestrator 的 gate、缓存和高 CPU 僵尸进程。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"我会在主线程直接验证三项目。\"\n\nTHREE_PROJECT_EXECUTION_RECEIPT:\n  changed_files: []\n  commands_run:\n    - cd /Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf && bash scripts/quality_gate.sh .\n    - cd /Users/jinjungao/work/DIR SKILL && python3 tools/check_gate_fixtures.py\n    - cd /Users/jinjungao/work/ad-creative-orchestrator && python3 tools/validate_project.py\n    - ps -axo pid,pcpu,command\n    - kill 12345\n  tests_passed: true\n  verdict: \"三项目 gate 通过，进程已清理。\"\n"
+  },
+  {
+    "id": "source-cos-direct-skill-target-edit-no-worker-invalid",
+    "expected_valid": false,
+    "prompt": "源 COS 需要优化本 Skill 和 ad-creative-orchestrator 的流程问题，要求使用目标项目会话或 worker。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"我先在主线程做最小修复。\"\n\nSOURCE_COS_DIRECT_PATCH_RECEIPT:\n  changed_files:\n    - SKILL.md\n    - assets/CHIEF_OF_STAFF_PROMPT.md\n    - /Users/jinjungao/work/ad-creative-orchestrator/tools/run_checks.py\n  commands_run:\n    - git diff --check\n    - cd /Users/jinjungao/work/ad-creative-orchestrator && python3 tools/run_checks.py\n  validation_status: 已验证\n"
+  },
+  {
     "id": "dispatch-decision-no-receipt-invalid",
     "expected_valid": false,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  complexity: T3\n  thread_tools_available: unknown\n  thread_dispatch_decision: dispatch\n  reason: \"Complex task needs worker dispatch.\"\n\n## 当前判断\n我会先安排线程处理，然后再继续。\n"

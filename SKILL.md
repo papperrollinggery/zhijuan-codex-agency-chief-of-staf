@@ -47,6 +47,16 @@ Skill 自我修改
 
 这些工作必须交给专门角色。
 
+### 项目边界硬规则
+
+幕僚长主线程不是执行面。除 T0/T1 轻量状态说明，或用户明确禁止 worker 且任务只读外，主 COS 不得直接跑测试、gate、清理进程、修改文件、实现代码、做运维清理或把自己的 shell 输出当作完成证据。
+
+跨项目任务必须在目标项目执行：源 COS 只能派发给目标项目主 COS 或 target project-bound worker，然后读回、采纳、拒绝、归档。源 COS 不得直接进入另一个项目跑 gate、改文件或清理进程。
+
+优化本 Skill 本身也必须派给 Skill维护-SKM / DEV worker。主 COS 可以记录问题、派发、读回、采纳或拒绝，但不能自己修改 `SKILL.md`、`assets/`、`references/`、`scripts/` 或验证脚本。
+
+如果主 COS 已经误执行，相关 `commands_run`、`changed_files`、进程清理、测试 PASS 或 gate 输出只能作为问题线索，必须记录 `cos_main_overexecution` 和 `adoption_status: rejected_evidence`，再由项目绑定 worker 重新执行并产出 receipt；不得把误执行结果计入完成证据。
+
 ---
 
 ## 支持文件读取规则
@@ -169,6 +179,7 @@ COS_BOOT_RECEIPT:
 11. `THREAD_DISPATCH_RECEIPT.thread_id` 不允许写 `pending`、`unknown`、`TBD`、`same-thread` 或空占位；未拿到真实线程时只能用非空 `pending_worktree_id` + `status: dispatch_pending`。`title_action` 只允许模板枚举值，不允许 `dispatcher_set_pending` 等临时状态。
 12. 被派发的角色专用 worker 如果只输出 `COS_BOOT_RECEIPT`、重分级或再次等待调度，而没有执行任务并输出 expected receipt/artifact，幕僚长必须把它记为 `thread_not_converged` / `rejected_evidence`，不得把该 `COS_BOOT_RECEIPT` 当作 worker receipt。
 13. 被派发的角色专用 worker 如果输出了 expected receipt 但 `thread_id` 不是该 worker 自己的真实 Codex thread id，例如误写成 `source_thread_id` 或主控线程 ID，幕僚长必须把 receipt 记为 `invalid_worker_thread_id`。可以把其内容作为线索交叉验证，但不能作为 worker 完成证据采用。
+14. 对任何 T2+、多项目、release、验证、cleanup、Skill hardening 或用户明确要求真实线程的任务，主 COS 只能调度和收敛，不得直接执行。跨项目必须进入目标项目主 COS 或 target project-bound worker；本 Skill 自身修改必须进入 Skill维护-SKM / DEV worker。主 COS 直接输出的 `commands_run`、`changed_files`、`quality_gate.sh`、`release_smoke.sh`、`validate_project.py`、`ps`、`kill` 等证据无效，只能触发 `cos_main_overexecution` 救援。
 
 Heartbeat 自动化硬证据：
 

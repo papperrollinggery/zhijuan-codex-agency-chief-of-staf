@@ -12,6 +12,8 @@ This receipt is the single release table for dispatch, adoption or rejection, cl
 | `019f23c6-cec3-7ad2-a68b-2bb16f9ef8b0` | review worker | 1 | received | adopted | archived | PASS |
 | `019f23a0-bdf5-79d1-8d2d-5730a27be2ee` | review worker | 2 | missing | rejected | archived | thread_not_converged; bounded rescue |
 | `019f23a4-2d6e-7690-9ae0-78c7a4014151` | review worker | 2 | received | adopted after fix | archived | conditional-go |
+| `019f3382-2e19-7300-af88-2adf22eddbc0` | skill maintainer worker | post-stop-bounded | received | adopted | cleanup_blocked; pending main archive | PASS |
+| `019f3387-af55-7522-a24a-18a86ebe9885` | review worker | post-stop-bounded | received | adopted | cleanup_blocked; pending main archive | PASS |
 
 Release review budget:
 
@@ -88,6 +90,8 @@ Project-main thread status:
 | `019f3183-1cb6-7d72-99f5-1be8dfab4096` | `DIR SKILL` | `DOMAIN_DELIVERABLE_RECEIPT` | natural DIR test dispatched execution/review/fix threads, but dispatch receipts lacked `worker_prompt_identity_contract` and the domain receipt omitted worker self `thread_id`; archived and rejected as completion evidence while content remains clue-only |
 | `019f335a-217c-7c93-b847-281bf29d5021` | `zhijuan-codex-agency-chief-of-staf` | `COS_HEARTBEAT_THREE_PROJECT_AUDIT_RECEIPT` | received with correct worker id; adopted as current blocking evidence: three local project gates/status pass, but DIR still lacks live-user acceptance, ADCO remote CI/fresh-clone is not verified in this turn, and the full long goal remains open |
 | `019f335b-4d64-7e42-839b-1d3bc411c7d9` | `zhijuan-codex-agency-chief-of-staf` | `SKM_AUTOMATION_LIFECYCLE_HARDENING_RECEIPT` | received with correct worker id; adopted after controller validation; adds hard gates for due heartbeat dispatch, bounded self-improvement/SKM path during execution, and delete/pause self-recycle evidence when automation goals complete |
+| `019f3382-2e19-7300-af88-2adf22eddbc0` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_COS_FIX_RECEIPT` | received with correct SKM worker id; adopted; review verdict PASS; hardens the rule that COS cannot directly execute tests/gates/process cleanup/file edits, cross-project work must run in the target project main COS or target project-bound worker, and Skill self-hardening must run through SKM/DEV worker; cleanup pending main controller archive |
+| `019f3387-af55-7522-a24a-18a86ebe9885` | `zhijuan-codex-agency-chief-of-staf` | `PROJECT_BOUNDARY_PATCH_REVIEW_RECEIPT` | received; independent REV verdict PASS; adopted; confirms project-boundary hardening patch, validator, fixture, and quality_gate behavior; cleanup pending main controller archive |
 
 Automation receipt:
 
