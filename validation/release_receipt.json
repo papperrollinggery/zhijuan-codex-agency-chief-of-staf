@@ -528,6 +528,44 @@
       "receipt_summary": "The handoff/current validation worker corrected the receipt thread_id to 019f33cf-54e2-7e23-8ae9-c6a4f33fcbae, synced /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf using python3 scripts/install_skill.py --force --json, and verified installed copy consistency."
     },
     {
+      "thread_id": "019f33cf-54e2-7e23-8ae9-c6a4f33fcbae",
+      "thread_class": "skill_maintainer_worker",
+      "deliverable": "release receipt update handoff turn",
+      "wave": "post-stop-bounded",
+      "status": "thread_not_converged",
+      "dispatch_status": "dispatched",
+      "receipt_status": "missing",
+      "adoption_status": "rejected_until_rescue_validation",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "rescue_thread_id": "019f33d7-bd33-7631-b891-e52bf56b372d",
+      "rescue_type": "bounded_rescue_worker",
+      "receipt_summary": "The same worker previously produced valid installed-copy sync evidence, but its later release_receipt.json update turn did not output COS_RELEASE_RECEIPT_UPDATE_RECEIPT within the controller budget. That later turn is rejected as adoption evidence until the bounded rescue worker validates and commits the receipt boundary."
+    },
+    {
+      "thread_id": "019f33d7-bd33-7631-b891-e52bf56b372d",
+      "thread_class": "bounded_rescue_worker",
+      "deliverable": "release receipt update rescue validation",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_after_rescue_validation",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "rescued_thread_id": "019f33cf-54e2-7e23-8ae9-c6a4f33fcbae",
+      "validation_commands": [
+        "python3 -m json.tool validation/release_receipt.json >/tmp/cos_release_receipt_validated.json",
+        "python3 scripts/audit_historical_threads.py --repo-root . --fixture evals/history_threads.sample.json",
+        "bash scripts/quality_gate.sh .",
+        "bash scripts/release_smoke.sh .",
+        "git diff --check"
+      ],
+      "receipt_summary": "Bounded rescue worker verified the checkout, preserved the prior valid installed-copy sync evidence, recorded the missing release receipt update turn as thread_not_converged, and did not claim public release, three-project completion, remote push, or automation self-recycle completion."
+    },
+    {
       "thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
       "thread_class": "project_main_cos",
       "deliverable": "DIR natural domain test",
@@ -667,6 +705,19 @@
         "git diff --check",
         "installed copy consistency"
       ]
+    },
+    "release_receipt_update_rescue": {
+      "rescued_thread_id": "019f33cf-54e2-7e23-8ae9-c6a4f33fcbae",
+      "rescued_turn": "release receipt update handoff turn",
+      "rescued_turn_status": "thread_not_converged",
+      "rescued_turn_receipt": "COS_RELEASE_RECEIPT_UPDATE_RECEIPT",
+      "rescued_turn_receipt_status": "missing",
+      "rescue_thread_id": "019f33d7-bd33-7631-b891-e52bf56b372d",
+      "adoption_status": "adopted_after_rescue_validation",
+      "full_public_release_claim": false,
+      "three_project_goal_completion_claim": false,
+      "remote_push_performed": false,
+      "automation_self_recycle_status": "requires_final_evidence_before_cancellation"
     },
     "domain_test_summary": {
       "DIR_NATURAL_DOMAIN_TEST_RECEIPT": {
