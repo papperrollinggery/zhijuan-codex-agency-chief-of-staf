@@ -309,6 +309,36 @@
       "review_verdict": "n/a",
       "receipt_summary": "SKM_AUTOMATION_LIFECYCLE_HARDENING_RECEIPT used the correct worker thread id and added heartbeat lifecycle gates: due heartbeat dispatch requirement, bounded self-improvement/SKM path for in-flight failure fixes, and delete/pause self-recycle evidence for completed automations.",
       "controller_validation": "Controller read back the worker receipt, applied the 9-file diff to main, and independently reran validate_activation_contract.py and quality_gate.sh."
+    },
+    {
+      "thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+      "thread_class": "project_main_cos",
+      "deliverable": "DIR live-user acceptance boundary",
+      "wave": "post-stop-bounded",
+      "status": "blocked",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NEEDS_HUMAN",
+      "cleanup_reason": "Project-main COS thread remains open by design; only completed workers are archived.",
+      "receipt_summary": "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT verified cwd/title, clean status at main...origin/main ahead 2, latest c597baa, validate_project.py PASS, and git diff --check PASS. It concluded live_acceptance_judgement=NEEDS_USER; the natural routing and DIRcreative draft tests are useful process/content clues but cannot prove real user acceptance or client-ready creative quality.",
+      "controller_validation": "Controller sent the bounded prompt to the DIR project-main COS thread and read back the completed receipt. Old TASK-006 receipts remain rejected as completion evidence because the dispatch lacked worker_prompt_identity_contract and the domain receipt omitted the worker self thread_id."
+    },
+    {
+      "thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+      "thread_class": "project_main_cos",
+      "deliverable": "ADCO fresh-clone and remote CI boundary",
+      "wave": "post-stop-bounded",
+      "status": "blocked",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NEEDS_HUMAN",
+      "cleanup_reason": "Project-main COS thread remains open by design; only completed workers are archived.",
+      "receipt_summary": "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT verified local gates pass at local HEAD fa60638 while origin/main remains 48f2193 and the local branch is ahead 4. It concluded fresh_clone_current_head, installed_copy_smoke_current_head, and remote_ci_current_head are not done; the latest observed GitHub Actions success is on 48f2193, not fa60638.",
+      "controller_validation": "Controller sent the bounded prompt to the ADCO replacement project-main COS thread and read back the completed receipt. Old invalid_worker_thread_id and thread_not_converged receipts remain rejected as completion evidence."
     }
   ],
   "release_decision": {
@@ -814,6 +844,16 @@
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "fork_thread same-directory -> 019f30d1; set_thread_title; send COS_WORKER_BYPASS review prompt; wait 65s; read_thread 019f30d1; set_thread_archived 019f30d1",
         "result": "THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT received and archived; complete_ready=false because current_time 2026-07-05T13:48:18+08:00 is before cos next_due_at 2026-07-05T18:49:24.944+08:00; recommended_next_action=wait_until_next_due."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "codex_app.send_message_to_thread 019f2e3c-93f6-7b40-8616-4945feb79c0d; wait bounded window; codex_app.read_thread 019f2e3c-93f6-7b40-8616-4945feb79c0d",
+        "result": "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT received. DIR project main verified validate_project.py PASS and git diff --check PASS, but live_acceptance_judgement remains NEEDS_USER and the old TASK-006 domain receipt remains rejected as completion evidence."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "codex_app.send_message_to_thread 019f2e9d-c7a1-7b83-9b24-05117432c52f; wait bounded window; codex_app.read_thread 019f2e9d-c7a1-7b83-9b24-05117432c52f",
+        "result": "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT received. ADCO project main verified local gates PASS, but local HEAD fa60638 is ahead 4 while origin/main is 48f2193; fresh clone, installed-copy smoke, and remote CI for current HEAD are not done."
       }
     ],
     "automation_receipts": [
@@ -826,9 +866,9 @@
         "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
         "target_thread_verified": true,
         "prompt_requires_cos_heartbeat_run_receipt": true,
-        "last_config_update_at_local": "2026-07-05T12:49:24.944+08:00",
-        "next_natural_due_at_local": "2026-07-05T18:49:24.944+08:00",
-        "natural_fire_status": "not_due_yet_as_of_2026-07-05T13:48:18+08:00",
+        "last_config_update_at_local": "2026-07-06T01:43:28.193+08:00",
+        "next_natural_due_at_local": "2026-07-06T07:43:28.193+08:00",
+        "natural_fire_status": "not_due_yet_as_of_2026-07-06T01:54:49+08:00",
         "natural_fire_acceptance_criteria": "After next_natural_due_at_local, read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf must show a heartbeat-created turn containing COS_BOOT_RECEIPT and COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f2354-f00c-7132-90d7-fb6c26ff2ecf, target_thread_verified=true, target title/cwd readback, current_due_status, dispatch_required, dispatch_outcome, thread_dispatch_receipt or TOOL_BLOCKED, stuck_rescue_decision, and next_due_or_next_check; otherwise record thread_not_converged or tool_blocked rather than claiming completion.",
         "target_thread_title": "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -929,7 +969,9 @@
       "Natural heartbeat and release-gap reviewer 019f30d1-5af7-7862-8e71-af63ca2765c0 produced a valid receipt with complete_ready=false; it confirms the current blocker is waiting for the natural due window rather than a newly failing gate.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
-      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T13:48:18+08:00 the long-running six-hour cos automation is not due until 2026-07-05T18:49:24.944+08:00, so natural-fire completion remains unproven rather than failed."
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-06T01:54:49+08:00 the long-running six-hour cos automation is not due until 2026-07-06T07:43:28.193+08:00, so natural-fire completion remains unproven rather than failed.",
+      "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT now confirms the DIR project remains NEEDS_USER for real live acceptance despite passing local validation.",
+      "ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT now confirms ADCO current local HEAD fa60638 lacks fresh-clone, installed-copy smoke, and remote CI evidence because origin/main is still 48f2193."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",

@@ -54,8 +54,10 @@ Project-main thread status:
 | Thread | Project | Expected receipt | Status |
 |---|---|---|---|
 | `019f2e3c-93f6-7b40-8616-4945feb79c0d` | `DIR SKILL` | `DIR_CURRENT_STATE_RECEIPT` | received; customer-preview gate patch verified |
+| `019f2e3c-93f6-7b40-8616-4945feb79c0d` | `DIR SKILL` | `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` | received; local gates pass, but live acceptance remains `NEEDS_USER`; old TASK-006 receipt rejected as completion evidence |
 | `019f2e3c-9a52-7d70-845a-9db49acbb7bf` | `ad-creative-orchestrator` | `ADCO_CURRENT_STATE_RECEIPT` | blocked then replaced; archived after `send_message_to_thread` returned `no active turn to steer` |
 | `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_PROJECT_COS_CURRENT_RECEIPT` | received; reviewer `019f3037...` marked `thread_not_converged` / archived / rejected evidence; later fork rescue adopted partial ThreadOps receipt fixture as `5101dbf`; legacy dirty worktree kept open |
+| `019f2e9d-c7a1-7b83-9b24-05117432c52f` | `ad-creative-orchestrator` | `ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT` | received; local gates pass, but current HEAD `fa60638` lacks fresh-clone, installed-copy smoke, and remote CI evidence because `origin/main` is still `48f2193` |
 | `019f2e9c-dafb-7750-ac10-3fdcbf8669b5` | `ad-creative-orchestrator` | `ADCO_DIRTY_WORKTREE_REVIEW_RECEIPT` | received; split adoption recommended; archived |
 | `019f2ea1-bb8b-7da2-825e-dd4e496b292d` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT` | `thread_not_converged`; systemError; no receipt; archived; temporary worktree no longer present |
 | `019f2eab-ff09-7db3-ab78-16ae6dd383b4` | `ad-creative-orchestrator` | `ADCO_SPLIT_ADOPTION_RESCUE_RECEIPT` | rescue attempted; systemError; no receipt; archived; temporary worktree no longer present |
@@ -76,7 +78,7 @@ Project-main thread status:
 | `019f30ab-0554-7f60-a1ef-588f162a16e3` | `zhijuan-codex-agency-chief-of-staf` | `STALE_WORKTREE_THREAD_REVIEW_RECEIPT` | received; reviewer found missing-cwd worker handling was documented but not hard-blocked; adopted after adding `thread_cwd_missing` rules, audit category, activation fixtures, history fixture, and quality-gate checks; archived |
 | `019f30b7-3879-76c2-87ab-76286de8142f` | `zhijuan-codex-agency-chief-of-staf` | `COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT` | receipt marker received but `thread_id` incorrectly copied source/main thread `019f2354...`; archived and rejected as completion evidence; adopted only as hardening input for `invalid_worker_thread_id` |
 | `019f30b4-34b3-79c1-9d8c-3b44d90571d0` | `zhijuan-codex-agency-chief-of-staf` | `COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT` | receipt marker received with correct worker id but verdict `FAIL` before next due; archived and rejected as acceptance evidence; adopted only as hardening input for due-window validation |
-| `019f30d1-5af7-7862-8e71-af63ca2765c0` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT` | received; correct worker id; archived; `complete_ready=false` because natural `cos` heartbeat is not due until `2026-07-05T18:49:24.944+08:00` |
+| `019f30d1-5af7-7862-8e71-af63ca2765c0` | `zhijuan-codex-agency-chief-of-staf` | `THREE_PROJECT_NATURAL_HEARTBEAT_AND_RELEASE_GAP_REVIEW_RECEIPT` | received; correct worker id; archived; `complete_ready=false`; superseded by current automation due readback below |
 | `019f3182-c1c7-7fd2-8f0e-75a73cbc5c7a` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_REVIEW_RECEIPT` | natural ADCO test dispatched a worker, but receipt copied main thread `019f2e9d...`; archived and rejected as completion evidence; adopted only as worker prompt identity hardening input |
 | `019f3184-c626-73b0-9757-72bc3d0e48cf` | `ad-creative-orchestrator` | `ADCO_MESSY_PROJECT_FIRST_ROUND_RESCUE_RECEIPT` | bounded rescue receipt used the correct worker thread id after the prompt explicitly named it; archived; adopted for routing-test evidence only, not client-ready creative output |
 | `019f3183-1cb6-7d72-99f5-1be8dfab4096` | `DIR SKILL` | `DOMAIN_DELIVERABLE_RECEIPT` | natural DIR test dispatched execution/review/fix threads, but dispatch receipts lacked `worker_prompt_identity_contract` and the domain receipt omitted worker self `thread_id`; archived and rejected as completion evidence while content remains clue-only |
@@ -91,17 +93,17 @@ Automation receipt:
 
 Natural heartbeat acceptance:
 
-- Current check time: `2026-07-05T13:48:18+08:00`
-- Latest check time: `2026-07-05T13:48:18+08:00`
-- Last config update: `2026-07-05T12:49:24.944+08:00`
-- Next six-hour due time: `2026-07-05T18:49:24.944+08:00`
+- Current check time: `2026-07-06T01:54:49+08:00`
+- Latest check time: `2026-07-06T01:54:49+08:00`
+- Last config update: `2026-07-06T01:43:28.193+08:00`
+- Next six-hour due time: `2026-07-06T07:43:28.193+08:00`
 - Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT` and `COS_HEARTBEAT_RUN_RECEIPT` with `target_thread_verified=true`, correct target id/title/cwd, due status, dispatch outcome, rescue decision, and next check; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
 
 Automation target audit:
 
 - Previous target `019f17c2-b4f2-7a93-aa9a-a0c124b1545d` was read back as `Weekly Workflow Packaging Audit`; the `cos` heartbeat fired there at `2026-07-05T01:30:51Z` and reported `TOOL_BLOCKED`, which explains why the active COS project thread did not visibly advance.
 - Current target is verified as `019f2354-f00c-7132-90d7-fb6c26ff2ecf`, title `[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000`, cwd `/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf`.
-- The live `cos` automation prompt was updated through `codex_app.automation_update` to explicitly require `COS_HEARTBEAT_RUN_RECEIPT` and to carry the expected target id/title/cwd. This reset the six-hour natural due window to `2026-07-05T18:49:24.944+08:00`.
+- The live `cos` automation prompt was updated through `codex_app.automation_update` to explicitly require `COS_HEARTBEAT_RUN_RECEIPT`, lifecycle dispatch/self-improvement/self-recycle evidence, and the expected target id/title/cwd. The current readback resets the six-hour natural due window to `2026-07-06T07:43:28.193+08:00`.
 - A bounded temporary heartbeat `cos-heartbeat-smoke-target-temporary` was attached to idle target thread `019f3049-354c-7031-a196-2d315e7f7a9f`; it fired at `2026-07-05T03:20:21Z` and produced both `COS_BOOT_RECEIPT` and `HEARTBEAT_SMOKE_RECEIPT`. The temporary automation was deleted and the thread was archived.
 - A later bounded heartbeat run receipt smoke `cos-heartbeat-run-receipt-smoke-temporary` targeted `019f3090-c370-7952-91a9-ce3ca910e4ee`; it fired twice and emitted `COS_HEARTBEAT_RUN_RECEIPT`, but the receipt copied root/source thread `019f2354...` into `target_thread_id` and set `target_thread_verified=false`. The temporary automation was deleted, the target thread was archived, and this is rejected as progress evidence.
 - A strict bounded heartbeat run receipt smoke `cos-heartbeat-strict-run-receipt-smoke-temporary` targeted `019f30a0-cf3c-77a1-8681-4609c1927c0f`; with explicit target id/title/cwd in the prompt, it emitted `COS_HEARTBEAT_RUN_RECEIPT` with `target_thread_verified=true`, `dispatch_required=false`, and `dispatch_outcome=not_required_user_forbid_threads`. The temporary automation was deleted and the target thread archived.
@@ -114,6 +116,8 @@ Current hard limits:
 
 - No remote push has been performed in this round.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
+- DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
+- ADCO remains blocked on current-HEAD release evidence: `ADCO_FRESH_CLONE_REMOTE_GAP_RECEIPT` confirms `fa60638` is ahead of `origin/main` and lacks fresh-clone, installed-copy smoke, and remote CI evidence.
 - The old ADCO project-main thread could not be steered and was replaced by `019f2e9d-c7a1-7b83-9b24-05117432c52f`.
 - ADCO split adoption implementation and early bounded rescue attempts failed with systemError before receipts; those failed threads are rejected as evidence.
 - New ADCO split-adoption reviewer `019f3037-5b77-7773-a7c4-0461f2e6f5ce` also failed to provide a receipt within budget and was archived/interrupted; it is rejected as evidence.
@@ -132,6 +136,6 @@ Current hard limits:
 - Natural heartbeat and release-gap reviewer `019f30d1-5af7-7862-8e71-af63ca2765c0` produced a valid receipt with `complete_ready=false`; it confirms the current blocker is waiting for the natural due window, not a new failing gate.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
-- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T13:48:18+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T18:49:24.944+08:00`, so natural-fire completion remains unproven rather than failed.
+- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-06T01:54:49+08:00` the long-running six-hour `cos` automation is not due until `2026-07-06T07:43:28.193+08:00`, so natural-fire completion remains unproven rather than failed.
 - Residual-process scan found no lingering gate/test/playwright/vite/npm worker processes from validation; no `adco-check-*` temp dirs remained; cache dirs were removed. Multiple stale `xcodebuildmcp` MCP server pairs were sleeping, so older duplicate pairs were terminated and the newest pair was left running.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.
