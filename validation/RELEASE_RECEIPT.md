@@ -73,6 +73,13 @@ Automation receipt:
 |---|---|---|---|---|
 | `cos` | heartbeat | ACTIVE | `019f2354-f00c-7132-90d7-fb6c26ff2ecf` | continue three-project COS hardening every 6 hours with current-state checks, gates/tests, receipt cleanup, and no remote push |
 
+Natural heartbeat acceptance:
+
+- Current check time: `2026-07-05T11:47:27+08:00`
+- Last config update: `2026-07-05T11:18:47.347+08:00`
+- Next six-hour due time: `2026-07-05T17:18:47.347+08:00`
+- Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT`; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
+
 Automation target audit:
 
 - Previous target `019f17c2-b4f2-7a93-aa9a-a0c124b1545d` was read back as `Weekly Workflow Packaging Audit`; the `cos` heartbeat fired there at `2026-07-05T01:30:51Z` and reported `TOOL_BLOCKED`, which explains why the active COS project thread did not visibly advance.
@@ -91,5 +98,5 @@ Current hard limits:
 - ADCO split-adoption fork rescue worker `019f3058-9213-73b3-9c60-a6284b6b77e9` produced a valid receipt. The bounded ThreadOps receipt fixture was adopted into ADCO main as commit `5101dbf Harden ThreadOps receipt gate fixtures`, with `python3 tools/check_gate_fixtures.py`, `python3 tools/run_checks.py`, `python3 tools/check_distribution.py`, and `git diff --check` all passing; its temporary worktree `f436` was removed by thread archive.
 - After archival, failed temporary worktree paths `d6f2` and `0e1f` were no longer present, so no diff from those failed paths is claimed.
 - Legacy dirty worktree `/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator` still exists and remains the only retained dirty-worktree evidence.
-- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but the long-running six-hour `cos` automation has not yet naturally fired in active thread `019f2354-f00c-7132-90d7-fb6c26ff2ecf` after target correction.
+- The heartbeat smoke proves explicit Skill invocation can fire through Codex heartbeat and produce `COS_BOOT_RECEIPT`, but as of `2026-07-05T11:47:27+08:00` the long-running six-hour `cos` automation is not due until `2026-07-05T17:18:47.347+08:00`, so natural-fire completion remains unproven rather than failed.
 - Transient invalid placeholder dispatch receipts with `thread_id: "pending"` or `thread_id: "dispatch_pending"` were emitted during continuations and are rejected as evidence; only real `thread_id` rows or non-empty `pending_worktree_id` rows are counted.

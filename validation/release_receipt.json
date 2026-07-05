@@ -395,6 +395,11 @@
         "cwd": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
         "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; wc -l rollout JSONL; set_thread_archived 019f3051...; git worktree remove /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
         "result": "THREAD_NOT_CONVERGED; no receipt, no diff, session JSONL has only 2 lines, thread archive cleanup_blocked because set_thread_archived could not find the thread; filesystem worktree removed after clean status verification"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "date; codex_app.automation_update view cos; codex_app.read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf; sed -n '1,220p' /Users/jinjungao/.codex/automations/cos/automation.toml",
+        "result": "Current time 2026-07-05T11:47:27+0800; cos heartbeat is ACTIVE and targets 019f2354-f00c-7132-90d7-fb6c26ff2ecf; updated_at 2026-07-05T11:18:47.347+08:00 implies next six-hour due time 2026-07-05T17:18:47.347+08:00; read_thread newest turn is user-triggered goal continuation, not natural heartbeat evidence"
       }
     ],
     "automation_receipts": [
@@ -406,6 +411,10 @@
         "rrule": "FREQ=HOURLY;INTERVAL=6",
         "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
         "target_thread_verified": true,
+        "last_config_update_at_local": "2026-07-05T11:18:47.347+08:00",
+        "next_natural_due_at_local": "2026-07-05T17:18:47.347+08:00",
+        "natural_fire_status": "not_due_yet_as_of_2026-07-05T11:47:27+08:00",
+        "natural_fire_acceptance_criteria": "After next_natural_due_at_local, read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf must show a heartbeat-created turn containing COS_BOOT_RECEIPT; otherwise record thread_not_converged or tool_blocked rather than claiming completion.",
         "target_thread_title": "[P01-TH00-R00] \u5e55\u50da\u957f-COS\uff5c\u4e3b\u63a7\u6c9f\u901a\uff5cTASK-000\uff5cOUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "previous_target_thread_id": "019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
@@ -451,7 +460,7 @@
       "ADCO split adoption fork rescue worker 019f3058-9213-73b3-9c60-a6284b6b77e9 produced a valid receipt and the bounded gate fixture was adopted as 5101dbf, but this is a partial ThreadOps validation hardening, not a claim that all legacy dirty worktree material has been ported.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
-      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but the long-running six-hour cos automation has not yet naturally fired in the active 019f2354-f00c-7132-90d7-fb6c26ff2ecf thread after target correction."
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T11:47:27+08:00 the long-running six-hour cos automation is not due until 2026-07-05T17:18:47.347+08:00, so natural-fire completion remains unproven rather than failed."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
