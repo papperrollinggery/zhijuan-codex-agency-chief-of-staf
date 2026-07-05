@@ -6,8 +6,9 @@ Automation activation contract:
 - If the automation prompt does not include `使用 $zhijuan-codex-agency-chief-of-staf` and the target context does not have the AGENTS routing shim, do not expect `COS_BOOT_RECEIPT`.
 - A plain emitter prompt such as "Send exactly one plain text message ... Do nothing else" must not use this template and must not be rewritten into a Chief-of-Staff heartbeat.
 - Any claim that Heartbeat/Automation is enabled must cite evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`; a bare `AGENTS.md` mention is not evidence.
-- Any claim that Heartbeat/Automation is enabled must also cite target readback: `target_thread_id` plus `target_thread_verified: true`, `target_thread_title`, or `target_thread_cwd`. A heartbeat aimed at an unrelated historical thread is misconfigured even when the prompt invokes the Skill.
+- Any claim that Heartbeat/Automation is enabled must also cite target readback: `target_thread_id`, `target_thread_verified: true`, and at least one readback field such as `target_thread_title` or `target_thread_cwd`. A heartbeat aimed at an unrelated historical thread is misconfigured even when the prompt invokes the Skill.
 - Enabling automation is not run evidence. Every T4/T5 heartbeat run must output `COS_HEARTBEAT_RUN_RECEIPT` or `HEARTBEAT_RUN_RECEIPT` with `target_thread_id` readback, `current_due_status`, `dispatch_required`, `dispatch_outcome`, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and `next_due_or_next_check`.
+- `target_thread_verified: false`, `unknown`, or "未验证" is blocking evidence, not a partial pass. If the heartbeat run cannot verify its target thread, set `current_due_status: unknown | misconfigured` and a blocking `dispatch_outcome`; do not copy `source_thread_id` or a historical thread id into `target_thread_id`.
 
 身份：
 幕僚长-COS 调度，但检查动作可以派发给专门线程。

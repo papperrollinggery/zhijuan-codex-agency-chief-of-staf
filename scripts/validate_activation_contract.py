@@ -189,24 +189,22 @@ def has_heartbeat_activation_evidence(output: str) -> bool:
 
 
 def has_heartbeat_target_evidence(output: str) -> bool:
-    has_target_id = any(
-        marker in output
-        for marker in [
-            "target_thread_id:",
-            "targetThreadId:",
-            "target_thread:",
-        ]
+    target_id = first_field_value(output, "target_thread_id") or first_field_value(
+        output, "targetThreadId"
+    ) or first_field_value(output, "target_thread")
+    target_verified = first_field_value(output, "target_thread_verified").lower()
+    target_readback = first_field_value(output, "target_thread_readback").lower()
+    if not target_id or not looks_like_thread_id(target_id):
+        return False
+    if target_verified and target_verified != "true":
+        return False
+    if target_readback and target_readback != "true":
+        return False
+    has_verified_flag = target_verified == "true" or target_readback == "true"
+    has_metadata_readback = has_nonempty_field(output, "target_thread_title") or has_nonempty_field(
+        output, "target_thread_cwd"
     )
-    has_target_readback = any(
-        marker in output
-        for marker in [
-            "target_thread_verified: true",
-            "target_thread_readback: true",
-            "target_thread_title:",
-            "target_thread_cwd:",
-        ]
-    )
-    return has_target_id and has_target_readback
+    return has_verified_flag and has_metadata_readback
 
 
 def has_heartbeat_run_receipt(output: str) -> bool:
@@ -226,11 +224,23 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
     for field in sorted(required_fields):
         if not has_nonempty_field(output, field):
             reasons.append(f"heartbeat run receipt missing {field}")
+    target_id = first_field_value(output, "target_thread_id")
+    if target_id and not looks_like_thread_id(target_id):
+        reasons.append("heartbeat run receipt target_thread_id is not a real-looking UUID")
+    target_verified = first_field_value(output, "target_thread_verified").lower()
+    if target_verified != "true":
+        reasons.append("heartbeat run receipt target_thread_verified is not true")
     if not has_heartbeat_target_evidence(output):
         reasons.append("heartbeat run receipt missing target_thread_id/readback evidence")
 
     dispatch_required = first_field_value(output, "dispatch_required").lower()
     dispatch_outcome = first_field_value(output, "dispatch_outcome").lower()
+    if target_verified and target_verified != "true" and dispatch_outcome in {
+        "dispatched",
+        "dispatch_pending",
+        "not_required_user_forbid_threads",
+    }:
+        reasons.append("unverified heartbeat target cannot have a non-blocking dispatch_outcome")
     if dispatch_required == "true" and not dispatch_outcome:
         reasons.append("heartbeat run receipt missing dispatch_outcome for required dispatch")
     if dispatch_required == "true" and dispatch_outcome in {"tool_blocked", "blocked"}:
@@ -484,6 +494,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "automation-enabled-no-target-thread-evidence-invalid",
         "automation-enabled-with-target-thread-valid",
         "heartbeat-active-no-run-receipt-invalid",
+        "heartbeat-run-target-unverified-invalid",
         "role-worker-bypass-valid",
         "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",

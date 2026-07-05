@@ -145,6 +145,8 @@ COS_HEARTBEAT_RUN_RECEIPT:
 
 启用 automation 只证明定时器或配置存在，不证明本次已推进、已派发或已收敛。每次 T4/T5 heartbeat run 必须输出 `HEARTBEAT_RUN_RECEIPT` 或 `COS_HEARTBEAT_RUN_RECEIPT`，并记录目标线程 readback、当前 due 状态、是否需要派发、派发结果、`THREAD_DISPATCH_RECEIPT` 或 `TOOL_BLOCKED`、卡住/救援判断、下一次 due 或检查时间。如果 `dispatch_required: true` 但没有真实派发回执，必须写 `dispatch_outcome: tool_blocked` + `TOOL_BLOCKED`，或写 `dispatch_outcome: thread_not_converged` + `thread_not_converged`；不得只说 heartbeat active / enabled / will arrange workers。
 
+`target_thread_verified: false`、`unknown`、空值或标题里写“未验证”不能作为 heartbeat run 证据。无法通过当前上下文或 thread readback 核验目标线程时，必须把本次 run 记为 `current_due_status: unknown | misconfigured`，并输出阻断状态；不得把 `source_thread_id`、历史主线程 ID、或猜测 ID 填进 `target_thread_id` 后声称本次 run 已收敛。
+
 ---
 
 ## 0. 第一性原理

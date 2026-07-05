@@ -120,6 +120,12 @@
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: true\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat automation active and due now.\"\n\nautomation_prompt_path: /Users/example/.codex/automations/cos/automation.toml\nprompt_contains_skill_invocation: true\ntarget_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\ntarget_thread_verified: true\ntarget_thread_title: \"[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000\"\ntarget_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\nHeartbeat active; will arrange workers on this run.\n"
   },
   {
+    "id": "heartbeat-run-target-unverified-invalid",
+    "expected_valid": false,
+    "prompt": "Codex automation prompt: 使用 $zhijuan-codex-agency-chief-of-staf 做一次 Heartbeat run receipt smoke。user_explicitly_forbid_threads。",
+    "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T4\n  thread_tools_available: unknown\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"Heartbeat run receipt smoke；用户明确禁止创建子线程。\"\n\nCOS_HEARTBEAT_RUN_RECEIPT:\n  target_thread_id: \"019f2354-f00c-7132-90d7-fb6c26ff2ecf\"\n  target_thread_verified: false\n  target_thread_title: \"未验证：本次 smoke 未读取 thread metadata。\"\n  target_thread_cwd: \"/Users/example/work/zhijuan-codex-agency-chief-of-staf\"\n  current_due_status: due_now\n  dispatch_required: false\n  dispatch_outcome: not_required_user_forbid_threads\n  thread_dispatch_receipt: not_applicable\n  stuck_rescue_decision: monitor_next_check\n  next_due_or_next_check: \"下一次 automation due/check\"\n"
+  },
+  {
     "id": "role-worker-bypass-valid",
     "expected_valid": true,
     "requires_cos_boot": false,

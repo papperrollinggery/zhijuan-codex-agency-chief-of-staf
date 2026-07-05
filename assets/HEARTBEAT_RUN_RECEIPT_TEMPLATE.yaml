@@ -1,5 +1,6 @@
 COS_HEARTBEAT_RUN_RECEIPT:
   target_thread_id: ""
+  # Must be true for run evidence; false/unknown is blocking evidence.
   target_thread_verified: true
   target_thread_title: ""
   target_thread_cwd: ""
