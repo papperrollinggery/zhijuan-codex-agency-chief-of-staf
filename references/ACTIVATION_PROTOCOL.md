@@ -51,6 +51,7 @@ Every dispatched worker must then enter bounded receipt polling:
 6. A repeated “still waiting” status without `receipt_status`, remaining polls, next poll time, or rescue action is not convergence evidence.
 7. If the bounded rescue worker also reaches the receipt limit, the Chief-of-Staff must not switch to same-thread implementation in the COS worktree. Record `thread_not_converged` plus cleanup status, then either dispatch another explicitly budgeted rescue, emit `NEEDS_HUMAN`, or emit `TOOL_BLOCKED`.
 8. If Codex UI, `read_thread`, or `list_threads` shows "当前工作目录缺失", `current working directory missing`, `cwd_missing`, `worktree_missing`, or a `cwd` / associated worktree path that no longer exists, stop using that worker immediately. Record `thread_cwd_missing`, `thread_not_converged`, `adoption_status: rejected_evidence`, and `cleanup_status: archived | cleanup_blocked`. Do not send follow-up prompts to the missing-cwd thread and do not adopt old diffs from it; if work remains, re-dispatch in a live project-bound thread or fresh isolated worktree.
+9. A worker must not self-heal a missing Codex worktree. If its own `cwd`/worktree is missing, the only valid output is a `BLOCKED` / `TOOL_BLOCKED` receipt with no file changes. A receipt claiming "isolated worktree was missing, so I created it from main HEAD" is invalid adoption evidence.
 
 When thread tools are unavailable, the correct output is explicit blockage, not simulation:
 
@@ -111,6 +112,7 @@ Heartbeat/Automation contract:
 6. Automation enablement is not run evidence. Every T4/T5 heartbeat run must output `HEARTBEAT_RUN_RECEIPT` or `COS_HEARTBEAT_RUN_RECEIPT` with target thread id/readback, `current_due_status`, `dispatch_required`, `dispatch_outcome`, `THREAD_DISPATCH_RECEIPT` or `TOOL_BLOCKED`, stuck/rescue decision, and `next_due_or_next_check`.
 7. If `dispatch_required: true` but the heartbeat cannot dispatch a worker, the run receipt must say `dispatch_outcome: tool_blocked` with `TOOL_BLOCKED`, or `dispatch_outcome: thread_not_converged` with `thread_not_converged`. "Heartbeat active" without run receipt and dispatch outcome is invalid.
 8. `target_thread_verified: false`, `unknown`, blank values, or "未验证" text are invalid run evidence. If the heartbeat cannot verify the target thread, record `current_due_status: unknown | misconfigured` and a blocking outcome instead of filling `target_thread_id` with a `source_thread_id`, historical main thread id, or guess.
+9. Natural heartbeat acceptance must respect the due window. If `current_time` is before the configured `next_natural_due_at_local`, the acceptance verdict is `NOT_DUE`; do not classify a user-triggered or in-progress target-thread turn as heartbeat `FAIL`. Only after the due window may missing `COS_HEARTBEAT_RUN_RECEIPT` become `FAIL` / `thread_not_converged`.
 
 Machine-readable heartbeat run receipt:
 

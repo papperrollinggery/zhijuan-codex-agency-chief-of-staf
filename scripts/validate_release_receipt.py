@@ -155,19 +155,19 @@ def validate_unified_table(data: dict[str, Any]) -> None:
 
         if cleanup_status not in TERMINAL_CLEANUP:
             fail(f"unified table row {idx} cleanup_status must be archived or cleanup_blocked")
+        if status.startswith("invalid_") or receipt_status == "invalid":
+            if not status.startswith("invalid_"):
+                fail(f"invalid thread row {idx} must use status=invalid_*")
+            if adoption_status not in {"rejected_evidence", "rejected"}:
+                fail(f"invalid thread row {idx} must be rejected evidence")
+            if not row.get("invalid_reason"):
+                fail(f"invalid thread row {idx} missing invalid_reason")
+            if not row.get("controller_validation") and not row.get("rescue_thread_id"):
+                fail(f"invalid thread row {idx} needs controller_validation or rescue_thread_id")
+            continue
         if thread_class == "review_worker":
             if review_verdict in CONVERGED_VERDICTS and adoption_status == "adopted":
                 seen_adopted_review = True
-            if status == "invalid_worker_thread_id" or receipt_status == "invalid":
-                if status != "invalid_worker_thread_id":
-                    fail(f"invalid review row {idx} must use status=invalid_worker_thread_id")
-                if adoption_status not in {"rejected_evidence", "rejected"}:
-                    fail(f"invalid review row {idx} must be rejected evidence")
-                if not row.get("invalid_reason"):
-                    fail(f"invalid review row {idx} missing invalid_reason")
-                if not row.get("controller_validation") and not row.get("rescue_thread_id"):
-                    fail(f"invalid review row {idx} needs controller_validation or rescue_thread_id")
-                continue
             if status == "thread_not_converged" or receipt_status != "received":
                 if status != "thread_not_converged":
                     fail(f"stuck review row {idx} must use status=thread_not_converged")

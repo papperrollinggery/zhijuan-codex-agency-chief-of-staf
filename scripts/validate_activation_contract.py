@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 
 
@@ -269,6 +270,43 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
     return reasons
 
 
+def parse_iso_datetime(value: str) -> datetime | None:
+    text = value.strip().strip('"').replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def validate_natural_heartbeat_acceptance_receipt(output: str) -> list[str]:
+    reasons: list[str] = []
+    if "COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT" not in output:
+        return reasons
+    verdict = first_field_value(output, "verdict")
+    current_time_text = first_field_value(output, "current_time")
+    next_due_text = first_field_value(output, "next_natural_due_at_local") or first_field_value(
+        output, "next_due_at"
+    )
+    if not verdict:
+        reasons.append("natural heartbeat acceptance receipt missing verdict")
+    if not current_time_text:
+        reasons.append("natural heartbeat acceptance receipt missing current_time")
+    if not next_due_text:
+        reasons.append("natural heartbeat acceptance receipt missing next_natural_due_at_local")
+    current_time = parse_iso_datetime(current_time_text) if current_time_text else None
+    next_due = parse_iso_datetime(next_due_text) if next_due_text else None
+    if current_time_text and current_time is None:
+        reasons.append("natural heartbeat acceptance current_time must be ISO-8601")
+    if next_due_text and next_due is None:
+        reasons.append("natural heartbeat acceptance next_due must be ISO-8601")
+    if current_time is not None and next_due is not None:
+        if current_time < next_due and verdict != "NOT_DUE":
+            reasons.append("natural heartbeat before next_due must use verdict NOT_DUE, not PASS/FAIL")
+        if current_time >= next_due and verdict == "NOT_DUE":
+            reasons.append("natural heartbeat at/after next_due cannot use verdict NOT_DUE")
+    return reasons
+
+
 def validate_missing_cwd_thread_handling(output: str) -> list[str]:
     reasons: list[str] = []
     missing_cwd_markers = [
@@ -277,6 +315,7 @@ def validate_missing_cwd_thread_handling(output: str) -> list[str]:
         "current working directory missing",
         "cwd_missing",
         "worktree_missing",
+        "isolated worktree was missing",
         "thread_cwd_missing",
         "cwd no longer exists",
         "worktree no longer exists",
@@ -295,6 +334,12 @@ def validate_missing_cwd_thread_handling(output: str) -> list[str]:
         reasons.append("missing-cwd thread cannot be adopted")
     if re.search(r"继续(等待|发送|推进)|continue (waiting|sending|using)", output, re.I):
         reasons.append("missing-cwd thread cannot be continued in place")
+    if re.search(
+        r"(?i)(created it from main HEAD|created .*worktree.*from main|recreated .*worktree|self-created .*worktree)"
+        r"|自行(创建|重建).*worktree|重建.*worktree",
+        output,
+    ):
+        reasons.append("missing-cwd worker cannot recreate its own worktree")
     return reasons
 
 
@@ -399,6 +444,7 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         reasons.append("tool_blocked decision without TOOL_BLOCKED marker")
     if has_heartbeat_run_receipt(output):
         reasons.extend(validate_heartbeat_run_receipt(output))
+    reasons.extend(validate_natural_heartbeat_acceptance_receipt(output))
     reasons.extend(validate_missing_cwd_thread_handling(output))
     if (
         "thread_dispatch_decision: dispatch" in output
@@ -537,6 +583,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "dispatcher-set-pending-title-action-invalid",
         "rapid-poll-nonconverged-invalid",
         "missing-cwd-thread-adopted-invalid",
+        "missing-cwd-worker-self-recreated-invalid",
         "missing-cwd-thread-archived-valid",
         "complex-quality-audit-no-dispatch-invalid",
         "heartbeat-explicit-skill-valid",
@@ -551,6 +598,7 @@ def validate_activation_fixture(root: Path) -> dict:
         "heartbeat-run-target-unverified-invalid",
         "role-worker-bypass-valid",
         "role-worker-bypass-source-thread-id-invalid",
+        "natural-heartbeat-before-due-fail-invalid",
         "role-worker-bypass-cos-only-invalid",
         "valid-real-dispatch",
         "valid-pending-worktree-dispatch",

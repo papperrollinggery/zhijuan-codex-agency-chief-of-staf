@@ -208,6 +208,21 @@
             "invalid_reason": "The worker emitted COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT but wrote thread_id as the source/main thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf instead of its own worker thread id 019f30b7-3879-76c2-87ab-76286de8142f.",
             "controller_validation": "Controller independently verified the underlying stale-worktree evidence and added worker receipt self-thread-id requirements, activation fixture coverage, and release receipt validation for invalid_worker_thread_id.",
             "receipt_summary": "Content was consistent with local evidence, but the receipt identity field was invalid. The thread is archived and rejected as completion evidence; its failure mode is adopted only as a hardening input."
+        },
+        {
+            "thread_id": "019f30b4-34b3-79c1-9d8c-3b44d90571d0",
+            "thread_class": "review_worker",
+            "deliverable": "natural heartbeat acceptance due-window hardening",
+            "wave": "post-stop-bounded",
+            "status": "invalid_natural_heartbeat_due_window",
+            "dispatch_status": "dispatched",
+            "receipt_status": "invalid",
+            "adoption_status": "rejected_evidence",
+            "cleanup_status": "archived",
+            "review_verdict": "n/a",
+            "invalid_reason": "The worker read current_time 2026-07-05T13:16:01+08:00 and automation updated_at 2026-07-05T12:49:24.944+08:00, which implies next_natural_due_at_local 2026-07-05T18:49:24.944+08:00, but it still returned verdict FAIL instead of NOT_DUE and treated a user-triggered in-progress target turn as heartbeat failure.",
+            "controller_validation": "Controller independently verified current time 2026-07-05T13:30:48+08:00, cos automation next due 2026-07-05T18:49:24.944+08:00, and added natural-heartbeat-before-due-fail-invalid activation fixture plus due-window validation.",
+            "receipt_summary": "The receipt had the correct worker thread_id but an invalid due-window verdict. It is archived and rejected as acceptance evidence; its failure mode is adopted only as hardening input."
         }
     ],
   "release_decision": {
@@ -371,14 +386,16 @@
         "thread_class": "implementation_worker",
         "expected_receipt": "ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT",
         "dispatch_status": "dispatched_after_pending_worktree",
-        "receipt_status": "missing",
-        "status": "thread_not_converged",
+        "receipt_status": "invalid",
+        "status": "invalid_missing_cwd_worker_self_recreated",
         "adoption_status": "rejected_evidence",
-        "cleanup_status": "cleanup_blocked",
+        "cleanup_status": "archived",
         "worktree": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
-        "worktree_status": "removed_after_verified_no_diff",
-        "worktree_cleanup_status": "manual_removed_after_clean_status",
-        "blocker": "thread materialized and read_thread reported inProgress, but session JSONL contains only session_meta/task_started, no user task payload, no agent output, no worktree diff, and set_thread_archived returned No Codex thread found; filesystem worktree was later removed after git status confirmed no diff"
+        "worktree_status": "exists_dirty_rejected_evidence",
+        "worktree_cleanup_status": "retained_dirty_after_thread_archive",
+        "invalid_reason": "The worker reported that its isolated worktree was missing and that it created the worktree from main HEAD, then produced ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT with changed files. A worker must not self-recreate a missing Codex worktree and then claim executable evidence.",
+        "controller_validation": "Controller read back thread 019f3051, verified the saved cwd /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator, verified git status shows three modified files, archived the thread, and added missing-cwd-worker-self-recreated-invalid activation fixture plus validator/documentation hardening.",
+        "blocker": "Rejected as ADCO adoption evidence; if the diff direction is still useful it must be re-run in a valid live project-bound or fresh isolated worktree."
       },
       {
         "thread_id": "019f3058-9213-73b3-9c60-a6284b6b77e9",
@@ -589,8 +606,8 @@
       },
       {
         "cwd": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
-        "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; wc -l rollout JSONL; set_thread_archived 019f3051...; git worktree remove /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
-        "result": "THREAD_NOT_CONVERGED; no receipt, no diff, session JSONL has only 2 lines, thread archive cleanup_blocked because set_thread_archived could not find the thread; filesystem worktree removed after clean status verification"
+        "command": "read_thread 019f3051-957a-76f1-8cd1-658620da147c; git status --short --branch; git diff --stat; set_thread_archived 019f3051-957a-76f1-8cd1-658620da147c",
+        "result": "INVALID_RECEIPT; worker output said isolated worktree was missing and self-created from main HEAD, then produced a 3-file diff; thread archived; f7b3 retained dirty as rejected evidence"
       },
       {
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -653,6 +670,11 @@
         "result": "PASS; target emitted COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true, matching target id/title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT status done; temporary automation deleted and target thread archived"
       },
       {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "date; sed -n '1,220p' /Users/jinjungao/.codex/automations/cos/automation.toml; read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf; read_thread 019f30b4-34b3-79c1-9d8c-3b44d90571d0; set_thread_archived 019f30b4-34b3-79c1-9d8c-3b44d90571d0",
+        "result": "Current time 2026-07-05T13:30:48+0800; cos updated_at 2026-07-05T12:49:24.944+08:00 implies next due 2026-07-05T18:49:24.944+08:00; reviewer 019f30b4 returned FAIL before due and was archived/rejected as invalid due-window evidence"
+      },
+      {
         "cwd": "/Users/jinjungao/work/DIR SKILL",
         "command": "PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py; git diff --check; git status --short --branch",
         "result": "PASS; working tree clean; main...origin/main ahead 1"
@@ -665,7 +687,12 @@
       {
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "ps residual-process scan; find temp adco-check dirs; rm -rf scripts/__pycache__; find cache dirs",
-        "result": "No lingering gate/test/playwright/vite/npm processes found; no adco-check temp dirs remained; scripts/__pycache__ removed"
+        "result": "No lingering gate/test/playwright/vite/npm worker processes from validation remained; no adco-check temp dirs remained; cache dirs removed. Multiple stale xcodebuildmcp MCP server pairs were found sleeping; older duplicate pairs were terminated, leaving latest pair 89462/89638."
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "list_threads query=adco; read_thread 019f3051-957a-76f1-8cd1-658620da147c; ls -ld /Users/jinjungao/work/ad-creative-orchestrator /Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator; set_thread_archived 019f3051-957a-76f1-8cd1-658620da147c",
+        "result": "Explained user screenshot: main ADCO path exists; worker was bound to temporary f7b3 worktree. The worker self-recreated a missing isolated worktree and produced dirty changes, so it was archived and rejected as evidence; activation contract now blocks this pattern."
       }
     ],
     "automation_receipts": [
@@ -680,7 +707,7 @@
         "prompt_requires_cos_heartbeat_run_receipt": true,
         "last_config_update_at_local": "2026-07-05T12:49:24.944+08:00",
         "next_natural_due_at_local": "2026-07-05T18:49:24.944+08:00",
-        "natural_fire_status": "not_due_yet_as_of_2026-07-05T12:49:33+08:00",
+        "natural_fire_status": "not_due_yet_as_of_2026-07-05T13:30:48+08:00",
         "natural_fire_acceptance_criteria": "After next_natural_due_at_local, read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf must show a heartbeat-created turn containing COS_BOOT_RECEIPT and COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f2354-f00c-7132-90d7-fb6c26ff2ecf, target_thread_verified=true, target title/cwd readback, current_due_status, dispatch_required, dispatch_outcome, thread_dispatch_receipt or TOOL_BLOCKED, stuck_rescue_decision, and next_due_or_next_check; otherwise record thread_not_converged or tool_blocked rather than claiming completion.",
         "target_thread_title": "[P01-TH00-R00] \u5e55\u50da\u957f-COS\uff5c\u4e3b\u63a7\u6c9f\u901a\uff5cTASK-000\uff5cOUT-000",
         "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -767,9 +794,9 @@
       "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
       "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; those threads are not adoption evidence.",
       "ADCO split adoption current-state reviewer 019f3037-5b77-7773-a7c4-0461f2e6f5ce also exceeded the receipt budget and was archived/interrupted without ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT.",
-      "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c materialized with isolated worktree f7b3 but never received or recorded the task payload, produced no receipt and no diff, and could not be archived by set_thread_archived; its clean filesystem worktree was removed manually.",
+      "ADCO split adoption retry worker 019f3051-957a-76f1-8cd1-658620da147c is the screenshot case: it is bound to temporary worktree f7b3, reported that the isolated worktree was missing, self-created it from main HEAD, and produced a 3-file diff. The thread was archived and the diff is rejected evidence; missing-cwd worker self-recreation is now hard-blocked by missing-cwd-worker-self-recreated-invalid.",
       "ADCO split adoption fork rescue worker 019f3058-9213-73b3-9c60-a6284b6b77e9 produced a valid receipt and the bounded gate fixture was adopted as 5101dbf, but this is a partial ThreadOps validation hardening, not a claim that all legacy dirty worktree material has been ported.",
-      "Archived temporary ADCO worker worktrees such as d6f2, 0e1f, f436, and f7b3 can show 'current working directory missing' when reopened in Codex; the ADCO main path /Users/jinjungao/work/ad-creative-orchestrator and retained legacy dirty evidence worktree remain verified separately.",
+      "Archived temporary ADCO worker worktrees such as d6f2, 0e1f, and f436 can show 'current working directory missing' when reopened in Codex; f7b3 currently exists but is dirty rejected evidence. The ADCO main path /Users/jinjungao/work/ad-creative-orchestrator and retained legacy dirty evidence worktree remain verified separately.",
       "ADCO legacy dirty disposition reviewer 019f3065-dd2a-7df0-beaf-8f9fbc780742 concluded adopt_now=none: the legacy branch has no commits ahead of main, main is ahead by 3 commits, and the remaining dirty diff is evidence-only keep_open rather than safe migration material.",
       "Goal-readiness reviewer 019f306b-5652-7322-9ac2-ecdd651fae2f did not produce THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT; it booted COS/no_dispatch despite being a role-specific worker, so it is rejected evidence and was archived.",
       "Bounded rescue reviewer 019f3075-a3e9-7660-9813-dc39a8cb0d04 was dispatched after adding COS_WORKER_BYPASS and did not emit COS_BOOT_RECEIPT. It was initially interrupted by coordinator error while active, then unarchived and resumed; it produced THREE_PROJECT_GOAL_READINESS_AUDIT_RECEIPT with complete_ready=false.",
@@ -777,9 +804,10 @@
       "Temporary heartbeat run receipt smoke target 019f3090-c370-7952-91a9-ce3ca910e4ee fired twice but emitted target_thread_verified=false and used root thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf instead of the actual target; it is rejected as progress evidence and now covered by heartbeat-run-target-unverified-invalid.",
       "Strict heartbeat run receipt smoke target 019f30a0-cf3c-77a1-8681-4609c1927c0f produced a valid COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true after the prompt included explicit target id/title/cwd, but this remains a bounded smoke and does not prove the long-running cos automation naturally fired in the root COS thread.",
       "Stale-worktree incident reviewer 019f30b7-3879-76c2-87ab-76286de8142f emitted the expected COS_STALE_WORKTREE_INCIDENT_REVIEW_RECEIPT but copied the source/main thread id into receipt.thread_id; it is archived and rejected as completion evidence, and now covered by role-worker-bypass-source-thread-id-invalid plus invalid_worker_thread_id release validation.",
+      "Natural heartbeat acceptance reviewer 019f30b4-34b3-79c1-9d8c-3b44d90571d0 emitted COS_NATURAL_HEARTBEAT_ACCEPTANCE_REVIEW_RECEIPT with verdict FAIL before the configured next due time; it is archived and rejected as acceptance evidence, and now covered by natural-heartbeat-before-due-fail-invalid due-window validation.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
-      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T12:33:00+08:00 the long-running six-hour cos automation is not due until 2026-07-05T17:18:47.347+08:00, so natural-fire completion remains unproven rather than failed."
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-05T13:30:48+08:00 the long-running six-hour cos automation is not due until 2026-07-05T18:49:24.944+08:00, so natural-fire completion remains unproven rather than failed."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
