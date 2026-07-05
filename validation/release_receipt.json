@@ -168,20 +168,33 @@
       "review_verdict": "n/a",
       "receipt_summary": "Temporary heartbeat run receipt smoke fired twice and produced COS_HEARTBEAT_RUN_RECEIPT, but the receipt used root thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf instead of smoke target 019f3090-c370-7952-91a9-ce3ca910e4ee, with target_thread_verified=false. Rejected as progress evidence and adopted only as a regression fixture."
     },
-    {
-      "thread_id": "019f30a0-cf3c-77a1-8681-4609c1927c0f",
-      "thread_class": "heartbeat_smoke_target",
-      "deliverable": "strict heartbeat run receipt target verification",
+        {
+            "thread_id": "019f30a0-cf3c-77a1-8681-4609c1927c0f",
+            "thread_class": "heartbeat_smoke_target",
+            "deliverable": "strict heartbeat run receipt target verification",
       "wave": "post-stop-bounded",
       "status": "done",
       "dispatch_status": "heartbeat_triggered",
       "receipt_status": "received",
       "adoption_status": "adopted_as_strict_smoke_evidence",
       "cleanup_status": "archived",
-      "review_verdict": "n/a",
-      "receipt_summary": "Strict temporary heartbeat target emitted COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f30a0-cf3c-77a1-8681-4609c1927c0f, target_thread_verified=true, matching title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, and HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT. Temporary automation was deleted and the target thread archived. This proves the stricter prompt shape can produce valid run evidence, but does not replace the long-running cos natural-fire acceptance."
-    }
-  ],
+            "review_verdict": "n/a",
+            "receipt_summary": "Strict temporary heartbeat target emitted COS_HEARTBEAT_RUN_RECEIPT with target_thread_id 019f30a0-cf3c-77a1-8681-4609c1927c0f, target_thread_verified=true, matching title/cwd, dispatch_required=false, dispatch_outcome=not_required_user_forbid_threads, and HEARTBEAT_RUN_STRICT_SMOKE_RECEIPT. Temporary automation was deleted and the target thread archived. This proves the stricter prompt shape can produce valid run evidence, but does not replace the long-running cos natural-fire acceptance."
+        },
+        {
+            "thread_id": "019f30ab-0554-7f60-a1ef-588f162a16e3",
+            "thread_class": "review_worker",
+            "deliverable": "stale worker cwd hardening",
+            "wave": "post-stop-bounded",
+            "status": "done",
+            "dispatch_status": "dispatched",
+            "receipt_status": "received",
+            "adoption_status": "adopted_after_fix",
+            "cleanup_status": "archived",
+            "review_verdict": "FAIL",
+            "receipt_summary": "Read-only reviewer found that missing worker cwd/worktree cases were documented in ADCO release notes but not yet hard-blocked in COS historical audit, activation fixtures, or quality gate. The controller adopted the finding by adding thread_cwd_missing rules to SKILL.md, ACTIVATION_PROTOCOL, README, CHIEF_OF_STAFF prompt, audit_historical_threads.py, activation-contract fixtures, history fixture, and quality_gate.sh. Reviewer archived after receipt."
+        }
+    ],
   "release_decision": {
     "cold_review_converged": true,
     "domain_or_rebuttal_review_converged": true,
@@ -457,9 +470,22 @@
       "adoption_status": "adopted_as_strict_smoke_evidence",
       "cleanup_status": "archived",
       "review_verdict": "n/a",
-      "receipt_summary": "Temporary strict heartbeat run receipt smoke produced COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true and matching target id/title/cwd. It was explicitly thread-forbidden, so dispatch_required=false and dispatch_outcome=not_required_user_forbid_threads are expected for this smoke only."
-    }
-  ],
+                "receipt_summary": "Temporary strict heartbeat run receipt smoke produced COS_HEARTBEAT_RUN_RECEIPT with target_thread_verified=true and matching target id/title/cwd. It was explicitly thread-forbidden, so dispatch_required=false and dispatch_outcome=not_required_user_forbid_threads are expected for this smoke only."
+            },
+            {
+                "thread_id": "019f30ab-0554-7f60-a1ef-588f162a16e3",
+                "project": "zhijuan-codex-agency-chief-of-staf",
+                "thread_class": "read_only_review_worker",
+                "expected_receipt": "STALE_WORKTREE_THREAD_REVIEW_RECEIPT",
+                "dispatch_status": "dispatched",
+                "receipt_status": "received",
+                "status": "done",
+                "adoption_status": "adopted_after_fix",
+                "cleanup_status": "archived",
+                "review_verdict": "FAIL",
+                "receipt_summary": "Reviewer confirmed the ADCO missing-worktree symptom was only documented, not hard-blocked. Adopted fix adds thread_cwd_missing handling to rules, historical audit classification, output contract fixtures, history fixture, and quality-gate checks."
+            }
+        ],
     "commands_run": [
       {
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",

@@ -269,6 +269,35 @@ def validate_heartbeat_run_receipt(output: str) -> list[str]:
     return reasons
 
 
+def validate_missing_cwd_thread_handling(output: str) -> list[str]:
+    reasons: list[str] = []
+    missing_cwd_markers = [
+        "当前工作目录缺失",
+        "工作目录缺失",
+        "current working directory missing",
+        "cwd_missing",
+        "worktree_missing",
+        "thread_cwd_missing",
+        "cwd no longer exists",
+        "worktree no longer exists",
+    ]
+    if not any(marker.lower() in output.lower() for marker in missing_cwd_markers):
+        return reasons
+    if "thread_not_converged" not in output:
+        reasons.append("missing-cwd thread must be marked thread_not_converged")
+    if not re.search(r"(?m)^\s*adoption_status:\s*(rejected_evidence|rejected)\s*$", output):
+        reasons.append("missing-cwd thread must be rejected evidence")
+    if not re.search(
+        r"(?m)^\s*cleanup_status:\s*(archived|cleanup_blocked)\s*$", output
+    ) and "set_thread_archived" not in output:
+        reasons.append("missing-cwd thread must record archived or cleanup_blocked")
+    if re.search(r"(?m)^\s*adoption_status:\s*adopted", output):
+        reasons.append("missing-cwd thread cannot be adopted")
+    if re.search(r"继续(等待|发送|推进)|continue (waiting|sending|using)", output, re.I):
+        reasons.append("missing-cwd thread cannot be continued in place")
+    return reasons
+
+
 def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     output = str(case.get("output", ""))
     prompt = case_prompt_text(case)
@@ -348,6 +377,7 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         reasons.append("tool_blocked decision without TOOL_BLOCKED marker")
     if has_heartbeat_run_receipt(output):
         reasons.extend(validate_heartbeat_run_receipt(output))
+    reasons.extend(validate_missing_cwd_thread_handling(output))
     if (
         "thread_dispatch_decision: dispatch" in output
         and "THREAD_DISPATCH_RECEIPT" not in output
@@ -484,6 +514,8 @@ def validate_activation_fixture(root: Path) -> dict:
         "placeholder-thread-id-invalid",
         "dispatcher-set-pending-title-action-invalid",
         "rapid-poll-nonconverged-invalid",
+        "missing-cwd-thread-adopted-invalid",
+        "missing-cwd-thread-archived-valid",
         "complex-quality-audit-no-dispatch-invalid",
         "heartbeat-explicit-skill-valid",
         "heartbeat-explicit-t5-no-dispatch-invalid",

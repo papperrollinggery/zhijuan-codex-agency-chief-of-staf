@@ -54,6 +54,15 @@
     "rollout_text": "The assistant checked only sidebar state and did not run historical audit."
   },
   {
+    "id": "fixture-missing-cwd-worker",
+    "cwd": "/tmp/codex-missing-worktree-adco",
+    "title": "ADCO worker 当前工作目录缺失",
+    "first_user_message": "这个 ADCO 新线程为什么提示当前工作目录缺失？",
+    "preview": "幕僚长",
+    "archived": 0,
+    "rollout_text": "The worker cwd no longer exists, but the run did not archive it or mark rejected_evidence."
+  },
+  {
     "id": "fixture-good",
     "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
     "title": "COS smoke",

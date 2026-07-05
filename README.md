@@ -131,6 +131,7 @@ Codex skills are loaded on demand. Before Codex selects a skill, it mainly sees 
 - Explicit `$zhijuan-codex-agency-chief-of-staf` runs must start with `COS_BOOT_RECEIPT`.
 - Explicit requests for real Codex Threads, worker threads, a complete team, thread id, receipt, or cleanup must dispatch real threads with `THREAD_DISPATCH_RECEIPT` or return `TOOL_BLOCKED`; they must not fall back to same-thread simulation.
 - Pre-release quality, public release, multi-file reliability, asset/stale-file/browser-evidence/customer-language audits are T3+ routing cases. They should dispatch real workers or report `TOOL_BLOCKED`, not collapse to `no_dispatch`.
+- If a Codex worker thread shows "当前工作目录缺失" / "current working directory missing", treat it as stale evidence: record `thread_cwd_missing`, `thread_not_converged`, `adoption_status: rejected_evidence`, and `cleanup_status: archived | cleanup_blocked`; do not continue that thread in place.
 - Codex automation heartbeats execute their configured prompt. They only start this Skill when the prompt explicitly invokes `$zhijuan-codex-agency-chief-of-staf` or the target context has the AGENTS routing shim; a heartbeat prompt that says "do nothing else" should never emit `COS_BOOT_RECEIPT`.
 - Heartbeat/Automation enablement claims are invalid without activation evidence: cite the `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or cite explicit `agents_routing_evidence` / `AGENTS routing shim`. A bare `AGENTS.md` mention is not evidence, and [assets/HEARTBEAT_PROMPT.md](assets/HEARTBEAT_PROMPT.md) by itself does not enable COS heartbeat.
 - Heartbeat/Automation enablement claims must also verify the target context: record `target_thread_id`, `target_thread_verified: true`, and at least one readback field such as `target_thread_title` or `target_thread_cwd`. A heartbeat pointed at an unrelated historical thread is a misconfigured automation even if its prompt invokes this Skill.
@@ -183,7 +184,7 @@ Audit local historical runs that used this Skill:
 python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --output /tmp/HISTORICAL_THREAD_AUDIT_RECEIPT.json
 ```
 
-The history audit is intentionally local-only. It scans Codex thread metadata and rollout logs for activation, dispatch, pending worktree, title/readback, non-converged review, and cross-project routing risks without copying raw conversation text into the receipt.
+The history audit is intentionally local-only. It scans Codex thread metadata and rollout logs for activation, dispatch, pending worktree, missing cwd/worktree, title/readback, non-converged review, and cross-project routing risks without copying raw conversation text into the receipt.
 
 ## What Good Looks Like
 
@@ -193,7 +194,7 @@ This skill is release-ready only when:
 - The installed skill copy matches the source bundle.
 - Scripts have useful `--help`, bounded output, and JSON modes where useful.
 - Real Codex Thread work records thread ids, receipts, and cleanup.
-- Historical-thread audits classify old failures without treating `pendingWorktreeId`, title self-report, or `thread_not_converged` as success evidence.
+- Historical-thread audits classify old failures without treating `pendingWorktreeId`, title self-report, missing-cwd workers, or `thread_not_converged` as success evidence.
 - A full Agency-flow pilot has converged SKS, AGS, DEV, and REV receipts in `validation/AGENCY_FLOW_PILOT.md`.
 - A valid release convergence receipt unifies dispatch, adoption/rejection, cleanup, and review verdicts in `validation/release_receipt.json`.
 - Domain deliverables use `DOMAIN_DELIVERABLE_RECEIPT`; thread/process PASS is not treated as creative or client-ready quality PASS.

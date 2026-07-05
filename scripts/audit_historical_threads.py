@@ -57,6 +57,17 @@ HISTORY_AUDIT_CHALLENGES = [
     "没安排别的线程",
 ]
 
+MISSING_CWD_TERMS = [
+    "当前工作目录缺失",
+    "工作目录缺失",
+    "current working directory missing",
+    "cwd_missing",
+    "worktree_missing",
+    "thread_cwd_missing",
+    "cwd no longer exists",
+    "worktree no longer exists",
+]
+
 
 def read_text(path: Path, max_bytes: int) -> str:
     if not path.exists() or not path.is_file():
@@ -137,6 +148,8 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
     has_dispatch = "THREAD_DISPATCH_RECEIPT" in text
     has_tool_blocked = "TOOL_BLOCKED" in text
     categories: list[str] = []
+    cwd_path = Path(thread["cwd"]).expanduser() if thread["cwd"] else None
+    cwd_exists = bool(cwd_path and cwd_path.exists())
 
     if explicit_trigger and not has_boot:
         categories.append("activation_missing_or_unproven")
@@ -164,6 +177,11 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
         in_repo = Path(thread["cwd"]).resolve().is_relative_to(repo_root.resolve())
     except Exception:
         in_repo = False
+    if thread["cwd"] and (
+        not cwd_exists
+        or contains_any(text, MISSING_CWD_TERMS)
+    ):
+        categories.append("thread_cwd_missing_requires_archive_or_rehome")
     if thread["cwd"] and not in_repo:
         categories.append("cross_project_routing_requires_agents_snippet")
 
@@ -173,6 +191,7 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
         "has_boot_receipt_marker": has_boot,
         "has_dispatch_receipt_marker": has_dispatch,
         "has_tool_blocked_marker": has_tool_blocked,
+        "cwd_exists": cwd_exists,
     }
     return sorted(set(categories)), markers
 
@@ -228,6 +247,9 @@ def main() -> int:
             "cross_project_threads": category_counts.get(
                 "cross_project_routing_requires_agents_snippet", 0
             ),
+            "missing_cwd_threads": category_counts.get(
+                "thread_cwd_missing_requires_archive_or_rehome", 0
+            ),
             "issue_categories": dict(sorted(category_counts.items())),
             "top_cwds": dict(cwd_counts.most_common(12)),
         },
@@ -239,6 +261,7 @@ def main() -> int:
             "When a user challenges archive, real execution, or skipped Skill flow, run the historical audit path.",
             "For cross-project default routing, install the AGENTS routing snippet where the work runs.",
             "When real Codex Threads are requested, dispatch with THREAD_DISPATCH_RECEIPT or stop with TOOL_BLOCKED.",
+            "If a thread cwd/worktree is missing, archive or mark cleanup_blocked, reject its evidence, and re-dispatch in a live project/worktree if work remains.",
         ],
     }
     text = json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"

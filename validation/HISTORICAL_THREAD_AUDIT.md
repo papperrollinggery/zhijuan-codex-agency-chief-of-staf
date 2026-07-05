@@ -1,13 +1,13 @@
 # Historical Thread Audit
 
-Date: 2026-07-04
+Date: 2026-07-05
 
 This file records the local cross-project audit requested after v0.1.6. The audit looks for historical uses of `zhijuan-codex-agency-chief-of-staf`, `幕僚长`, `COS_BOOT_RECEIPT`, and `THREAD_DISPATCH_RECEIPT` across Codex thread metadata and rollout logs.
 
 ## Command
 
 ```bash
-python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --max-rollout-bytes 1200000 --output /tmp/live_history_receipt.json
+python3 scripts/audit_historical_threads.py --repo-root . --scan-rollouts --output /tmp/HISTORICAL_THREAD_AUDIT_RECEIPT_current.json
 ```
 
 Fixture coverage is wired into `scripts/quality_gate.sh`:
@@ -18,36 +18,40 @@ python3 scripts/audit_historical_threads.py --repo-root . --fixture evals/histor
 
 ## Local Result
 
-Summary from `/tmp/live_history_receipt.json`:
+Summary from `/tmp/HISTORICAL_THREAD_AUDIT_RECEIPT_current.json`:
 
 ```json
 {
-  "matching_threads": 75,
-  "cross_project_threads": 45,
+  "matching_threads": 83,
+  "cross_project_threads": 63,
+  "missing_cwd_threads": 25,
   "issue_categories": {
-    "activation_missing_or_unproven": 48,
-    "cross_project_routing_requires_agents_snippet": 45,
-    "main_thread_self_execution_complaint": 1,
-    "nonconverged_evidence_must_be_rejected": 49,
-    "pending_worktree_not_thread_id": 74,
-    "title_receipt_metadata_requires_readback": 74
+    "activation_missing_or_unproven": 6,
+    "cross_project_routing_requires_agents_snippet": 63,
+    "history_audit_not_triggered": 3,
+    "main_thread_self_execution_complaint": 29,
+    "nonconverged_evidence_must_be_rejected": 46,
+    "pending_worktree_not_thread_id": 82,
+    "thread_cwd_missing_requires_archive_or_rehome": 25,
+    "title_receipt_metadata_requires_readback": 82
   }
 }
 ```
 
 Top matched projects:
 
-- `/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf`: 30 threads.
-- `/Users/jinjungao/work/ad-creative-orchestrator`: 7 threads.
-- `/Users/jinjungao/Documents/策划文案/Duffy Month_ 10yrs & BTS `: 5 threads.
+- `/Users/jinjungao/work/ad-creative-orchestrator`: 23 threads.
+- `/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf`: 20 threads.
+- `/Users/jinjungao/work/DIR SKILL`: 7 threads.
 
 ## Findings
 
 1. Historical evidence cannot be trusted from thread title or worker self-report alone. Several runs contain title changes or title-blocked states, so current release evidence must use thread metadata/readback.
 2. `pendingWorktreeId` appears frequently in historical traces. It is not a worker `thread_id`; it only means dispatch is pending until a real thread appears.
 3. Many early review/council threads contain `thread_not_converged`. Those runs are rejected evidence unless a later bounded rescue receipt exists.
-4. Cross-project usage is common. Installing the Skill globally does not guarantee a project will route through COS automatically; projects that need default routing must include `references/AGENTS_ROUTING_SNIPPET.md` in their `AGENTS.md`.
-5. The `ad-creative-orchestrator` history shows the realistic failure shape: the Skill can be used as orchestration guidance while the actual project still needs explicit local gates, worker scope, thread metadata, and adoption/cleanup proof.
+4. Missing `cwd` / removed worktree now appears as a first-class category. A Codex thread that shows "current working directory missing" must be archived or marked `cleanup_blocked`, rejected as evidence, and replaced in a live project/worktree if work remains.
+5. Cross-project usage is common. Installing the Skill globally does not guarantee a project will route through COS automatically; projects that need default routing must include `references/AGENTS_ROUTING_SNIPPET.md` in their `AGENTS.md`.
+6. The `ad-creative-orchestrator` history shows the realistic failure shape: the Skill can be used as orchestration guidance while the actual project still needs explicit local gates, worker scope, thread metadata, and adoption/cleanup proof.
 
 ## Adopted Fix
 
@@ -56,6 +60,7 @@ Top matched projects:
 - Added `evals/activation_contract.fixture.json` so `TOOL_BLOCKED`, `pendingWorktreeId`, and same-thread simulation are checked as output-level contract cases.
 - Added historical audit rules to `SKILL.md` and `references/ACTIVATION_PROTOCOL.md`.
 - Added README usage so users can reproduce the audit without exposing raw thread text.
+- Added `thread_cwd_missing_requires_archive_or_rehome` classification, activation fixtures, and quality-gate checks after the ADCO missing-worktree screenshot exposed that archived temporary worker threads can look like broken projects when reopened.
 
 ## Adversarial Review
 

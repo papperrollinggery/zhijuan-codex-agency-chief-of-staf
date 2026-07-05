@@ -55,6 +55,18 @@
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: explicit\n  thread_role: COS\n  thread_dispatch_decision: dispatch\n  worker_receipt_poll_limit: 3\n\nTHREAD_DISPATCH_RECEIPT:\n  thread_id: \"019f2e3e-b3ff-7612-a2d5-57d0412f08d8\"\n  thread_class: scout_worker\n  expected_receipt: HISTORY_CURRENT_AUDIT_RECEIPT\n  title_action: dispatcher_set\n  cleanup_plan: archive_after_receipt\n  status: dispatched\n\nreceipt_status:\n  scout_worker: \"poll 3/3 pending; still no HISTORY_CURRENT_AUDIT_RECEIPT\"\nthread_not_converged:\n  thread_id: \"019f2e3e-b3ff-7612-a2d5-57d0412f08d8\"\n  reason: \"3 次轮询无 receipt，直接归档\"\n"
   },
   {
+    "id": "missing-cwd-thread-adopted-invalid",
+    "expected_valid": false,
+    "requires_cos_boot": false,
+    "output": "ADCO_PROJECT_COS_CURRENT_RECEIPT:\n  thread_id: \"019f2ea1-bb8b-7da2-825e-dd4e496b292d\"\n  status: done\n  issue: \"当前工作目录缺失\"\n  adoption_status: adopted\n  cleanup_status: keep_open\n  next_action: \"继续发送消息到该 worker 等待它恢复。\"\n"
+  },
+  {
+    "id": "missing-cwd-thread-archived-valid",
+    "expected_valid": true,
+    "requires_cos_boot": false,
+    "output": "ADCO_PROJECT_COS_CURRENT_RECEIPT:\n  thread_id: \"019f2ea1-bb8b-7da2-825e-dd4e496b292d\"\n  status: blocked\n  issue: \"thread_cwd_missing / 当前工作目录缺失\"\n  thread_not_converged: true\n  adoption_status: rejected_evidence\n  cleanup_status: archived\n  next_action: \"如工作仍需要推进，重新在 live project-bound worker 派发；不要继续使用该缺失工作目录线程。\"\n"
+  },
+  {
     "id": "complex-quality-audit-no-dispatch-invalid",
     "expected_valid": false,
     "output": "COS_BOOT_RECEIPT:\n  skill_loaded: true\n  trigger_type: implicit\n  thread_role: COS\n  title_action: title_update_blocked\n  complexity: T3\n  thread_tools_available: true\n  thread_dispatch_decision: no_dispatch\n  worker_receipt_poll_limit: 3\n  worker_receipt_poll_interval_seconds: 60\n  worker_startup_grace_seconds: 120\n  reason: \"发布前质量审计涉及素材、旧图、浏览器资产和客户话术，但本轮直接同线程核查。\"\n"

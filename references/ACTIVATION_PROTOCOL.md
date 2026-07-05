@@ -50,6 +50,7 @@ Every dispatched worker must then enter bounded receipt polling:
 5. If a worker has no expected receipt by the limit and the grace/timeout budget is exhausted, record `thread_not_converged`, archive it or record `cleanup_blocked`, and dispatch a bounded rescue worker.
 6. A repeated “still waiting” status without `receipt_status`, remaining polls, next poll time, or rescue action is not convergence evidence.
 7. If the bounded rescue worker also reaches the receipt limit, the Chief-of-Staff must not switch to same-thread implementation in the COS worktree. Record `thread_not_converged` plus cleanup status, then either dispatch another explicitly budgeted rescue, emit `NEEDS_HUMAN`, or emit `TOOL_BLOCKED`.
+8. If Codex UI, `read_thread`, or `list_threads` shows "当前工作目录缺失", `current working directory missing`, `cwd_missing`, `worktree_missing`, or a `cwd` / associated worktree path that no longer exists, stop using that worker immediately. Record `thread_cwd_missing`, `thread_not_converged`, `adoption_status: rejected_evidence`, and `cleanup_status: archived | cleanup_blocked`. Do not send follow-up prompts to the missing-cwd thread and do not adopt old diffs from it; if work remains, re-dispatch in a live project-bound thread or fresh isolated worktree.
 
 When thread tools are unavailable, the correct output is explicit blockage, not simulation:
 
@@ -161,5 +162,6 @@ Historical failure categories to look for:
 - `release_receipt_fragmented`: dispatch, adoption/rejection, cleanup, and review verdict were scattered across worker replies instead of a single release receipt.
 - `history_audit_not_triggered`: user challenged missing archive, fake execution, or skipped Skill flow, but the run did not enter historical thread audit.
 - `cross_project_routing_requires_agents_snippet`: the Skill was referenced from another project without a local routing shim.
+- `thread_cwd_missing_requires_archive_or_rehome`: a thread's recorded cwd/worktree is gone or Codex reports "current working directory missing"; it must be archived or marked cleanup_blocked and replaced in a live project/worktree before work continues.
 
 For cross-project use, add `references/AGENTS_ROUTING_SNIPPET.md` to the project where the work actually runs, or install it with `scripts/install_skill.py --agents-routing project --project-root /path/to/project`. Installing the Skill bundle alone is not enough to guarantee that every future project route starts with the COS boot contract.

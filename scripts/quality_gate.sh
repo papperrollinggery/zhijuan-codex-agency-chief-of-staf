@@ -115,6 +115,7 @@ required = {
     "activation_missing_or_unproven",
     "dispatch_missing_or_unproven",
     "pending_worktree_not_thread_id",
+    "thread_cwd_missing_requires_archive_or_rehome",
     "nonconverged_evidence_must_be_rejected",
     "title_receipt_metadata_requires_readback",
     "cross_project_routing_requires_agents_snippet",
@@ -223,6 +224,8 @@ grep -q "rescue-fallback-to-cos-implementation-invalid" evals/activation_contrac
 grep -q "placeholder-thread-id-invalid" evals/activation_contract.fixture.json
 grep -q "dispatcher-set-pending-title-action-invalid" evals/activation_contract.fixture.json
 grep -q "rapid-poll-nonconverged-invalid" evals/activation_contract.fixture.json
+grep -q "missing-cwd-thread-adopted-invalid" evals/activation_contract.fixture.json
+grep -q "missing-cwd-thread-archived-valid" evals/activation_contract.fixture.json
 grep -q "complex-quality-audit-no-dispatch-invalid" evals/activation_contract.fixture.json
 grep -q "dispatch decision without THREAD_DISPATCH_RECEIPT or TOOL_BLOCKED" scripts/validate_activation_contract.py
 grep -q "COS boot receipt missing" scripts/validate_activation_contract.py
@@ -231,6 +234,10 @@ grep -q "passive waiting after dispatch without receipt polling or rescue state"
 grep -q "COS cannot fall back to same-thread implementation after rescue non-convergence" scripts/validate_activation_contract.py
 grep -q "title_action is not one of the allowed receipt enum values" scripts/validate_activation_contract.py
 grep -q "thread_not_converged lacks paced polling or startup-grace evidence" scripts/validate_activation_contract.py
+grep -q "missing-cwd thread must be marked thread_not_converged" scripts/validate_activation_contract.py
+grep -q "thread_cwd_missing_requires_archive_or_rehome" scripts/audit_historical_threads.py
+grep -q "thread_cwd_missing" SKILL.md
+grep -q "current working directory missing" references/ACTIVATION_PROTOCOL.md
 grep -q "heartbeat automation prompt explicitly invokes Skill but output lacks COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
 grep -q "T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED" scripts/validate_activation_contract.py
 grep -q "plain heartbeat prompt must not emit COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
