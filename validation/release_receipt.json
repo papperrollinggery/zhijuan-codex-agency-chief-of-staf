@@ -471,13 +471,223 @@
       "review_verdict": "NEEDS_HUMAN",
       "project": "zhijuan-codex-agency-chief-of-staf",
       "receipt_summary": "Rebuttal review found release evidence still stale at a822df2, hard-coded cross-project checks, and an English README startup example. This finding is adopted as blocking evidence for the current hardening patch."
+    },
+    {
+      "thread_id": "019f33c0-58a8-7880-ae1c-e073fe42ee6b",
+      "thread_class": "skill_maintainer_worker",
+      "deliverable": "Self Skill boundary and automation hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "adopted_commit": "d970325",
+      "receipt_summary": "Skill-maintainer worker produced the boundary/automation hardening patches culminating in d970325 Cover COS boundary audit failure modes. The patch added historical audit categories for source COS direct target execution, COS main overexecution, missing automation lifecycle evidence, and natural test prompt overdisclosure, plus fixtures and quality-gate coverage.",
+      "controller_validation": "Handoff/current validation thread 019f33cf-54e2-7e23-8ae9-c6a4f33fcbae verified audit fixture, quality_gate.sh, release_smoke.sh, git diff --check, and installed-copy consistency after install sync."
+    },
+    {
+      "thread_id": "019f33c6-86be-78d1-b20c-5b755e6f9eb5",
+      "thread_class": "review_worker",
+      "deliverable": "Self Skill boundary and automation hardening",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "PASS",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt": "COS_BOUNDARY_AUTOMATION_FIX_REVIEW_RECEIPT",
+      "receipt_summary": "Independent review initially failed 95322bc for missing historical audit categories, then accepted the d970325 follow-up with verdict PASS."
+    },
+    {
+      "thread_id": "019f33cf-54e2-7e23-8ae9-c6a4f33fcbae",
+      "thread_class": "handoff_validation_worker",
+      "deliverable": "Self Skill boundary and automation hardening installed-copy sync",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "installed_copy_synced_and_validated",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "PASS",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "validated_commit": "d970325",
+      "receipt": "COS_INSTALLED_COPY_SYNC_RECEIPT",
+      "previous_receipt_thread_id_status": "corrected_after_handoff",
+      "validation_commands": [
+        "python3 scripts/audit_historical_threads.py --repo-root . --fixture evals/history_threads.sample.json",
+        "bash scripts/quality_gate.sh .",
+        "bash scripts/release_smoke.sh .",
+        "git diff --check",
+        "diff -qr installed copy versus checkout"
+      ],
+      "receipt_summary": "The handoff/current validation worker corrected the receipt thread_id to 019f33cf-54e2-7e23-8ae9-c6a4f33fcbae, synced /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf using python3 scripts/install_skill.py --force --json, and verified installed copy consistency."
+    },
+    {
+      "thread_id": "019f2e3c-93f6-7b40-8616-4945feb79c0d",
+      "thread_class": "project_main_cos",
+      "deliverable": "DIR natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "blocked",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NEEDS_HUMAN",
+      "project": "DIR SKILL",
+      "receipt": "DIR_NATURAL_DOMAIN_TEST_RECEIPT",
+      "client_ready": false,
+      "hard_blockers": [
+        "logo",
+        "packaging",
+        "mandatory copy/legal",
+        "references",
+        "selling-point priority"
+      ],
+      "receipt_summary": "DIR natural domain test final receipt says client_ready=false. The exercise is useful as natural routing/domain quality evidence, not as a client-ready deliverable."
+    },
+    {
+      "thread_id": "019f33c0-68d0-7ff0-814d-4df1ec0d56c3",
+      "thread_class": "implementation_worker",
+      "deliverable": "DIR natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "thread_not_converged",
+      "dispatch_status": "dispatched",
+      "receipt_status": "missing",
+      "adoption_status": "rejected_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "DIR SKILL",
+      "receipt_summary": "Original execution worker did not converge and is rejected as completion evidence."
+    },
+    {
+      "thread_id": "019f33c5-5d06-7673-bca1-ec7cdcf1a0df",
+      "thread_class": "rescue_implementation_worker",
+      "deliverable": "DIR natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_for_internal_first_round_only",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "DIR SKILL",
+      "receipt_summary": "Rescue worker output is adopted for internal first-round evidence only, not for client-ready or final release completion."
+    },
+    {
+      "thread_id": "019f33c9-4db8-73c2-a672-403178d0934a",
+      "thread_class": "review_worker",
+      "deliverable": "DIR natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "draft_accepted_with_limitations",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "draft_accepted_with_limitations",
+      "project": "DIR SKILL",
+      "receipt_summary": "Review accepted the internal draft with limitations and preserved the client_ready=false boundary."
+    },
+    {
+      "thread_id": "019f2e9d-c7a1-7b83-9b24-05117432c52f",
+      "thread_class": "project_main_cos",
+      "deliverable": "ADCO natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "blocked",
+      "dispatch_status": "dispatched_to_existing_project_main",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "NEEDS_HUMAN",
+      "project": "ad-creative-orchestrator",
+      "receipt": "ADCO_NATURAL_DOMAIN_TEST_RECEIPT",
+      "client_ready_status": "not_client_ready",
+      "ppt_entry_status": "blocked",
+      "double_review_status": "incomplete",
+      "artifact": "/Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md",
+      "receipt_summary": "ADCO natural domain test is internal first-round evidence only. It blocks PPT entry and client-ready claims until double review and domain readiness are complete."
+    },
+    {
+      "thread_id": "019f33c0-a182-7540-ac09-bc0096ef8189",
+      "thread_class": "implementation_worker",
+      "deliverable": "ADCO natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_for_internal_first_round_only",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "n/a",
+      "project": "ad-creative-orchestrator",
+      "artifact": "/Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md",
+      "receipt_summary": "Execution worker produced the internal first-round artifact, but this does not satisfy client-ready, PPT entry, or full objective completion."
+    },
+    {
+      "thread_id": "019f33c3-439d-7841-ab11-fb55dc2cc2d0",
+      "thread_class": "review_worker",
+      "deliverable": "ADCO natural domain test",
+      "wave": "post-stop-bounded",
+      "status": "done",
+      "dispatch_status": "dispatched",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "double_review_incomplete",
+      "project": "ad-creative-orchestrator",
+      "receipt_summary": "Review worker confirmed internal first-round value while preserving not_client_ready, ppt_entry_status=blocked, and incomplete double-review status."
     }
   ],
   "release_decision": {
     "cold_review_converged": true,
     "domain_or_rebuttal_review_converged": true,
     "stop_more_reviewers": true,
-    "additional_review_wave_reason": "User challenged whether the long-running three-project goal was actually complete after prior evidence showed unverified natural heartbeat and worker-routing failures. The added goal-readiness audit is bounded post-stop evidence collection, not open-ended release review expansion."
+    "additional_review_wave_reason": "User challenged whether the long-running three-project goal was actually complete after prior evidence showed unverified natural heartbeat and worker-routing failures. The added goal-readiness audit is bounded post-stop evidence collection, not open-ended release review expansion.",
+    "public_release_complete": false,
+    "three_project_objective_complete": false,
+    "remote_push_performed": false,
+    "latest_self_skill_hardening_commit": "d970325",
+    "latest_self_skill_hardening_status": "adopted_and_installed_copy_synced",
+    "latest_self_skill_review": {
+      "review_worker_thread_id": "019f33c6-86be-78d1-b20c-5b755e6f9eb5",
+      "receipt": "COS_BOUNDARY_AUTOMATION_FIX_REVIEW_RECEIPT",
+      "verdict": "PASS"
+    },
+    "latest_self_skill_validation": {
+      "worker_thread_id": "019f33cf-54e2-7e23-8ae9-c6a4f33fcbae",
+      "receipt": "COS_INSTALLED_COPY_SYNC_RECEIPT",
+      "status": "installed_copy_synced_and_validated",
+      "passed": [
+        "audit fixture",
+        "quality_gate.sh",
+        "release_smoke.sh",
+        "git diff --check",
+        "installed copy consistency"
+      ]
+    },
+    "domain_test_summary": {
+      "DIR_NATURAL_DOMAIN_TEST_RECEIPT": {
+        "client_ready": false,
+        "adoption_status": "internal_first_round_only",
+        "hard_blockers": [
+          "logo",
+          "packaging",
+          "mandatory copy/legal",
+          "references",
+          "selling-point priority"
+        ]
+      },
+      "ADCO_NATURAL_DOMAIN_TEST_RECEIPT": {
+        "client_ready_status": "not_client_ready",
+        "ppt_entry_status": "blocked",
+        "adoption_status": "internal_first_round_only",
+        "double_review_status": "incomplete"
+      }
+    },
+    "automation_natural_long_run_status": "requires_final_due_window_evidence_before_completion_or_cancellation"
   },
   "additional_review_waves_after_stop": true,
   "cross_project_sync_evidence": {
@@ -618,6 +828,24 @@
       "Public release readiness remains convention-only for remote consumers until push, remote CI, and any required publication authorization are completed."
     ]
   },
+  "notes": [
+    {
+      "topic": "latest self Skill boundary hardening",
+      "summary": "d970325 is adopted in the target checkout and installed copy is synced. Independent review 019f33c6-86be-78d1-b20c-5b755e6f9eb5 returned COS_BOUNDARY_AUTOMATION_FIX_REVIEW_RECEIPT with verdict PASS. Current validation thread 019f33cf-54e2-7e23-8ae9-c6a4f33fcbae returned COS_INSTALLED_COPY_SYNC_RECEIPT with status installed_copy_synced_and_validated."
+    },
+    {
+      "topic": "DIR natural domain test",
+      "summary": "DIR_NATURAL_DOMAIN_TEST_RECEIPT remains client_ready=false. Original execution worker 019f33c0-68d0-7ff0-814d-4df1ec0d56c3 is thread_not_converged/rejected_evidence/cleanup_blocked. Rescue worker 019f33c5-5d06-7673-bca1-ec7cdcf1a0df is adopted for internal first round only. Review worker 019f33c9-4db8-73c2-a672-403178d0934a accepted the draft with limitations."
+    },
+    {
+      "topic": "ADCO natural domain test",
+      "summary": "ADCO_NATURAL_DOMAIN_TEST_RECEIPT is internal first round only. Artifact /Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md is not client-ready; ppt_entry_status is blocked and double review is incomplete."
+    },
+    {
+      "topic": "release decision boundary",
+      "summary": "Full public release and three-project objective remain incomplete. No push was performed. Automation natural long-run/self-recycle still requires final due-window evidence if objective closure or cancellation is required."
+    }
+  ],
   "cross_project_validation_round": {
     "round_id": "2026-07-05-three-project-hardening-recheck",
     "scope": [
