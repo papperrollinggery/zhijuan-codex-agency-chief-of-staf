@@ -79,6 +79,7 @@ Heartbeat/Automation contract:
 2. If that heartbeat is T4/T5, `thread_dispatch_decision` must be `dispatch` or `tool_blocked`; `no_dispatch` is invalid unless the user explicitly forbids child threads.
 3. A plain emitter heartbeat such as "Send exactly one plain text message ... Do nothing else" is not a COS activation and should not emit `COS_BOOT_RECEIPT`.
 4. A claim that Heartbeat/Automation is enabled must include evidence: `automation_prompt` text/path plus `prompt_contains_skill_invocation: true`, or explicit `agents_routing_evidence` / `AGENTS routing shim`. A bare `AGENTS.md` mention, or "未检查 AGENTS.md / 没有 prompt evidence", is invalid.
+5. A claim that Heartbeat/Automation is enabled must also verify the target context: include `target_thread_id` and a readback such as `target_thread_verified: true`, `target_thread_title`, or `target_thread_cwd`. If the target points at an unrelated historical thread, the heartbeat is misconfigured even when the prompt itself invokes this Skill.
 
 ## AGENTS.md Shim
 

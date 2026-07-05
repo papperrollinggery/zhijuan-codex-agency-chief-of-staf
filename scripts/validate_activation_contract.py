@@ -142,6 +142,27 @@ def has_heartbeat_activation_evidence(output: str) -> bool:
     return (has_prompt_source and has_prompt_invocation) or has_routing_shim
 
 
+def has_heartbeat_target_evidence(output: str) -> bool:
+    has_target_id = any(
+        marker in output
+        for marker in [
+            "target_thread_id:",
+            "targetThreadId:",
+            "target_thread:",
+        ]
+    )
+    has_target_readback = any(
+        marker in output
+        for marker in [
+            "target_thread_verified: true",
+            "target_thread_readback: true",
+            "target_thread_title:",
+            "target_thread_cwd:",
+        ]
+    )
+    return has_target_id and has_target_readback
+
+
 def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
     output = str(case.get("output", ""))
     prompt = case_prompt_text(case)
@@ -315,8 +336,11 @@ def validate_activation_output_case(case: dict) -> tuple[bool, list[str]]:
         and not any(marker in output for marker in worker_result_markers)
     ):
         reasons.append("COS main thread appears to claim direct execution")
-    if claims_heartbeat_automation_enabled(output) and not has_heartbeat_activation_evidence(output):
+    heartbeat_enabled_claim = claims_heartbeat_automation_enabled(output)
+    if heartbeat_enabled_claim and not has_heartbeat_activation_evidence(output):
         reasons.append("heartbeat/automation enablement claim lacks automation_prompt+prompt_contains_skill_invocation or explicit AGENTS routing shim evidence")
+    if heartbeat_enabled_claim and not has_heartbeat_target_evidence(output):
+        reasons.append("heartbeat/automation enablement claim lacks verified target_thread_id/title/cwd readback evidence")
     return not reasons, reasons
 
 
@@ -344,6 +368,8 @@ def validate_activation_fixture(root: Path) -> dict:
         "automation-enabled-no-evidence-invalid",
         "automation-created-before-keyword-no-evidence-invalid",
         "automation-enabled-bare-agents-md-invalid",
+        "automation-enabled-no-target-thread-evidence-invalid",
+        "automation-enabled-with-target-thread-valid",
         "valid-real-dispatch",
         "valid-pending-worktree-dispatch",
     }

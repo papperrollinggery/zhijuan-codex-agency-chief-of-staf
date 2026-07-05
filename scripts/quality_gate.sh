@@ -235,6 +235,7 @@ grep -q "heartbeat automation prompt explicitly invokes Skill but output lacks C
 grep -q "T4/T5 heartbeat COS must dispatch or TOOL_BLOCKED" scripts/validate_activation_contract.py
 grep -q "plain heartbeat prompt must not emit COS_BOOT_RECEIPT" scripts/validate_activation_contract.py
 grep -q "heartbeat/automation enablement claim lacks automation_prompt+prompt_contains_skill_invocation or explicit AGENTS routing shim evidence" scripts/validate_activation_contract.py
+grep -q "heartbeat/automation enablement claim lacks verified target_thread_id/title/cwd readback evidence" scripts/validate_activation_contract.py
 grep -q "worker_receipt_poll_limit" SKILL.md
 grep -q "worker_receipt_poll_interval_seconds" SKILL.md
 grep -q "worker_startup_grace_seconds" SKILL.md
@@ -253,8 +254,10 @@ grep -q "validate_domain_deliverable_contract.py" scripts/release_smoke.sh
 grep -q "SKIP_INSTALLED_COPY_DIFF" scripts/release_smoke.sh
 grep -q "automation heartbeats execute their configured prompt" README.md
 grep -q "Heartbeat/Automation enablement claims are invalid without activation evidence" README.md
+grep -q "target_thread_verified" README.md
 grep -q "Automation activation contract" assets/HEARTBEAT_PROMPT.md
 grep -q "Any claim that Heartbeat/Automation is enabled must cite evidence" assets/HEARTBEAT_PROMPT.md
+grep -q "target_thread_verified" assets/HEARTBEAT_PROMPT.md
 grep -q "bare \`AGENTS.md\` mention is not evidence" README.md
 grep -q "heartbeat-explicit-skill-valid" evals/activation_contract.fixture.json
 grep -q "heartbeat-explicit-t5-no-dispatch-invalid" evals/activation_contract.fixture.json
@@ -262,6 +265,8 @@ grep -q "plain-one-line-heartbeat-no-cos-valid" evals/activation_contract.fixtur
 grep -q "automation-enabled-no-evidence-invalid" evals/activation_contract.fixture.json
 grep -q "automation-created-before-keyword-no-evidence-invalid" evals/activation_contract.fixture.json
 grep -q "automation-enabled-bare-agents-md-invalid" evals/activation_contract.fixture.json
+grep -q "automation-enabled-no-target-thread-evidence-invalid" evals/activation_contract.fixture.json
+grep -q "automation-enabled-with-target-thread-valid" evals/activation_contract.fixture.json
 grep -q "activation_fixture_summary" scripts/validate_activation_contract.py
 grep -q "blackbox_eval_summary" scripts/validate_activation_contract.py
 grep -q "blackbox-08" evals/blackbox_complex.prompts.csv

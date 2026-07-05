@@ -160,7 +160,7 @@
         "dispatch_status": "dispatched",
         "receipt_status": "received",
         "cleanup_status": "keep_open_with_reason",
-        "receipt_summary": "main worktree contains 9056cad and 128736a; check_gate_fixtures, run_checks, check_distribution, and git diff --check passed; dirty worktree review still separate"
+        "receipt_summary": "ADCO_PROJECT_COS_CURRENT_RECEIPT received after reviewer timeout; main worktree contains 9056cad and 128736a; check_gate_fixtures, run_checks, check_distribution, and git diff --check passed; reviewer 019f3037 was marked thread_not_converged/archived/rejected_evidence; legacy dirty worktree remains keep_open"
       },
       {
         "thread_id": "019f2e9c-dafb-7750-ac10-3fdcbf8669b5",
@@ -212,6 +212,63 @@
         "adoption_status": "rejected_evidence",
         "cleanup_status": "archived",
         "blocker": "read-only rescue review thread also reported systemError without receipt"
+      },
+      {
+        "thread_id": "019f3036-2085-75f0-a174-fcbe807c81bf",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "review_worker",
+        "expected_receipt": "THREE_PROJECT_AUTOMATION_AUDIT_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "received",
+        "adoption_status": "adopted_after_fix",
+        "cleanup_status": "archived",
+        "receipt_summary": "confirmed the cos heartbeat previously fired in the unrelated Weekly Workflow Packaging Audit thread 019f17c2; current automation target was corrected to root COS thread 019f2354; installed-copy drift was later resolved with install_skill.py --force and release_smoke PASS"
+      },
+      {
+        "thread_id": "019f3036-fe20-7a00-b5eb-14ea205bad24",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "duplicate_review_worker",
+        "expected_receipt": "THREE_PROJECT_AUTOMATION_AUDIT_RECEIPT",
+        "dispatch_status": "duplicate_dispatched_by_tool_glitch",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "archived",
+        "blocker": "duplicate audit thread exceeded receipt budget and was archived/interrupted without receipt"
+      },
+      {
+        "thread_id": "019f3037-5b77-7773-a7c4-0461f2e6f5ce",
+        "project": "ad-creative-orchestrator",
+        "thread_class": "review_worker",
+        "expected_receipt": "ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "missing",
+        "status": "thread_not_converged",
+        "adoption_status": "rejected_evidence",
+        "cleanup_status": "archived",
+        "blocker": "read-only ADCO split-adoption reviewer exceeded receipt budget and was archived/interrupted without receipt"
+      },
+      {
+        "thread_id": "019f3048-3210-7f90-85aa-36f220371d68",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "review_worker",
+        "expected_receipt": "HEARTBEAT_TRIGGER_AUDIT_RECEIPT",
+        "dispatch_status": "dispatched",
+        "receipt_status": "received",
+        "adoption_status": "adopted_after_fix",
+        "cleanup_status": "archived",
+        "receipt_summary": "confirmed target thread readback and activation-contract hard gates are valid; blocked on live trigger proof until heartbeat smoke produced HEARTBEAT_SMOKE_RECEIPT; noted temporary smoke config must be restored"
+      },
+      {
+        "thread_id": "019f3049-354c-7031-a196-2d315e7f7a9f",
+        "project": "zhijuan-codex-agency-chief-of-staf",
+        "thread_class": "heartbeat_smoke_target",
+        "expected_receipt": "HEARTBEAT_SMOKE_RECEIPT",
+        "dispatch_status": "heartbeat_triggered",
+        "receipt_status": "received",
+        "adoption_status": "adopted_as_smoke_evidence",
+        "cleanup_status": "archived",
+        "receipt_summary": "temporary heartbeat cos-heartbeat-smoke-target-temporary fired at 2026-07-05T03:20:21Z, produced COS_BOOT_RECEIPT and HEARTBEAT_SMOKE_RECEIPT, changed_files empty, commands_run empty, DOMAIN_DELIVERABLE_RECEIPT not_applicable"
       }
     ],
     "commands_run": [
@@ -239,6 +296,16 @@
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
         "command": "bash scripts/release_smoke.sh .",
         "result": "PASS"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "python3 scripts/install_skill.py --force --agents-routing project --project-root . --json",
+        "result": "PASS; installed copy overwritten at /Users/jinjungao/.agents/skills/zhijuan-codex-agency-chief-of-staf"
+      },
+      {
+        "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "command": "codex_app.automation_update create cos-heartbeat-smoke-target-temporary, read_thread 019f3049-354c-7031-a196-2d315e7f7a9f, delete cos-heartbeat-smoke-target-temporary",
+        "result": "PASS; temporary heartbeat produced HEARTBEAT_SMOKE_RECEIPT and was deleted"
       },
       {
         "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
@@ -283,11 +350,38 @@
         "name": "COS 三项目硬化收敛心跳",
         "status": "ACTIVE",
         "rrule": "FREQ=HOURLY;INTERVAL=6",
-        "target_thread_id": "019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
+        "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "target_thread_verified": true,
+        "target_thread_title": "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000",
+        "target_thread_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "previous_target_thread_id": "019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
+        "previous_target_thread_title": "Weekly Workflow Packaging Audit",
+        "previous_target_issue": "The COS heartbeat fired in the historical Weekly Workflow Packaging Audit thread at 2026-07-05T01:30:51Z, so the user did not see it in the active COS project thread and that older context reported thread tools unavailable.",
         "config_path": "/Users/jinjungao/.codex/automations/cos/automation.toml",
         "purpose": "Continue three-project COS hardening with COS_BOOT_RECEIPT, current-state checks, gates/tests, receipt cleanup, and no remote push.",
         "verified_by": [
           "codex_app.automation_update view cos",
+          "codex_app.automation_update update cos targetThreadId=019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+          "sed -n '1,220p' /Users/jinjungao/.codex/automations/cos/automation.toml",
+          "codex_app.read_thread 019f17c2-b4f2-7a93-aa9a-a0c124b1545d",
+          "codex_app.list_threads query=zhijuan-codex-agency-chief-of-staf"
+        ]
+      },
+      {
+        "automation_id": "cos-heartbeat-smoke-target-temporary",
+        "kind": "heartbeat",
+        "name": "COS heartbeat smoke target temporary",
+        "status": "deleted_after_pass",
+        "rrule": "FREQ=MINUTELY;INTERVAL=1",
+        "target_thread_id": "019f3049-354c-7031-a196-2d315e7f7a9f",
+        "target_thread_title": "[P03-TH15-R01] 心跳靶线程-HBT｜Heartbeat Smoke Target｜TASK-COS-HB｜OUT-SMOKE",
+        "receipt_status": "received",
+        "receipt": "HEARTBEAT_SMOKE_RECEIPT",
+        "purpose": "Bounded smoke proving a heartbeat prompt that explicitly invokes this Skill produces COS_BOOT_RECEIPT in a target thread.",
+        "verified_by": [
+          "codex_app.automation_update create cos-heartbeat-smoke-target-temporary",
+          "codex_app.read_thread 019f3049-354c-7031-a196-2d315e7f7a9f",
+          "codex_app.automation_update delete cos-heartbeat-smoke-target-temporary",
           "sed -n '1,220p' /Users/jinjungao/.codex/automations/cos/automation.toml"
         ]
       }
@@ -298,11 +392,15 @@
       "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer.",
       "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
       "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; no split adoption into main is claimed.",
+      "ADCO split adoption current-state reviewer 019f3037-5b77-7773-a7c4-0461f2e6f5ce also exceeded the receipt budget and was archived/interrupted without ADCO_SPLIT_ADOPTION_CURRENT_REVIEW_RECEIPT.",
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no ADCO split-adoption diff is claimed or adopted.",
-      "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence."
+      "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
+      "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but the long-running six-hour cos automation has not yet naturally fired in the active 019f2354-f00c-7132-90d7-fb6c26ff2ecf thread after target correction."
     ],
     "evidence_limits": [
-      "This round proves current gates/tests and local worktree evidence, not live automatic thread startup in every future Codex surface.",
+      "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
+      "create_thread returned a handler error while duplicate threads materialized; duplicate 019f3036-fe20-7a00-b5eb-14ea205bad24 was archived/interrupted and rejected as evidence.",
+      "A transient invalid placeholder THREAD_DISPATCH_RECEIPT with thread_id=pending was emitted during this continuation and is explicitly rejected as evidence; only 019f3048-3210-7f90-85aa-36f220371d68 is valid dispatch evidence.",
       "Project-main COS threads remain open by design; only completed worker/review threads should be archived."
     ]
   }
