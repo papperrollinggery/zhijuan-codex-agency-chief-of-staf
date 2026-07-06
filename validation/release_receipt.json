@@ -841,6 +841,31 @@
       "receipt": "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT",
       "release_completion_allowed": false,
       "receipt_summary": "Rebuttal completion audit used the correct worker thread id and kept release_completion_allowed=false. Local validators and project worktrees are clean, but release completion remains blocked by missing natural heartbeat due-window evidence, no push or remote CI proof, missing DIR live acceptance, ADCO not client/PPT-ready with incomplete double review, missing client-ready DOMAIN_DELIVERABLE_RECEIPT, automation self-recycle not complete, and no safe unconfirmed cleanup."
+    },
+    {
+      "thread_id": "019f355f-f919-7201-89ab-baa3d8708449",
+      "thread_class": "ops_natural_heartbeat_worker",
+      "deliverable": "natural heartbeat due-window OPS validation",
+      "wave": "post-stop-bounded",
+      "status": "natural_heartbeat_recorded_release_still_blocked",
+      "dispatch_status": "natural_heartbeat_triggered",
+      "receipt_status": "received",
+      "adoption_status": "adopted_as_current_blocking_evidence",
+      "cleanup_status": "cleanup_blocked",
+      "review_verdict": "BLOCKED",
+      "project": "zhijuan-codex-agency-chief-of-staf",
+      "receipt": "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+      "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+      "target_thread_verified": true,
+      "current_due_status": "due_now",
+      "overdue": true,
+      "release_completion_allowed": false,
+      "public_release_complete": false,
+      "three_project_objective_complete": false,
+      "remote_push_performed": false,
+      "automation_self_recycle_complete": false,
+      "self_improvement_status": "not_needed",
+      "receipt_summary": "Natural heartbeat OPS worker used the correct worker thread id, verified target thread/title/cwd, recorded due_now/overdue status after the configured due time, confirmed three local project gate sets pass, and kept release_completion_allowed=false with no push, cleanup, or automation cancellation."
     }
   ],
   "release_decision": {
@@ -910,9 +935,9 @@
         "completion_limit": "local project state only"
       }
     },
-    "automation_natural_long_run_status": "requires_final_due_window_evidence_before_completion_or_cancellation",
+    "automation_natural_long_run_status": "natural_heartbeat_ops_receipt_recorded_release_still_blocked",
     "latest_project_state_convergence": {
-      "round_id": "2026-07-06-project-state-and-automation-update",
+      "round_id": "2026-07-06-natural-heartbeat-ops-update",
       "public_release_complete": false,
       "three_project_objective_complete": false,
       "remote_push_performed": false,
@@ -1086,10 +1111,113 @@
         "no remote push or current remote CI proof is recorded",
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle must wait for final due-window evidence and objective completion",
-        "OPS process/cache sampling found no safe kill/rm action without user confirmation",
-        "rebuttal completion audit keeps release_completion_allowed=false until natural heartbeat due-window evidence is checked"
-      ]
+        "cos automation self-recycle remains blocked because objectives are incomplete and automation_self_recycle_complete=false",
+        "OPS process/cache sampling and natural heartbeat cleanup candidates found no safe kill/rm action without user confirmation",
+        "natural heartbeat OPS receipt is recorded as due_now/overdue evidence but release_completion_allowed remains false"
+      ],
+      "COS_HEARTBEAT_OPS_WORKER_RECEIPT": {
+        "worker_thread_id": "019f355f-f919-7201-89ab-baa3d8708449",
+        "receipt": "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+        "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "target_thread_verified": true,
+        "target_title_verified": true,
+        "target_cwd_verified": true,
+        "target_title": "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000",
+        "target_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "checked_at_local": "2026-07-06T11:01:00+08:00",
+        "configured_due_at_local": "2026-07-06T07:43:28.193+08:00",
+        "current_due_status": "due_now",
+        "overdue": true,
+        "due_reason": "2026-07-06T11:01+08:00 is after 2026-07-06T07:43:28.193+08:00",
+        "release_completion_allowed": false,
+        "public_release_complete": false,
+        "three_project_objective_complete": false,
+        "remote_push_performed": false,
+        "automation_self_recycle_complete": false,
+        "self_improvement_status": "not_needed",
+        "release_completion_status": "not_allowed",
+        "project_states": {
+          "zhijuan-codex-agency-chief-of-staf": {
+            "git_status": "## main...origin/main [ahead 35]",
+            "working_tree": "clean",
+            "latest_commit": "258d56a Record rebuttal completion audit",
+            "validation": [
+              "python3 scripts/validate_release_receipt.py validation/release_receipt.json PASS",
+              "bash scripts/quality_gate.sh . PASS",
+              "bash scripts/release_smoke.sh . PASS",
+              "git diff --check PASS"
+            ]
+          },
+          "DIR SKILL": {
+            "git_status": "## main...origin/main [ahead 3]",
+            "working_tree": "clean",
+            "validation": [
+              "python3 scripts/validate_project.py PASS",
+              "git diff --check PASS"
+            ]
+          },
+          "ad-creative-orchestrator": {
+            "git_status": "## main...origin/main [ahead 6]",
+            "working_tree": "clean",
+            "validation": [
+              "python3 tools/check_gate_fixtures.py PASS",
+              "python3 tools/run_checks.py PASS",
+              "python3 tools/check_distribution.py PASS",
+              "git diff --check PASS"
+            ]
+          }
+        },
+        "cleanup_candidates": {
+          "codex_app_server": {
+            "pid": 1233,
+            "cpu_percent": 63.2,
+            "cleanup_boundary": "requires_user_confirmation_before_kill_or_restart"
+          },
+          "zombies": [
+            {
+              "pid": 846,
+              "parent_process": "DoubaoIme",
+              "cleanup_boundary": "wait_for_parent_reap_or_restart"
+            },
+            {
+              "pid": 897,
+              "parent_process": "DoubaoIme",
+              "cleanup_boundary": "wait_for_parent_reap_or_restart"
+            }
+          ],
+          "detached_skill_worktrees": {
+            "project": "zhijuan-codex-agency-chief-of-staf",
+            "count": 5,
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          "dirty_adco_worktrees": [
+            {
+              "path": "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+              "cleanup_boundary": "do_not_clean_without_separate_review"
+            },
+            {
+              "path": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+              "cleanup_boundary": "do_not_clean_without_separate_review"
+            }
+          ],
+          "skill_worktree_pycache": {
+            "count": 3,
+            "cleanup_boundary": "cleanup_not_performed_this_round"
+          }
+        },
+        "cleanup_decision": "no_kill_rm_or_cleanup_performed",
+        "hard_blockers": [
+          "public release is incomplete",
+          "three-project objective is incomplete",
+          "no remote push or current remote CI proof is recorded",
+          "DIR live user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
+          "automation self-recycle cannot run while objectives remain incomplete",
+          "cleanup candidates require user confirmation or separate review"
+        ],
+        "recommended_next_action": "keep release_completion_allowed=false; do not push, cancel automation, or clean candidates without explicit authorization"
+      }
     }
   },
   "additional_review_waves_after_stop": true,
@@ -1226,7 +1354,7 @@
       "Any public release, push, merge, or publication still requires explicit user authorization.",
       "ADCO current local evidence commit is e7f3fd4 but remote/GitHub CI for that HEAD is not verified.",
       "DIR current local project-state convergence remains local commit 24bc7bb with DOMAIN_DELIVERABLE_RECEIPT not_applicable.",
-      "The cos automation must remain active until final due-window evidence and objective completion are proven."
+      "The natural heartbeat OPS receipt is recorded, but the cos automation cannot self-recycle until public release and three-project objective completion are proven."
     ],
     "still_convention_only": [
       "Cross-project routing boundaries are locally hardened and validated, but future organic project dispatches still need receipts to prove the convention is followed.",
@@ -1234,7 +1362,7 @@
       "Public release readiness remains convention-only for remote consumers until push, remote CI, and any required publication authorization are completed."
     ],
     "latest_state_convergence": {
-      "round_id": "2026-07-06-project-state-and-automation-update",
+      "round_id": "2026-07-06-natural-heartbeat-ops-update",
       "public_release_complete": false,
       "three_project_objective_complete": false,
       "remote_push_performed": false,
@@ -1408,10 +1536,113 @@
         "no remote push or current remote CI proof is recorded",
         "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
         "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle must wait for final due-window evidence and objective completion",
-        "OPS process/cache sampling found no safe kill/rm action without user confirmation",
-        "rebuttal completion audit keeps release_completion_allowed=false until natural heartbeat due-window evidence is checked"
-      ]
+        "cos automation self-recycle remains blocked because objectives are incomplete and automation_self_recycle_complete=false",
+        "OPS process/cache sampling and natural heartbeat cleanup candidates found no safe kill/rm action without user confirmation",
+        "natural heartbeat OPS receipt is recorded as due_now/overdue evidence but release_completion_allowed remains false"
+      ],
+      "COS_HEARTBEAT_OPS_WORKER_RECEIPT": {
+        "worker_thread_id": "019f355f-f919-7201-89ab-baa3d8708449",
+        "receipt": "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+        "target_thread_id": "019f2354-f00c-7132-90d7-fb6c26ff2ecf",
+        "target_thread_verified": true,
+        "target_title_verified": true,
+        "target_cwd_verified": true,
+        "target_title": "[P01-TH00-R00] 幕僚长-COS｜主控沟通｜TASK-000｜OUT-000",
+        "target_cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+        "checked_at_local": "2026-07-06T11:01:00+08:00",
+        "configured_due_at_local": "2026-07-06T07:43:28.193+08:00",
+        "current_due_status": "due_now",
+        "overdue": true,
+        "due_reason": "2026-07-06T11:01+08:00 is after 2026-07-06T07:43:28.193+08:00",
+        "release_completion_allowed": false,
+        "public_release_complete": false,
+        "three_project_objective_complete": false,
+        "remote_push_performed": false,
+        "automation_self_recycle_complete": false,
+        "self_improvement_status": "not_needed",
+        "release_completion_status": "not_allowed",
+        "project_states": {
+          "zhijuan-codex-agency-chief-of-staf": {
+            "git_status": "## main...origin/main [ahead 35]",
+            "working_tree": "clean",
+            "latest_commit": "258d56a Record rebuttal completion audit",
+            "validation": [
+              "python3 scripts/validate_release_receipt.py validation/release_receipt.json PASS",
+              "bash scripts/quality_gate.sh . PASS",
+              "bash scripts/release_smoke.sh . PASS",
+              "git diff --check PASS"
+            ]
+          },
+          "DIR SKILL": {
+            "git_status": "## main...origin/main [ahead 3]",
+            "working_tree": "clean",
+            "validation": [
+              "python3 scripts/validate_project.py PASS",
+              "git diff --check PASS"
+            ]
+          },
+          "ad-creative-orchestrator": {
+            "git_status": "## main...origin/main [ahead 6]",
+            "working_tree": "clean",
+            "validation": [
+              "python3 tools/check_gate_fixtures.py PASS",
+              "python3 tools/run_checks.py PASS",
+              "python3 tools/check_distribution.py PASS",
+              "git diff --check PASS"
+            ]
+          }
+        },
+        "cleanup_candidates": {
+          "codex_app_server": {
+            "pid": 1233,
+            "cpu_percent": 63.2,
+            "cleanup_boundary": "requires_user_confirmation_before_kill_or_restart"
+          },
+          "zombies": [
+            {
+              "pid": 846,
+              "parent_process": "DoubaoIme",
+              "cleanup_boundary": "wait_for_parent_reap_or_restart"
+            },
+            {
+              "pid": 897,
+              "parent_process": "DoubaoIme",
+              "cleanup_boundary": "wait_for_parent_reap_or_restart"
+            }
+          ],
+          "detached_skill_worktrees": {
+            "project": "zhijuan-codex-agency-chief-of-staf",
+            "count": 5,
+            "cleanup_boundary": "confirm_no_active_thread_before_rm"
+          },
+          "dirty_adco_worktrees": [
+            {
+              "path": "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+              "cleanup_boundary": "do_not_clean_without_separate_review"
+            },
+            {
+              "path": "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+              "cleanup_boundary": "do_not_clean_without_separate_review"
+            }
+          ],
+          "skill_worktree_pycache": {
+            "count": 3,
+            "cleanup_boundary": "cleanup_not_performed_this_round"
+          }
+        },
+        "cleanup_decision": "no_kill_rm_or_cleanup_performed",
+        "hard_blockers": [
+          "public release is incomplete",
+          "three-project objective is incomplete",
+          "no remote push or current remote CI proof is recorded",
+          "DIR live user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
+          "automation self-recycle cannot run while objectives remain incomplete",
+          "cleanup candidates require user confirmation or separate review"
+        ],
+        "recommended_next_action": "keep release_completion_allowed=false; do not push, cancel automation, or clean candidates without explicit authorization"
+      }
     }
   },
   "notes": [
@@ -1442,6 +1673,10 @@
     {
       "topic": "rebuttal completion audit",
       "summary": "Review worker 019f3407-5e29-7351-b485-5586bbd0be0b returned COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT with verdict NEEDS_HUMAN and release_completion_allowed=false. Do not change rules now; wait until 2026-07-06T07:43:28.193+08:00 and then verify the natural heartbeat due-window receipt."
+    },
+    {
+      "topic": "natural heartbeat OPS due-window validation",
+      "summary": "Natural heartbeat OPS worker 019f355f-f919-7201-89ab-baa3d8708449 returned COS_HEARTBEAT_OPS_WORKER_RECEIPT with the correct thread_id and due_now/overdue status. Three project local gates are clean, but public_release_complete, three_project_objective_complete, remote_push_performed, and automation_self_recycle_complete remain false; no kill, rm, push, or automation cancellation was performed."
     }
   ],
   "cross_project_validation_round": {

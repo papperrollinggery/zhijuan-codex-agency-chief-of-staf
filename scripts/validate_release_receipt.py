@@ -24,6 +24,7 @@ LATEST_ADCO_WORKER_THREAD_ID = "019f33e7-68eb-76c0-9317-8c81b958c57a"
 LATEST_ADCO_LOCAL_COMMIT = "e7f3fd4"
 LATEST_OPS_WORKER_THREAD_ID = "019f33e6-3a59-79a1-bf0c-226261faeb13"
 LATEST_OPS_SAMPLING_WORKER_THREAD_ID = "019f33fd-5e5b-7d52-8ec8-c518cebec1bd"
+LATEST_NATURAL_HEARTBEAT_OPS_WORKER_THREAD_ID = "019f355f-f919-7201-89ab-baa3d8708449"
 
 
 def fail(message: str) -> None:
@@ -411,6 +412,100 @@ def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
         )
     if sampling_receipt.get("tmp_cache_candidates") != []:
         fail("COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT.tmp_cache_candidates must be empty")
+
+    natural_ops = convergence.get("COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    if not isinstance(natural_ops, dict):
+        fail("latest_project_state_convergence.COS_HEARTBEAT_OPS_WORKER_RECEIPT must be an object")
+    require_equal(
+        natural_ops,
+        "worker_thread_id",
+        LATEST_NATURAL_HEARTBEAT_OPS_WORKER_THREAD_ID,
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+    )
+    require_equal(
+        natural_ops,
+        "receipt",
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+    )
+    require_equal(
+        natural_ops,
+        "target_thread_id",
+        str(convergence.get("COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT", {}).get("target_thread_id")),
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+    )
+    require_equal(natural_ops, "target_thread_verified", True, "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(natural_ops, "target_cwd_verified", True, "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(natural_ops, "current_due_status", "due_now", "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(natural_ops, "overdue", True, "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(natural_ops, "self_improvement_status", "not_needed", "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(natural_ops, "release_completion_allowed", False, "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    for field in [
+        "public_release_complete",
+        "three_project_objective_complete",
+        "remote_push_performed",
+        "automation_self_recycle_complete",
+    ]:
+        require_equal(natural_ops, field, False, "COS_HEARTBEAT_OPS_WORKER_RECEIPT")
+    require_equal(
+        natural_ops,
+        "cleanup_decision",
+        "no_kill_rm_or_cleanup_performed",
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT",
+    )
+    projects = natural_ops.get("project_states")
+    if not isinstance(projects, dict):
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.project_states must be an object")
+    expected_project_statuses = {
+        "zhijuan-codex-agency-chief-of-staf": "## main...origin/main [ahead 35]",
+        "DIR SKILL": "## main...origin/main [ahead 3]",
+        "ad-creative-orchestrator": "## main...origin/main [ahead 6]",
+    }
+    for project, expected_status in expected_project_statuses.items():
+        project_state = projects.get(project)
+        if not isinstance(project_state, dict):
+            fail(f"COS_HEARTBEAT_OPS_WORKER_RECEIPT.project_states missing {project}")
+        require_equal(project_state, "git_status", expected_status, f"COS_HEARTBEAT_OPS_WORKER_RECEIPT.{project}")
+        require_equal(project_state, "working_tree", "clean", f"COS_HEARTBEAT_OPS_WORKER_RECEIPT.{project}")
+        validations = require_list(
+            project_state.get("validation"),
+            f"COS_HEARTBEAT_OPS_WORKER_RECEIPT.{project}.validation",
+        )
+        require_marker(validations, "git diff --check", f"COS_HEARTBEAT_OPS_WORKER_RECEIPT.{project}.validation")
+    cleanup_candidates = natural_ops.get("cleanup_candidates")
+    if not isinstance(cleanup_candidates, dict):
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.cleanup_candidates must be an object")
+    app_server = cleanup_candidates.get("codex_app_server")
+    if not isinstance(app_server, dict):
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.cleanup_candidates.codex_app_server must be an object")
+    require_equal(app_server, "pid", 1233, "COS_HEARTBEAT_OPS_WORKER_RECEIPT.codex_app_server")
+    require_text_marker(
+        app_server.get("cleanup_boundary"),
+        "requires_user_confirmation",
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT.codex_app_server.cleanup_boundary",
+    )
+    zombies = require_list(cleanup_candidates.get("zombies"), "COS_HEARTBEAT_OPS_WORKER_RECEIPT.zombies")
+    zombie_pids = {zombie.get("pid") for zombie in zombies if isinstance(zombie, dict)}
+    if zombie_pids != {846, 897}:
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.zombies must record PID 846 and PID 897")
+    detached = cleanup_candidates.get("detached_skill_worktrees")
+    if not isinstance(detached, dict):
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.detached_skill_worktrees must be an object")
+    require_equal(detached, "count", 5, "COS_HEARTBEAT_OPS_WORKER_RECEIPT.detached_skill_worktrees")
+    dirty_adco = require_list(
+        cleanup_candidates.get("dirty_adco_worktrees"),
+        "COS_HEARTBEAT_OPS_WORKER_RECEIPT.dirty_adco_worktrees",
+    )
+    dirty_paths = {str(worktree.get("path")) for worktree in dirty_adco if isinstance(worktree, dict)}
+    if dirty_paths != {
+        "/Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator",
+        "/Users/jinjungao/.codex/worktrees/f7b3/ad-creative-orchestrator",
+    }:
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.dirty_adco_worktrees path set mismatch")
+    pycache = cleanup_candidates.get("skill_worktree_pycache")
+    if not isinstance(pycache, dict):
+        fail("COS_HEARTBEAT_OPS_WORKER_RECEIPT.skill_worktree_pycache must be an object")
+    require_equal(pycache, "count", 3, "COS_HEARTBEAT_OPS_WORKER_RECEIPT.skill_worktree_pycache")
 
     still_blocked = require_list(convergence.get("still_blocked"), "latest_project_state_convergence.still_blocked")
     for marker in [

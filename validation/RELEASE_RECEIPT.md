@@ -17,6 +17,7 @@ This receipt is the single release table for dispatch, adoption or rejection, cl
 | `019f339a-6907-7ff3-9dfc-2457e7a8db29` | skill maintainer worker | post-stop-bounded | received | adopted | archived | n/a |
 | `019f33a3-a120-70d1-af52-d3739df4395d` | handoff validation worker | post-stop-bounded | received | adopted | archived | PASS |
 | `019f33a8-9dd3-7741-ab18-025a657c025a` | review worker | post-stop-bounded | received | adopted as blocking evidence | archived | NEEDS_HUMAN |
+| `019f355f-f919-7201-89ab-baa3d8708449` | ops natural heartbeat worker | post-stop-bounded | received | adopted as blocking evidence | cleanup_blocked | BLOCKED |
 
 Release review budget:
 
@@ -45,7 +46,7 @@ Current sync evidence: `2026-07-06-current-three-project-sync`
 | `ad-creative-orchestrator` | project-main COS `019f2e9d-c7a1-7b83-9b24-05117432c52f` adopted worker `019f338d-cc9a-7fc2-a1c2-d90c572ce88d` as local commit `9f2ae62 Sync ADCO COS routing boundary`; changed `AGENTS.md` | `PYTHONDONTWRITEBYTECODE=1 python3 tools/check_gate_fixtures.py`, `tools/run_checks.py`, `tools/check_distribution.py`, `git diff --check` all PASS | no push, no remote CI for current local HEAD, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 | `DIR SKILL` | project-main COS `019f2e3c-93f6-7b40-8616-4945feb79c0d` adopted worker `019f338d-3964-77f0-8a6f-4fa5d5c95ae5`; validation worker `019f3393-3a08-78b3-8082-6af9e68d1dda`; local commit `24bc7bb Sync COS routing boundaries`; branch `codex/p01th09r01-skillskmdirtaskdirroutingsync` | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/validate_project.py` PASS and `git diff --check` PASS after removing clean task-owned residual worktree `/Users/jinjungao/.codex/worktrees/7298/DIR SKILL` | no push, no remote CI for current local HEAD, live acceptance still `NEEDS_USER`, `DOMAIN_DELIVERABLE_RECEIPT` not_applicable |
 
-Latest state-convergence update: `2026-07-06-project-state-and-automation-update`
+Latest state-convergence update: `2026-07-06-natural-heartbeat-ops-update`
 
 | Project | Receipt | Evidence | Limits |
 |---|---|---|---|
@@ -54,12 +55,15 @@ Latest state-convergence update: `2026-07-06-project-state-and-automation-update
 | `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT` | OPS worker `019f33e6-3a59-79a1-bf0c-226261faeb13`; `cos` automation ACTIVE; `FREQ=HOURLY;INTERVAL=6`; target `019f2354-f00c-7132-90d7-fb6c26ff2ecf`; next natural due `2026-07-06T07:43:28.193+08:00` | do not delete or pause automation before final due-window evidence; PID `1233` is not task-owned; dirty worktree cleanup remains blocked |
 | `zhijuan-codex-agency-chief-of-staf` | `COS_OPS_PROCESS_CACHE_SAMPLING_RECEIPT` | OPS worker `019f33fd-5e5b-7d52-8ec8-c518cebec1bd`; sampled `2026-07-06 04:34:59-04:35:59 +0800`; related processes `278`; zombies `0`; MCP/Node fanout recorded; tmp cache candidates empty | no direct `kill` or `rm`: PID `1233`/`1514` ownership unproven, five clean Skill worktrees require active-thread confirmation, dirty ADCO worktrees must be preserved or separately reviewed |
 | `zhijuan-codex-agency-chief-of-staf` | `COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT` | review worker `019f3407-5e29-7351-b485-5586bbd0be0b`; verdict `NEEDS_HUMAN`; `release_completion_allowed=false`; local receipt/gate evidence still passes | 不放行：自然 heartbeat due-window 未验收、未 push/远端 CI 未验证、DIR live acceptance 缺失、ADCO 不是 client/PPT-ready 且 double review incomplete、DIR/ADCO 仍缺客户级 `DOMAIN_DELIVERABLE_RECEIPT` |
+| `zhijuan-codex-agency-chief-of-staf` | `COS_HEARTBEAT_OPS_WORKER_RECEIPT` | natural heartbeat OPS worker `019f355f-f919-7201-89ab-baa3d8708449`; target id/title/cwd verified; `2026-07-06T11:01+08:00` was after due `2026-07-06T07:43:28.193+08:00`; three local project gate sets passed | 仍不放行：`public_release_complete=false`、`three_project_objective_complete=false`、`remote_push_performed=false`、`automation_self_recycle_complete=false`; no push, cleanup, or automation cancellation |
 
-Latest rebuttal completion audit:
+Latest natural heartbeat OPS update:
 
-- `019f3407-5e29-7351-b485-5586bbd0be0b` 已完成反驳审查，receipt.thread_id 正确，结论为 `NEEDS_HUMAN`。
-- 本轮只记录阻塞证据，不声明 release-ready；`public_release_complete=false`、`three_project_objective_complete=false`、`remote_push_performed=false`、`automation_self_recycle_complete=false` 继续保持。
-- 下一步不修规则、不清理旧进程或 worktree；只等 `2026-07-06T07:43:28.193+08:00` 后检查自然 heartbeat due-window 回执。到期仍无有效回执时，再派 bounded heartbeat rescue/OPS。
+- `019f355f-f919-7201-89ab-baa3d8708449` 已完成自然 heartbeat OPS 回执，receipt.thread_id 正确；目标 thread id/title/cwd 已由主控核验正确。
+- 本次 due-window 证据已记录为 `due_now`/overdue，但只证明自然 heartbeat 真实触发和三项目本地 gate 当前通过，不证明目标完成。
+- 本轮继续不放行：`public_release_complete=false`、`three_project_objective_complete=false`、`remote_push_performed=false`、`automation_self_recycle_complete=false`。
+- Cleanup candidates 仅登记不处理：Codex app-server PID `1233` 约 `63.2%` CPU；zombie PID `846`/`897` 父进程 `DoubaoIme`；本仓库 5 个 detached Codex worktree；ADCO `adco-skill-hardening` 和 `f7b3` worktree；本仓库 Codex worktree 下 3 个 `__pycache__`。
+- 下一步：保持不 push、不取消 automation、不 kill/rm；除非用户授权发布或清理，否则继续保留阻塞状态并等待目标完成所需的 release/acceptance/remote evidence。
 
 Current local validation evidence:
 
@@ -129,6 +133,7 @@ Project-main thread status:
 | `019f339a-6907-7ff3-9dfc-2457e7a8db29` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_SYNC_RECEIPT` | adopted as local commit `e4066fc`; this is the current cross-project evidence sync/adoption commit; previous self-hardening remains `a822df2` |
 | `019f33a3-a120-70d1-af52-d3739df4395d` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_ADOPTION_VALIDATION_RECEIPT` | corrected handoff/adoption validation thread for `e4066fc`; adopted and archived |
 | `019f33a8-9dd3-7741-ab18-025a657c025a` | `zhijuan-codex-agency-chief-of-staf` | `COS_RELEASE_EVIDENCE_REBUTTAL_REVIEW_RECEIPT` | verdict `NEEDS_HUMAN`; adopted as blocking evidence because receipt evidence was stale at `a822df2`, cross-project checks were too hard-coded, and README still showed the old English startup example |
+| `019f355f-f919-7201-89ab-baa3d8708449` | `zhijuan-codex-agency-chief-of-staf` | `COS_HEARTBEAT_OPS_WORKER_RECEIPT` | natural heartbeat OPS receipt recorded with correct worker id; target thread/title/cwd verified; due status `due_now`/overdue; adopted only as current blocking evidence |
 
 Automation receipt:
 
@@ -138,11 +143,11 @@ Automation receipt:
 
 Natural heartbeat acceptance:
 
-- Current check time: `2026-07-06T01:54:49+08:00`
-- Latest check time: `2026-07-06T01:54:49+08:00`
+- Current check time: `2026-07-06T11:01:00+08:00`
+- Latest check time: `2026-07-06T11:01:00+08:00`
 - Last config update: `2026-07-06T01:43:28.193+08:00`
-- Next six-hour due time: `2026-07-06T07:43:28.193+08:00`
-- Acceptance criterion: after the due time, `read_thread 019f2354-f00c-7132-90d7-fb6c26ff2ecf` must show a heartbeat-created turn containing `COS_BOOT_RECEIPT` and `COS_HEARTBEAT_RUN_RECEIPT` with `target_thread_verified=true`, correct target id/title/cwd, due status, dispatch outcome, rescue decision, and next check; otherwise record `thread_not_converged` or `TOOL_BLOCKED` instead of claiming completion.
+- Configured six-hour due time checked: `2026-07-06T07:43:28.193+08:00`
+- Acceptance result: natural heartbeat OPS evidence is now recorded with correct worker id and target readback, but release completion remains blocked because push/public release/three-project completion/self-recycle are still false.
 
 Automation target audit:
 
@@ -163,10 +168,11 @@ OPS process/cache sampling:
 - PID `1233` Codex app-server showed intermittent/sustained CPU (`20.6%`, `5.4%`, later `30.3%`) and PID `1514` Codex Renderer showed transient high CPU, but neither was proven task-owned; closing/restarting Codex Desktop requires user confirmation.
 - MCP/Node fanout remains broad: `skycomputer_mcp` 44, `xcodebuildmcp_or_child` 40, `opendesign_mcp` 22, `gitnexus_mcp` 22, `node_repl` 22, `generic_node_mcp` 110.
 - Five clean Skill worktree candidates (`72b0`, `d2ea`, `d555`, `daa9`, `fa6a`) may only be removed after confirming no active thread owns them. Dirty ADCO worktrees at `adco-skill-hardening` and `f7b3` are not cleanup candidates.
+- Natural heartbeat OPS later recorded PID `1233` at about `63.2%` CPU, zombie PID `846`/`897` with parent `DoubaoIme`, five detached Skill worktrees, ADCO `adco-skill-hardening`/`f7b3`, and three Skill-worktree `__pycache__` directories; no cleanup was performed.
 
 Current hard limits:
 
-- 最新反驳审查 `COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT` 明确不放行：当前只等待自然 heartbeat due-window 回执，不能把本地 gate 通过写成 release-ready。
+- 最新自然 heartbeat OPS 回执 `COS_HEARTBEAT_OPS_WORKER_RECEIPT` 明确不放行：due-window 和本地 gate 通过不能写成 release-ready。
 - No remote push has been performed in this round; no current local HEAD has remote CI proof from this evidence sync.
 - Creative/storyboard/proposal/copy/story deliverables are not claimed client-ready without `DOMAIN_DELIVERABLE_RECEIPT`.
 - DIR remains `NEEDS_USER` for live acceptance: `DIR_LIVE_ACCEPTANCE_GAP_RECEIPT` confirms local validation passes but real user acceptance is not complete.
