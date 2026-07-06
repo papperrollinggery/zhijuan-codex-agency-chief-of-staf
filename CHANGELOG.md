@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.1.7 - 2026-07-06
+
 - Clarified that real customer-project injection, DIR live-user acceptance, and ADCO client/PPT-ready/domain acceptance are post-release dogfood boundaries, while customer-facing client-ready claims still require `DOMAIN_DELIVERABLE_RECEIPT`.
 - Added project-state convergence receipts and field-level `release_receipt` gates so release status claims must match explicit receipt fields.
 - Clarified README release status wording so the package is described as local-hardened release-candidate quality instead of over-claiming open-source-ready publication.
