@@ -90,7 +90,9 @@
         "local_commit": "e7f3fd4",
         "artifact_adoption": "adopted_as_evidence_only",
         "hard_blockers": [
-          "remote/GitHub CI current HEAD not verified",
+          "remote/GitHub CI current HEAD not verified"
+        ],
+        "post_release_dogfood_boundaries": [
           "draft is not client/PPT deliverable",
           "double review incomplete"
         ]
@@ -176,13 +178,17 @@
         "tmp_cache_candidates": [],
         "cleanup_decision": "no_direct_kill_or_rm_without_user_confirmation"
       },
+      "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT": {
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
+        ]
+      },
       "still_blocked": [
         "public release is incomplete",
-        "three-project objective is incomplete",
         "no remote push or current remote CI proof is recorded",
-        "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
-        "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle remains blocked because objectives are incomplete and automation_self_recycle_complete=false",
+        "cos automation self-recycle remains blocked because release completion is incomplete and automation_self_recycle_complete=false",
         "OPS process/cache sampling and natural heartbeat cleanup candidates found no safe kill/rm action without user confirmation",
         "natural heartbeat OPS receipt is recorded as due_now/overdue evidence but release_completion_allowed remains false"
       ],
@@ -279,13 +285,14 @@
         "cleanup_decision": "no_kill_rm_or_cleanup_performed",
         "hard_blockers": [
           "public release is incomplete",
-          "three-project objective is incomplete",
           "no remote push or current remote CI proof is recorded",
-          "DIR live user acceptance is missing",
-          "ADCO draft is not client/PPT-ready and double review is incomplete",
-          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
-          "automation self-recycle cannot run while objectives remain incomplete",
+          "automation self-recycle cannot run while release completion remains incomplete",
           "cleanup candidates require user confirmation or separate review"
+        ],
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
         ],
         "recommended_next_action": "keep release_completion_allowed=false; do not push, cancel automation, or clean candidates without explicit authorization"
       }

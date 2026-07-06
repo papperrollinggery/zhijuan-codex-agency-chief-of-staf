@@ -48,6 +48,9 @@ grep -q "019f33fd-5e5b-7d52-8ec8-c518cebec1bd" scripts/validate_release_receipt.
 grep -q "019f355f-f919-7201-89ab-baa3d8708449" scripts/validate_release_receipt.py
 grep -q "remote/GitHub CI current HEAD not verified" scripts/validate_release_receipt.py
 grep -q "draft is not client/PPT deliverable" scripts/validate_release_receipt.py
+grep -q "must classify" scripts/validate_release_receipt.py
+grep -q "post_release_dogfood_boundaries" scripts/validate_release_receipt.py
+grep -q "post_release_dogfood_boundaries" validation/release_receipt.json
 grep -q "requires_final_due_window_evidence_before_completion_or_cancellation" scripts/validate_release_receipt.py
 grep -q "no_direct_kill_or_rm_without_user_confirmation" validation/release_receipt.json
 grep -q "confirm_no_active_thread_before_rm" validation/release_receipt.json

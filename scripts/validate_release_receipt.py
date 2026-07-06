@@ -54,6 +54,12 @@ def require_marker(values: list[Any], marker: str, label: str) -> None:
         fail(f"{label} missing marker: {marker}")
 
 
+def reject_marker(values: list[Any], marker: str, label: str) -> None:
+    marker_lower = marker.lower()
+    if any(marker_lower in str(value).lower() for value in values):
+        fail(f"{label} must classify {marker} under post_release_dogfood_boundaries, not hard blockers")
+
+
 def require_text_marker(value: Any, marker: str, label: str) -> None:
     if marker.lower() not in str(value).lower():
         fail(f"{label} missing marker: {marker}")
@@ -273,10 +279,23 @@ def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
     )
     for marker in [
         "remote/GitHub CI current HEAD not verified",
+    ]:
+        require_marker(adco_hard_blockers, marker, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.hard_blockers")
+    for marker in ["client/PPT", "double review", "DOMAIN_DELIVERABLE_RECEIPT"]:
+        reject_marker(adco_hard_blockers, marker, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.hard_blockers")
+    adco_dogfood_boundaries = require_list(
+        adco_receipt.get("post_release_dogfood_boundaries"),
+        "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.post_release_dogfood_boundaries",
+    )
+    for marker in [
         "draft is not client/PPT deliverable",
         "double review incomplete",
     ]:
-        require_marker(adco_hard_blockers, marker, "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.hard_blockers")
+        require_marker(
+            adco_dogfood_boundaries,
+            marker,
+            "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT.post_release_dogfood_boundaries",
+        )
 
     ops_receipt = convergence.get("COS_OPS_CLEANUP_AUTOMATION_AUDIT_RECEIPT")
     if not isinstance(ops_receipt, dict):
@@ -510,14 +529,27 @@ def validate_latest_project_state_convergence(decision: dict[str, Any]) -> None:
     still_blocked = require_list(convergence.get("still_blocked"), "latest_project_state_convergence.still_blocked")
     for marker in [
         "public release",
-        "three-project objective",
         "remote CI",
-        "ADCO evidence draft",
-        "DOMAIN_DELIVERABLE_RECEIPT",
         "automation self-recycle",
         "OPS process/cache sampling",
+        "release_completion_allowed",
     ]:
         require_marker(still_blocked, marker, "latest_project_state_convergence.still_blocked")
+    for marker in ["ADCO evidence draft", "DIR/ADCO domain deliverables", "DOMAIN_DELIVERABLE_RECEIPT"]:
+        reject_marker(still_blocked, marker, "latest_project_state_convergence.still_blocked")
+    rebuttal = convergence.get("COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT")
+    if not isinstance(rebuttal, dict):
+        fail("latest_project_state_convergence.COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT must be an object")
+    dogfood_boundaries = require_list(
+        rebuttal.get("post_release_dogfood_boundaries"),
+        "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT.post_release_dogfood_boundaries",
+    )
+    for marker in [
+        "DIR live-user acceptance",
+        "ADCO draft is not client/PPT-ready",
+        "DOMAIN_DELIVERABLE_RECEIPT",
+    ]:
+        require_marker(dogfood_boundaries, marker, "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT.post_release_dogfood_boundaries")
 
 
 def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
@@ -674,11 +706,21 @@ def validate_cross_project_sync_evidence(data: dict[str, Any]) -> None:
     for marker in [
         "No remote push",
         "remote CI",
-        "DOMAIN_DELIVERABLE_RECEIPT",
-        "DIR live acceptance",
         "user authorization",
     ]:
         require_marker(hard_blockers, marker, "cross_project_sync_evidence.hard_blockers")
+    for marker in ["DIR live acceptance", "DOMAIN_DELIVERABLE_RECEIPT", "client-ready domain deliverables"]:
+        reject_marker(hard_blockers, marker, "cross_project_sync_evidence.hard_blockers")
+    dogfood_boundaries = require_list(
+        evidence.get("post_release_dogfood_boundaries"),
+        "cross_project_sync_evidence.post_release_dogfood_boundaries",
+    )
+    for marker in [
+        "DIR live acceptance",
+        "DOMAIN_DELIVERABLE_RECEIPT",
+        "DIR current local project-state convergence",
+    ]:
+        require_marker(dogfood_boundaries, marker, "cross_project_sync_evidence.post_release_dogfood_boundaries")
     convention_only = require_list(evidence.get("still_convention_only"), "cross_project_sync_evidence.still_convention_only")
     for marker in ["routing boundaries", "client-ready", "public release"]:
         require_marker(convention_only, marker, "cross_project_sync_evidence.still_convention_only")

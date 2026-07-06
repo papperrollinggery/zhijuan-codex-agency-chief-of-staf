@@ -174,6 +174,8 @@ python3 scripts/validate_domain_deliverable_contract.py .
 
 This blocks the common false-positive where a worker receipt, green script, or `VALIDATION=PASS` is treated as proof that a creative, storyboard, proposal, research, copy, story, execution-plan, or planning deliverable is client-ready. Client-ready claims require `DOMAIN_DELIVERABLE_RECEIPT` with brief trace, artifacts, passing domain quality gates, validation evidence, `review_status: cold_reviewed_and_domain_reviewed`, and `verdict: PASS`.
 
+ADCO/DIR live-user acceptance, real customer-project injection, and client/PPT-ready domain deliverables are post-release dogfood or domain-project acceptance boundaries. They are not hard blockers for this Skill's current open-source release, but the Skill still must not claim those customer-facing outputs are client-ready without the domain receipt above.
+
 Run a lighter release smoke check:
 
 ```bash
@@ -224,7 +226,7 @@ evals/                   Activation and dispatch regression prompts
 
 ## Status
 
-Current status: local-hardened release-candidate package. Public release is not complete until it has explicit authorization, a remote push with current-head CI evidence, fresh-clone validation against the current HEAD, natural heartbeat due-window/self-recycle evidence, and domain deliverable boundary evidence for any ADCO/DIR customer-facing claims.
+Current status: local-hardened release-candidate package. Public release is not complete until it has explicit authorization, a remote push with current-head CI evidence, fresh-clone validation against the current HEAD, and natural heartbeat due-window/self-recycle evidence. ADCO/DIR customer-facing acceptance remains post-release dogfood/domain-project validation, not a hard blocker for this Skill's current open-source release.
 
 The skill has an install script, deterministic pilot artifacts, real ThreadOps receipt notes, explicit thread rescue rules, and a release quality gate. Each public release should be paired with a committed tag, passing CI, and fresh-clone validation.
 

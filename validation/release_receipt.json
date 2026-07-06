@@ -315,10 +315,10 @@
       "thread_class": "project_main_cos",
       "deliverable": "DIR live-user acceptance boundary",
       "wave": "post-stop-bounded",
-      "status": "blocked",
+      "status": "post_release_dogfood_boundary",
       "dispatch_status": "dispatched_to_existing_project_main",
       "receipt_status": "received",
-      "adoption_status": "adopted_as_current_blocking_evidence",
+      "adoption_status": "adopted_as_post_release_dogfood_evidence",
       "cleanup_status": "cleanup_blocked",
       "review_verdict": "NEEDS_HUMAN",
       "cleanup_reason": "Project-main COS thread remains open by design; only completed workers are archived.",
@@ -579,7 +579,7 @@
       "project": "DIR SKILL",
       "receipt": "DIR_NATURAL_DOMAIN_TEST_RECEIPT",
       "client_ready": false,
-      "hard_blockers": [
+      "domain_project_acceptance_gaps": [
         "logo",
         "packaging",
         "mandatory copy/legal",
@@ -635,10 +635,10 @@
       "thread_class": "project_main_cos",
       "deliverable": "ADCO natural domain test",
       "wave": "post-stop-bounded",
-      "status": "blocked",
+      "status": "post_release_dogfood_boundary",
       "dispatch_status": "dispatched_to_existing_project_main",
       "receipt_status": "received",
-      "adoption_status": "adopted_as_current_blocking_evidence",
+      "adoption_status": "adopted_as_post_release_dogfood_evidence",
       "cleanup_status": "cleanup_blocked",
       "review_verdict": "NEEDS_HUMAN",
       "project": "ad-creative-orchestrator",
@@ -647,7 +647,7 @@
       "ppt_entry_status": "blocked",
       "double_review_status": "incomplete",
       "artifact": "/Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md",
-      "receipt_summary": "ADCO natural domain test is internal first-round evidence only. It blocks PPT entry and client-ready claims until double review and domain readiness are complete."
+      "receipt_summary": "ADCO natural domain test is internal first-round evidence only. It blocks PPT entry and client-ready claims until double review and domain readiness are complete, but that is a post-release dogfood/domain-project acceptance boundary rather than a blocker for this Skill's current open-source release."
     },
     {
       "thread_id": "019f33c0-a182-7540-ac09-bc0096ef8189",
@@ -672,7 +672,7 @@
       "status": "done",
       "dispatch_status": "dispatched",
       "receipt_status": "received",
-      "adoption_status": "adopted_as_blocking_evidence",
+      "adoption_status": "adopted_as_domain_project_acceptance_evidence",
       "cleanup_status": "cleanup_blocked",
       "review_verdict": "double_review_incomplete",
       "project": "ad-creative-orchestrator",
@@ -726,12 +726,12 @@
       "thread_class": "project_main_cos",
       "deliverable": "ADCO project state convergence",
       "wave": "post-stop-bounded",
-      "status": "local_state_converged_with_hard_blockers",
+      "status": "local_state_converged_with_release_limits",
       "dispatch_status": "dispatched_to_existing_project_main",
       "receipt_status": "received",
       "adoption_status": "adopted_as_current_local_state_evidence",
       "cleanup_status": "cleanup_blocked",
-      "review_verdict": "blocked_for_release",
+      "review_verdict": "domain_acceptance_pending",
       "project": "ad-creative-orchestrator",
       "receipt": "ADCO_PROJECT_STATE_CONVERGENCE_RECEIPT",
       "worker_thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
@@ -749,12 +749,14 @@
       ],
       "hard_blockers": [
         "remote/GitHub CI current HEAD not verified",
-        "draft is not a client-ready PPT deliverable",
-        "double review incomplete",
         "no remote push performed"
       ],
+      "post_release_dogfood_boundaries": [
+        "draft is not a client-ready PPT deliverable",
+        "double review incomplete"
+      ],
       "release_limit": "Local evidence converged only; no client-ready, public-release, remote-push, or remote-CI completion is claimed.",
-      "receipt_summary": "ADCO project-main COS adopted the natural domain draft as evidence only in local commit e7f3fd4, ended main ahead 6 and clean, and reran the local gate, distribution, and diff checks. Hard blockers remain remote/GitHub CI for current HEAD, non-client/PPT status, and incomplete double review."
+      "receipt_summary": "ADCO project-main COS adopted the natural domain draft as evidence only in local commit e7f3fd4, ended main ahead 6 and clean, and reran the local gate, distribution, and diff checks. Remote/GitHub CI and push remain project release limits; non-client/PPT status and incomplete double review are post-release dogfood/domain-project acceptance boundaries."
     },
     {
       "thread_id": "019f33e7-68eb-76c0-9317-8c81b958c57a",
@@ -840,7 +842,7 @@
       "project": "zhijuan-codex-agency-chief-of-staf",
       "receipt": "COS_REBUTTAL_COMPLETION_AUDIT_RECEIPT",
       "release_completion_allowed": false,
-      "receipt_summary": "Rebuttal completion audit used the correct worker thread id and kept release_completion_allowed=false. Local validators and project worktrees are clean, but release completion remains blocked by missing natural heartbeat due-window evidence, no push or remote CI proof, missing DIR live acceptance, ADCO not client/PPT-ready with incomplete double review, missing client-ready DOMAIN_DELIVERABLE_RECEIPT, automation self-recycle not complete, and no safe unconfirmed cleanup."
+      "receipt_summary": "Rebuttal completion audit used the correct worker thread id and kept release_completion_allowed=false. Local validators and project worktrees are clean, but release completion remains blocked by missing natural heartbeat due-window evidence, no push or remote CI proof, automation self-recycle not complete, and no safe unconfirmed cleanup. DIR live acceptance, ADCO client/PPT readiness, and client-ready DOMAIN_DELIVERABLE_RECEIPT remain post-release dogfood/domain-project acceptance boundaries."
     },
     {
       "thread_id": "019f355f-f919-7201-89ab-baa3d8708449",
@@ -912,7 +914,7 @@
       "DIR_NATURAL_DOMAIN_TEST_RECEIPT": {
         "client_ready": false,
         "adoption_status": "internal_first_round_only",
-        "hard_blockers": [
+        "domain_project_acceptance_gaps": [
           "logo",
           "packaging",
           "mandatory copy/legal",
@@ -935,6 +937,11 @@
         "completion_limit": "local project state only"
       }
     },
+    "post_release_dogfood_boundaries": [
+      "DIR live-user acceptance remains domain project acceptance.",
+      "ADCO client/PPT-ready output remains domain project acceptance.",
+      "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains required before making client-ready claims."
+    ],
     "automation_natural_long_run_status": "natural_heartbeat_ops_receipt_recorded_release_still_blocked",
     "latest_project_state_convergence": {
       "round_id": "2026-07-06-natural-heartbeat-ops-update",
@@ -965,7 +972,9 @@
         "artifact_adoption": "adopted_as_evidence_only",
         "validation": "check_gate_fixtures.py, run_checks.py, check_distribution.py, and git diff --check passed",
         "hard_blockers": [
-          "remote/GitHub CI current HEAD not verified",
+          "remote/GitHub CI current HEAD not verified"
+        ],
+        "post_release_dogfood_boundaries": [
           "draft is not client/PPT deliverable",
           "double review incomplete"
         ],
@@ -1084,11 +1093,13 @@
         "still_blocking": [
           "natural heartbeat due-window receipt is not available before 2026-07-06T07:43:28.193+08:00",
           "no push or remote CI verification has been performed",
-          "DIR live user acceptance is missing",
-          "ADCO draft is not client/PPT-ready and double review is incomplete",
-          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
           "automation self-recycle cannot run while objectives remain incomplete",
           "old processes, worktrees, and caches have no safe unconfirmed cleanup action"
+        ],
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
         ],
         "hard_gated_now": [
           "worker bypass and worker self thread_id",
@@ -1099,7 +1110,8 @@
         ],
         "still_convention_only": [
           "future natural tasks still require per-run receipt proof",
-          "client-ready creative quality, live acceptance, and remote release are not proven by local gates",
+          "client-ready creative quality and live acceptance are post-release dogfood/domain-project acceptance, not proof supplied by local gates",
+          "remote release is not proven by local gates",
           "clean worktree cleanup still requires active-thread ownership confirmation"
         ],
         "recommended_next_dispatch": "Do not change rules now. After 2026-07-06T07:43:28.193+08:00, verify the natural heartbeat due-window receipt; if absent, dispatch bounded heartbeat rescue/OPS.",
@@ -1107,11 +1119,8 @@
       },
       "still_blocked": [
         "public release is incomplete",
-        "three-project objective is incomplete",
         "no remote push or current remote CI proof is recorded",
-        "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
-        "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle remains blocked because objectives are incomplete and automation_self_recycle_complete=false",
+        "cos automation self-recycle remains blocked because release completion is incomplete and automation_self_recycle_complete=false",
         "OPS process/cache sampling and natural heartbeat cleanup candidates found no safe kill/rm action without user confirmation",
         "natural heartbeat OPS receipt is recorded as due_now/overdue evidence but release_completion_allowed remains false"
       ],
@@ -1208,13 +1217,14 @@
         "cleanup_decision": "no_kill_rm_or_cleanup_performed",
         "hard_blockers": [
           "public release is incomplete",
-          "three-project objective is incomplete",
           "no remote push or current remote CI proof is recorded",
-          "DIR live user acceptance is missing",
-          "ADCO draft is not client/PPT-ready and double review is incomplete",
-          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
-          "automation self-recycle cannot run while objectives remain incomplete",
+          "automation self-recycle cannot run while release completion remains incomplete",
           "cleanup candidates require user confirmation or separate review"
+        ],
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
         ],
         "recommended_next_action": "keep release_completion_allowed=false; do not push, cancel automation, or clean candidates without explicit authorization"
       }
@@ -1349,16 +1359,18 @@
     "hard_blockers": [
       "No remote push has been performed for the three projects in this evidence round.",
       "No remote CI proof exists for the current local HEAD of the Skill, ADCO, or DIR commits recorded here.",
-      "DIR live acceptance remains NEEDS_USER and is not satisfied by local validation.",
-      "DIR and ADCO client-ready domain deliverables cannot be claimed without DOMAIN_DELIVERABLE_RECEIPT.",
       "Any public release, push, merge, or publication still requires explicit user authorization.",
       "ADCO current local evidence commit is e7f3fd4 but remote/GitHub CI for that HEAD is not verified.",
-      "DIR current local project-state convergence remains local commit 24bc7bb with DOMAIN_DELIVERABLE_RECEIPT not_applicable.",
-      "The natural heartbeat OPS receipt is recorded, but the cos automation cannot self-recycle until public release and three-project objective completion are proven."
+      "The natural heartbeat OPS receipt is recorded, but the cos automation cannot self-recycle until public release completion is proven."
+    ],
+    "post_release_dogfood_boundaries": [
+      "DIR live acceptance remains NEEDS_USER and is not satisfied by local validation.",
+      "DIR and ADCO client-ready domain deliverables cannot be claimed without DOMAIN_DELIVERABLE_RECEIPT.",
+      "DIR current local project-state convergence remains local commit 24bc7bb with DOMAIN_DELIVERABLE_RECEIPT not_applicable."
     ],
     "still_convention_only": [
       "Cross-project routing boundaries are locally hardened and validated, but future organic project dispatches still need receipts to prove the convention is followed.",
-      "DIR/ADCO client-ready creative or proposal quality remains convention-only until a valid DOMAIN_DELIVERABLE_RECEIPT and live acceptance evidence exist.",
+      "DIR/ADCO client-ready creative or proposal quality remains post-release dogfood/domain-project acceptance until a valid DOMAIN_DELIVERABLE_RECEIPT and live acceptance evidence exist.",
       "Public release readiness remains convention-only for remote consumers until push, remote CI, and any required publication authorization are completed."
     ],
     "latest_state_convergence": {
@@ -1390,7 +1402,9 @@
         "artifact_adoption": "adopted_as_evidence_only",
         "validation": "check_gate_fixtures.py, run_checks.py, check_distribution.py, and git diff --check passed",
         "hard_blockers": [
-          "remote/GitHub CI current HEAD not verified",
+          "remote/GitHub CI current HEAD not verified"
+        ],
+        "post_release_dogfood_boundaries": [
           "draft is not client/PPT deliverable",
           "double review incomplete"
         ],
@@ -1509,11 +1523,13 @@
         "still_blocking": [
           "natural heartbeat due-window receipt is not available before 2026-07-06T07:43:28.193+08:00",
           "no push or remote CI verification has been performed",
-          "DIR live user acceptance is missing",
-          "ADCO draft is not client/PPT-ready and double review is incomplete",
-          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
           "automation self-recycle cannot run while objectives remain incomplete",
           "old processes, worktrees, and caches have no safe unconfirmed cleanup action"
+        ],
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
         ],
         "hard_gated_now": [
           "worker bypass and worker self thread_id",
@@ -1524,7 +1540,8 @@
         ],
         "still_convention_only": [
           "future natural tasks still require per-run receipt proof",
-          "client-ready creative quality, live acceptance, and remote release are not proven by local gates",
+          "client-ready creative quality and live acceptance are post-release dogfood/domain-project acceptance, not proof supplied by local gates",
+          "remote release is not proven by local gates",
           "clean worktree cleanup still requires active-thread ownership confirmation"
         ],
         "recommended_next_dispatch": "Do not change rules now. After 2026-07-06T07:43:28.193+08:00, verify the natural heartbeat due-window receipt; if absent, dispatch bounded heartbeat rescue/OPS.",
@@ -1532,11 +1549,8 @@
       },
       "still_blocked": [
         "public release is incomplete",
-        "three-project objective is incomplete",
         "no remote push or current remote CI proof is recorded",
-        "ADCO evidence draft is not client-ready or PPT-ready and double review is incomplete",
-        "DIR/ADCO domain deliverables still lack client-ready DOMAIN_DELIVERABLE_RECEIPT",
-        "cos automation self-recycle remains blocked because objectives are incomplete and automation_self_recycle_complete=false",
+        "cos automation self-recycle remains blocked because release completion is incomplete and automation_self_recycle_complete=false",
         "OPS process/cache sampling and natural heartbeat cleanup candidates found no safe kill/rm action without user confirmation",
         "natural heartbeat OPS receipt is recorded as due_now/overdue evidence but release_completion_allowed remains false"
       ],
@@ -1633,13 +1647,14 @@
         "cleanup_decision": "no_kill_rm_or_cleanup_performed",
         "hard_blockers": [
           "public release is incomplete",
-          "three-project objective is incomplete",
           "no remote push or current remote CI proof is recorded",
-          "DIR live user acceptance is missing",
-          "ADCO draft is not client/PPT-ready and double review is incomplete",
-          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing",
-          "automation self-recycle cannot run while objectives remain incomplete",
+          "automation self-recycle cannot run while release completion remains incomplete",
           "cleanup candidates require user confirmation or separate review"
+        ],
+        "post_release_dogfood_boundaries": [
+          "DIR live-user acceptance is missing",
+          "ADCO draft is not client/PPT-ready and double review is incomplete",
+          "DIR/ADCO client-ready DOMAIN_DELIVERABLE_RECEIPT remains missing"
         ],
         "recommended_next_action": "keep release_completion_allowed=false; do not push, cancel automation, or clean candidates without explicit authorization"
       }
@@ -1656,15 +1671,15 @@
     },
     {
       "topic": "ADCO natural domain test",
-      "summary": "ADCO_NATURAL_DOMAIN_TEST_RECEIPT is internal first round only. Artifact /Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md is not client-ready; ppt_entry_status is blocked and double review is incomplete."
+      "summary": "ADCO_NATURAL_DOMAIN_TEST_RECEIPT is internal first round only. Artifact /Users/jinjungao/work/ad-creative-orchestrator/drafts/domain_tests/outdoor_gear_launch_first_round.md is not client-ready; ppt_entry_status is blocked and double review is incomplete. This is a post-release dogfood/domain-project boundary, not a blocker for this Skill's current open-source release."
     },
     {
       "topic": "release decision boundary",
-      "summary": "Full public release and three-project objective remain incomplete. No push was performed. Automation natural long-run/self-recycle still requires final due-window evidence if objective closure or cancellation is required."
+      "summary": "Full public release remains incomplete. No push was performed. The three-project dogfood objective remains post-release acceptance work. Automation natural long-run/self-recycle still requires final due-window evidence if release closure or cancellation is required."
     },
     {
       "topic": "latest project state and automation update",
-      "summary": "DIR local state converged at 24bc7bb and ADCO local state converged at e7f3fd4, but these are local evidence only. OPS audit says the cos automation remains active and not self-recycled until final due-window evidence, public release status, and the three-project objective converge."
+      "summary": "DIR local state converged at 24bc7bb and ADCO local state converged at e7f3fd4, but these are local evidence only. OPS audit says the cos automation remains active and not self-recycled until final due-window evidence and public release status converge; three-project dogfood acceptance remains post-release work."
     },
     {
       "topic": "OPS process and cache sampling",
@@ -2301,7 +2316,6 @@
     ],
     "hard_blocks": [
       "No remote push has been performed in this round.",
-      "Domain deliverable quality for creative/storyboard/proposal/copy/story artifacts remains not claimed without DOMAIN_DELIVERABLE_RECEIPT.",
       "ADCO project-main follow-up dispatch is blocked by Codex thread steering tool response: no active turn to steer.",
       "ADCO split adoption implementation worker 019f2ea1-bb8b-7da2-825e-dd4e496b292d ended systemError without ADCO_SPLIT_ADOPTION_IMPLEMENTATION_RECEIPT and is rejected as evidence.",
       "ADCO split adoption rescue workers 019f2eab-ff09-7db3-ab78-16ae6dd383b4 and 019f2eac-aa97-7ec2-9591-d09c4414bce9 also ended systemError without receipts; those threads are not adoption evidence.",
@@ -2321,8 +2335,12 @@
       "After archival, the failed temporary worktree paths d6f2 and 0e1f were no longer present; no diff from those failed paths is claimed or adopted.",
       "Legacy dirty worktree /Users/jinjungao/.codex/worktrees/adco-skill-hardening/ad-creative-orchestrator still exists and remains the only retained dirty-worktree evidence.",
       "The heartbeat smoke proves explicit Skill invocation can fire via Codex heartbeat and produce COS_BOOT_RECEIPT, but as of 2026-07-06T01:54:49+08:00 the long-running six-hour cos automation is not due until 2026-07-06T07:43:28.193+08:00, so natural-fire completion remains unproven rather than failed.",
-      "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT now confirms the DIR project remains NEEDS_USER for real live acceptance despite passing local validation.",
       "ADCO_LOCAL_FRESH_CLONE_SMOKE_RECEIPT now confirms local fresh-clone and installed-copy smoke pass for local HEAD fa60638; remote CI is still not checked because origin/main remains 48f2193 and no push was performed."
+    ],
+    "post_release_dogfood_boundaries": [
+      "Domain deliverable quality for creative/storyboard/proposal/copy/story artifacts remains not claimed without DOMAIN_DELIVERABLE_RECEIPT.",
+      "DIR_LIVE_ACCEPTANCE_GAP_RECEIPT confirms the DIR project remains NEEDS_USER for real live acceptance despite passing local validation.",
+      "ADCO client/PPT-ready output remains post-release dogfood/domain-project acceptance."
     ],
     "evidence_limits": [
       "This round proves current gates/tests, local worktree evidence, target-thread readback, and a bounded heartbeat smoke in an idle target thread; it does not prove every future Codex surface or an in-progress target thread will accept a heartbeat mid-turn.",
