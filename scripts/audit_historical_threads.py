@@ -23,26 +23,15 @@ SKILL_TERMS = [
 ]
 
 REAL_THREAD_TERMS = [
+    "真实 Codex task",
+    "真实 Codex thread",
     "真实 Codex Threads",
-    "Codex Thread",
-    "worker thread",
-    "另一个线程",
-    "新线程",
-    "完整团队",
+    "独立 sidebar 任务",
+    "隔离 worktree",
+    "另一个 Codex 线程",
+    "新 Codex 线程",
     "thread id",
-    "receipt",
-    "cleanup",
-    "派发",
-]
-
-SELF_EXECUTION_COMPLAINTS = [
-    "你还是自己在执行",
-    "没安排别的线程",
-    "不会自动启动",
-    "不会自己去安排其他线程",
-    "必须得我要求",
-    "没真实执行",
-    "没有真实执行",
+    "task id",
 ]
 
 HISTORY_AUDIT_CHALLENGES = [
@@ -68,37 +57,6 @@ MISSING_CWD_TERMS = [
     "worktree no longer exists",
 ]
 
-TARGET_PROJECT_TERMS = [
-    "/Users/jinjungao/work/ad-creative-orchestrator",
-    "/Users/jinjungao/work/DIR SKILL",
-    "ad-creative-orchestrator",
-    "DIR SKILL",
-    "三项目",
-    "跨项目",
-]
-
-DIRECT_EXECUTION_TERMS = [
-    "commands_run:",
-    "changed_files:",
-    "tests_passed:",
-    "quality_gate.sh",
-    "release_smoke.sh",
-    "validate_project.py",
-    "check_gate_fixtures.py",
-    "check_distribution.py",
-    "run_checks.py",
-    "git diff --check",
-    "ps -",
-    "pgrep",
-    "kill ",
-    "pkill",
-    "我已实现",
-    "我已修复",
-    "我修改了",
-    "我跑了",
-    "我清理了",
-]
-
 AUTOMATION_LIFECYCLE_TERMS = [
     "heartbeat",
     "automation",
@@ -110,6 +68,12 @@ AUTOMATION_LIFECYCLE_TERMS = [
     "automation_complete: true",
     "目标已完成",
 ]
+
+DUE_STATUS_RE = re.compile(
+    r"(?:current_due_status|due_status)\s*:\s*"
+    r"(NOT_DUE|DUE_NOW|OVERDUE|未到期)(?![\w-])",
+    flags=re.IGNORECASE,
+)
 
 NATURAL_TEST_GIVEAWAY_TERMS = [
     "请派发 worker",
@@ -137,6 +101,31 @@ def read_text(path: Path, max_bytes: int) -> str:
 def contains_any(text: str, terms: list[str]) -> bool:
     lower = text.lower()
     return any(term.lower() in lower for term in terms)
+
+
+def latest_due_status(text: str) -> str | None:
+    matches = DUE_STATUS_RE.findall(text)
+    if not matches:
+        return None
+    value = matches[-1]
+    return value if value == "未到期" else value.upper()
+
+
+def has_current_work_receipt(text: str) -> bool:
+    if "WORK_RECEIPT" not in text:
+        return False
+    kind = re.search(r"worker_kind:\s*(codex_task|codex_thread)\b", text)
+    worker_id = re.search(r"worker_id:\s*['\"]?([^\s'\"]+)", text)
+    if not kind or not worker_id:
+        return False
+    return worker_id.group(1).lower() not in {
+        "",
+        "pending",
+        "unknown",
+        "same-thread",
+        "none",
+        "null",
+    }
 
 
 def normalize_thread(row: dict[str, Any]) -> dict[str, Any]:
@@ -203,7 +192,9 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
     explicit_trigger = contains_any(first_visible, SKILL_TERMS)
     real_thread_requested = contains_any(first_visible, REAL_THREAD_TERMS)
     has_boot = "COS_BOOT_RECEIPT" in text
-    has_dispatch = "THREAD_DISPATCH_RECEIPT" in text
+    has_legacy_dispatch = "THREAD_DISPATCH_RECEIPT" in text
+    has_work_receipt = has_current_work_receipt(text)
+    has_dispatch = has_legacy_dispatch or has_work_receipt
     has_tool_blocked = "TOOL_BLOCKED" in text
     categories: list[str] = []
     cwd_path = Path(thread["cwd"]).expanduser() if thread["cwd"] else None
@@ -219,15 +210,9 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
         categories.append("nonconverged_evidence_must_be_rejected")
     if contains_any(text, ["set_thread_title", "title_update_blocked", "dispatcher_set", "self_set"]):
         categories.append("title_receipt_metadata_requires_readback")
-    if contains_any(text, SELF_EXECUTION_COMPLAINTS):
-        categories.append("main_thread_self_execution_complaint")
-    if contains_any(text, DIRECT_EXECUTION_TERMS) and (
-        has_boot or contains_any(text, SKILL_TERMS) or contains_any(first_visible, ["COS", "幕僚长"])
-    ):
-        categories.append("cos_main_overexecution")
-    if contains_any(text, TARGET_PROJECT_TERMS) and contains_any(text, DIRECT_EXECUTION_TERMS):
-        categories.append("source_cos_direct_target_execution")
     if contains_any(text, AUTOMATION_LIFECYCLE_TERMS):
+        current_due_status = latest_due_status(text)
+        not_due_claim = current_due_status in {"NOT_DUE", "未到期"}
         has_run_receipt = "HEARTBEAT_RUN_RECEIPT" in text or "COS_HEARTBEAT_RUN_RECEIPT" in text
         has_dispatch_outcome = "dispatch_outcome:" in text
         has_self_recycle = "self_recycle_status:" in text
@@ -242,8 +227,10 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
             ],
         )
         complete_has_recycle = re.search(r"self_recycle_status:\s*(deleted|paused)", text)
-        due_claim = contains_any(text, ["due_now", "overdue", "到期", "已到期"])
-        due_has_action = contains_any(
+        due_claim = current_due_status in {"DUE_NOW", "OVERDUE"} or contains_any(
+            text, ["due_now", "overdue", "到期", "已到期"]
+        )
+        due_has_action = has_work_receipt or contains_any(
             text,
             [
                 "dispatch_outcome: dispatched",
@@ -254,7 +241,7 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
                 "THREAD_DISPATCH_RECEIPT",
             ],
         )
-        if (
+        if not not_due_claim and (
             not has_run_receipt
             or not has_dispatch_outcome
             or not has_self_recycle
@@ -287,13 +274,15 @@ def classify(thread: dict[str, Any], repo_root: Path) -> tuple[list[str], dict[s
     ):
         categories.append("thread_cwd_missing_requires_archive_or_rehome")
     if thread["cwd"] and not in_repo:
-        categories.append("cross_project_routing_requires_agents_snippet")
+        categories.append("cross_project_context_requires_readback")
 
     markers = {
         "explicit_trigger": explicit_trigger,
         "real_thread_requested": real_thread_requested,
         "has_boot_receipt_marker": has_boot,
         "has_dispatch_receipt_marker": has_dispatch,
+        "has_current_work_receipt": has_work_receipt,
+        "has_legacy_dispatch_receipt": has_legacy_dispatch,
         "has_tool_blocked_marker": has_tool_blocked,
         "cwd_exists": cwd_exists,
     }
@@ -330,7 +319,7 @@ def cleanup_status_for(thread: dict[str, Any], categories: list[str], repo_root:
             ),
         }
 
-    if "cross_project_routing_requires_agents_snippet" in categories and not in_repo:
+    if "cross_project_context_requires_readback" in categories and not in_repo:
         return {
             "status": "cleanup_blocked_target_project_scope_required",
             "safe_action": "rehome_or_dispatch_in_target_project",
@@ -401,7 +390,7 @@ def main() -> int:
         "summary": {
             "matching_threads": len(threads),
             "cross_project_threads": category_counts.get(
-                "cross_project_routing_requires_agents_snippet", 0
+                "cross_project_context_requires_readback", 0
             ),
             "missing_cwd_threads": category_counts.get(
                 "thread_cwd_missing_requires_archive_or_rehome", 0
@@ -422,8 +411,8 @@ def main() -> int:
             "Treat pendingWorktreeId as dispatch_pending until a real thread_id is observed.",
             "Classify non-converged review threads as rejected evidence until a receipt exists.",
             "When a user challenges archive, real execution, or skipped Skill flow, run the historical audit path.",
-            "For cross-project default routing, install the AGENTS routing snippet where the work runs.",
-            "When real Codex Threads are requested, dispatch with THREAD_DISPATCH_RECEIPT or stop with TOOL_BLOCKED.",
+            "For cross-project work, verify the target project and thread context before adoption or cleanup.",
+            "When real Codex tasks/threads are requested, use a WORK_RECEIPT backed by tool id/readback or stop with TOOL_BLOCKED.",
             "If a thread cwd/worktree is missing, archive or mark cleanup_blocked, reject its evidence, and re-dispatch in a live project/worktree if work remains.",
         ],
     }

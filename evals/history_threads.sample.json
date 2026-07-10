@@ -72,26 +72,26 @@
     "rollout_text": "Source COS noticed cross-project cleanup risk and must record cleanup_blocked instead of deleting files or killing processes."
   },
   {
-    "id": "fixture-cos-main-overexecution",
-    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
-    "title": "COS 主线程越界执行",
+    "id": "fixture-main-outcome-owner",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "COS 主线程直接交付",
     "first_user_message": "启动幕僚长，检查 release readiness。",
     "preview": "COS_BOOT_RECEIPT",
     "archived": 0,
-    "rollout_text": "COS_BOOT_RECEIPT\nIMPLEMENTATION_RECEIPT:\n  changed_files:\n    - SKILL.md\n  commands_run:\n    - bash scripts/quality_gate.sh .\n    - bash scripts/release_smoke.sh .\n  tests_passed: true\nThe COS main thread treated its own commands_run as completion evidence."
+    "rollout_text": "COS_BOOT_RECEIPT\nThe outcome owner changed SKILL.md, ran current validation, obtained an independent review, and reported the remaining limitations."
   },
   {
-    "id": "fixture-source-cos-direct-target-execution",
-    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
-    "title": "源 COS 直接跑目标项目 gate",
+    "id": "fixture-cross-project-context",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "跨项目上下文需要读回",
     "first_user_message": "启动幕僚长，处理跨项目修复。",
     "preview": "幕僚长",
     "archived": 0,
-    "rollout_text": "SOURCE_COS_DIRECT_EXECUTION:\n  commands_run:\n    - cd /Users/jinjungao/work/ad-creative-orchestrator && python3 tools/validate_project.py\n    - cd /Users/jinjungao/work/DIR SKILL && python3 tools/check_gate_fixtures.py\n  verdict: done"
+    "rollout_text": "The result names two target projects; verify each real task context and artifact before adoption or cleanup."
   },
   {
     "id": "fixture-automation-lifecycle-missing-evidence",
-    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+    "cwd": "/tmp/agency-history/source-repo",
     "title": "heartbeat active without run receipt",
     "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化生命周期。",
     "preview": "heartbeat automation enabled",
@@ -99,8 +99,62 @@
     "rollout_text": "Heartbeat automation active. current_due_status: due_now. automation_goal_status: complete. The run says workers will be arranged later, but has no COS_HEARTBEAT_RUN_RECEIPT, no dispatch_outcome, and no self_recycle_status."
   },
   {
+    "id": "fixture-automation-not-due-valid",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation heartbeat 尚未到期",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: NOT_DUE\nnext_due_at: 2099-01-01T00:00:00+08:00\nThe schedule readback proves no run is due, so no run, dispatch, or recycle receipt is required."
+  },
+  {
+    "id": "fixture-automation-due-now-with-next-due",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation due now with next schedule",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: due_now\nnext_due_at: 2099-01-01T00:00:00+08:00\nNo run receipt, dispatch outcome, or recycle status exists."
+  },
+  {
+    "id": "fixture-automation-overdue-with-next-due",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation overdue with next schedule",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: overdue\nnext_due_at: 2099-01-01T00:00:00+08:00\nNo run receipt, dispatch outcome, or recycle status exists."
+  },
+  {
+    "id": "fixture-automation-not-due-then-due-now",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation status advanced to due now",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: NOT_DUE\ncurrent_due_status: due_now\nNo run receipt, dispatch outcome, or recycle status exists."
+  },
+  {
+    "id": "fixture-automation-due-now-then-not-due",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation status readback now not due",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: due_now\ncurrent_due_status: NOT_DUE\nnext_due_at: 2099-01-01T00:00:00+08:00"
+  },
+  {
+    "id": "fixture-automation-invalid-not-due-prefix",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "automation invalid due status",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf 检查自动化当前状态。",
+    "preview": "COS_BOOT_RECEIPT automation",
+    "archived": 0,
+    "rollout_text": "COS_BOOT_RECEIPT\ncurrent_due_status: NOT_DUE_NOW\nNo run receipt, dispatch outcome, or recycle status exists."
+  },
+  {
     "id": "fixture-natural-test-prompt-overdisclosure",
-    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+    "cwd": "/tmp/agency-history/source-repo",
     "title": "自然业务测试 prompt 剧透",
     "first_user_message": "自然业务测试：请派发 worker thread，给 THREAD_DISPATCH_RECEIPT、thread id、receipt 和 cleanup。",
     "preview": "blackbox prompt overdisclosed the orchestration mechanism",
@@ -109,11 +163,20 @@
   },
   {
     "id": "fixture-good",
-    "cwd": "/Users/jinjungao/work/zhijuan-codex-agency-chief-of-staf",
+    "cwd": "/tmp/agency-history/source-repo",
     "title": "COS smoke",
     "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。真实 Codex Threads smoke。",
     "preview": "",
     "archived": 1,
     "rollout_text": "COS_BOOT_RECEIPT then THREAD_DISPATCH_RECEIPT with real thread_id and cleanup archived."
+  },
+  {
+    "id": "fixture-current-work-receipt-good",
+    "cwd": "/tmp/agency-history/source-repo",
+    "title": "COS current work receipt",
+    "first_user_message": "使用 $zhijuan-codex-agency-chief-of-staf。创建真实 Codex task 并返回 task id。",
+    "preview": "COS_BOOT_RECEIPT",
+    "archived": 1,
+    "rollout_text": "COS_BOOT_RECEIPT\nWORK_RECEIPT:\n  worker_kind: codex_task\n  worker_id: 019f-example-worker\n  status: done\n  adoption: adopted\n  cleanup: archived"
   }
 ]

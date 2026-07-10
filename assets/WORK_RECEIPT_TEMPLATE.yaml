@@ -1,0 +1,12 @@
+WORK_RECEIPT:
+  worker_kind: native_subagent | codex_task | codex_thread
+  worker_id: ""
+  objective: ""
+  read_scope: []
+  write_scope: []
+  status: done | blocked | failed
+  artifacts: []
+  validation: []
+  summary: ""
+  adoption: adopted | partially_adopted | rejected | pending
+  cleanup: not_applicable | archived | retained_with_reason | cleanup_blocked

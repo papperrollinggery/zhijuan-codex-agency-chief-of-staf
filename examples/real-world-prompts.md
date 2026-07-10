@@ -1,34 +1,69 @@
 # Real-World Forward-Test Prompts
 
-Use these prompts to test whether the skill behaves naturally on real tasks. Do not give the tester the expected answer.
+用真实模型运行这些 prompt，保存脱敏 event JSONL、最终消息、runtime/case/runner hash 和 Codex 版本。不要把预期答案告诉测试 agent。只在已审核 checkout 中使用专用低权限 eval 凭据；不可信 diff 需要一次性 OS 用户或容器。
 
-For each run, record whether the result started with `COS_BOOT_RECEIPT`, then whether it was direct, planned, goal-tracked, delegated, rescued, or rejected as `TOOL_BLOCKED`. When real Codex Threads are used, keep the thread id, receipt, adoption/rejection, and cleanup status.
+离线 `behavior_cases.json` 只定义行为 contract，不证明模型实际遵守。
 
-1. 使用 $zhijuan-codex-agency-chief-of-staf。这个项目我想正式用起来，但不知道现在差什么，你帮我看看。
-2. 使用 $zhijuan-codex-agency-chief-of-staf。给我一句最短调用方式。
-3. 使用 $zhijuan-codex-agency-chief-of-staf。这个 Skill 到底装到哪里了？结构完整吗？
-4. 使用 $zhijuan-codex-agency-chief-of-staf。我要用它来做一个 PPT 提案项目，应该调用哪些本机能力？
-5. 使用 $zhijuan-codex-agency-chief-of-staf。我有个品牌活动想法，但方向还没定，你先帮我搭团队和讨论方式。
-6. 使用 $zhijuan-codex-agency-chief-of-staf。我要让它长期跟进一个代码迁移和自动修复项目，不能半路忘目标。
-7. 使用 $zhijuan-codex-agency-chief-of-staf。这里有一个故意缺字段的 YAML，请让执行者修、审查者查，并留下验证证据。
-8. 使用 $zhijuan-codex-agency-chief-of-staf。这个低风险任务需要另一个线程检查一下，判断是否值得真的派发，并记录 thread id 或不派发原因。
-9. 使用 $zhijuan-codex-agency-chief-of-staf。这个线程一直没结果，接管一下，只补失败项，不要重跑全部。
-10. 使用 $zhijuan-codex-agency-chief-of-staf。它老把轻任务搞得太重，记住这个问题并提出修补方式，但先别改 Skill 本体。
+## 直接闭环
 
-## Activation Pressure Prompts
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。只读 README，告诉我仓库名称，不要修改文件。
+```
 
-Use these to catch the specific failure where the model directly executes instead of booting COS.
+检查：出现紧凑 `COS_BOOT_RECEIPT`；真实读取文件；没有不必要派发或 YAML。
 
-1. 启动幕僚长。制定规划、开发、执行、审核，完整团队完成这个 Skill 的测试修复。
-2. 按 Codex Agency 流程处理。开另一个线程做前测设计，主线程负责监察并记录 cleanup。
-3. 我要真实 Codex Threads，不要同线程模拟；让规划、开发、审核分别跑，并归档完成线程。
-4. 使用本 Skill。这个任务很小：告诉我当前仓库名字。
-5. 使用 $zhijuan-codex-agency-chief-of-staf。帮我写一个绘画提示词，但先判断是否需要图像 Skill 或创意线程。
+## 研究到交付
 
-## Black-Box Complex Prompts
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。先研究当前实现和测试，再给最小计划，完成修复、验证，并让独立 reviewer 做 cold review。
+```
 
-These prompts intentionally avoid `$skill`, Chief-of-Staff, thread, receipt, and cleanup wording. They test whether complex task wording is enough to route into the Skill when the surrounding project instructions allow it. The machine-readable set lives in `evals/blackbox_complex.prompts.csv`.
+检查：研究发生在计划前；主线程真正执行；reviewer 来自独立上下文；发现问题后修复并复验。
 
-1. 这个仓库我想正式对外发布，但不确定差什么。请先判断缺口，只做最小必要修复，并给出可验证结论。
-2. 线上导出功能偶发失败，已有日志、用户截图和一个半成品补丁。请先理清证据、定位风险，再安排修复和复核。
-3. 先调研现有做法，再在这个项目里落一个最小可用实现，最后说明哪些结论来自本机验证。
+## Goal 长任务
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。为迁移任务设定一个可验证 Goal，按 checkpoint 持续推进，达到停止条件再结束。
+```
+
+检查：Goal 有 outcome、constraints、verification 和 done condition；创建/checkpoint/完成后都有原生 readback；不会为每个短 worker 生成 Goal Ledger，也不会因临时困难提前标 blocked。
+
+## 并行研究
+
+```text
+启动幕僚长。把三个相互独立的技术方案交给原生 subagents 并行调研，主线程同时检查当前代码，最后收敛成一个决定。
+```
+
+检查：工作流确实独立；并行 agent 数量有界；主线程没有被动等待；结果有采纳/拒绝判断。
+
+## Worker bypass
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。AGENCY_WORKER: true。你是独立 reviewer，只读 diff 并返回 WORKER_RESULT；不要启动幕僚长，不要再派发。
+```
+
+检查：不出现 `COS_BOOT_RECEIPT`；不重分级；直接返回指定结果。
+
+## 真实 task/thread
+
+```text
+使用 $zhijuan-codex-agency-chief-of-staf。创建真实 Codex task 的隔离 worktree 完成修复，返回真实 task id、artifact、验证、adoption 和 cleanup。没有真实工具时 TOOL_BLOCKED，不要用 subagent 替代。
+```
+
+检查：工具 event 中有真实 task/thread id 和 readback；id 与 receipt 一致；可写任务使用隔离 worktree；完成后有 cleanup。
+
+## 负例
+
+这些普通请求不应自动启动幕僚长：
+
+```text
+把这句话翻译成英文。
+```
+
+```text
+修复 utils.py 里的 off-by-one 并跑对应单测。
+```
+
+```text
+review 这个小 diff，先列阻塞问题。
+```

@@ -1,120 +1,132 @@
 #!/usr/bin/env python3
+"""Install the minimal runtime skill bundle without touching project guidance."""
+
+from __future__ import annotations
+
 import argparse
 import hashlib
 import json
 import shutil
+import tempfile
+import uuid
 from pathlib import Path
 
+
 SKILL_NAME = "zhijuan-codex-agency-chief-of-staf"
-EXCLUDED_DIRS = {".git", ".codex", "__pycache__", ".pytest_cache", "agency-thread-pilot"}
-EXCLUDED_FILES = {".DS_Store"}
-BEGIN_ROUTING_MARKER = f"<!-- BEGIN {SKILL_NAME} routing -->"
-END_ROUTING_MARKER = f"<!-- END {SKILL_NAME} routing -->"
-
-
-def should_skip(path: Path) -> bool:
-    return any(part in EXCLUDED_DIRS for part in path.parts) or path.name in EXCLUDED_FILES
-
-
-def iter_files(root: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in root.rglob("*")
-        if path.is_file() and not should_skip(path.relative_to(root))
-    )
+RUNTIME_FILES = (
+    "SKILL.md",
+    "agents/openai.yaml",
+    "references/real-threads.md",
+    "references/delivery-review.md",
+    "references/long-running-work.md",
+    "references/history-audit.md",
+    "assets/WORK_RECEIPT_TEMPLATE.yaml",
+    "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
+    "scripts/audit_historical_threads.py",
+)
 
 
 def digest(path: Path) -> str:
-    h = hashlib.sha256()
-    h.update(path.read_bytes())
-    return h.hexdigest()
+    hasher = hashlib.sha256()
+    hasher.update(path.read_bytes())
+    return hasher.hexdigest()
 
 
-def manifest(root: Path) -> dict[str, str]:
-    return {
-        str(path.relative_to(root)): digest(path)
-        for path in iter_files(root)
-    }
+def runtime_source_path(root: Path, rel: str) -> Path:
+    path = root / rel
+    if path.is_symlink():
+        raise ValueError(f"runtime source must not be a symlink: {rel}")
+    if not path.is_file():
+        raise ValueError(f"runtime bundle missing file: {rel}")
+    if not path.resolve().is_relative_to(root.resolve()):
+        raise ValueError(f"runtime source escapes package root: {rel}")
+    return path
 
 
-def copy_skill(src: Path, dst: Path) -> None:
-    for path in iter_files(src):
-        rel = path.relative_to(src)
-        target = dst / rel
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, target)
+def runtime_manifest(root: Path) -> dict[str, str]:
+    return {rel: digest(runtime_source_path(root, rel)) for rel in RUNTIME_FILES}
 
 
-def routing_snippet(src: Path) -> str:
-    text = (src / "references" / "AGENTS_ROUTING_SNIPPET.md").read_text(
-        encoding="utf-8"
+def installed_manifest(root: Path) -> dict[str, str]:
+    if not root.exists():
+        return {}
+    manifest: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError(f"installed bundle contains a symlink: {path.relative_to(root)}")
+        if path.is_file() and "__pycache__" not in path.parts:
+            manifest[str(path.relative_to(root))] = digest(path)
+    return manifest
+
+
+def copy_runtime(source: Path, target: Path) -> None:
+    for rel in RUNTIME_FILES:
+        source_path = runtime_source_path(source, rel)
+        destination = target / rel
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination)
+
+
+def best_effort_remove(path: Path) -> None:
+    try:
+        if path.is_symlink() or path.is_file():
+            path.unlink(missing_ok=True)
+        else:
+            shutil.rmtree(path, ignore_errors=True)
+    except OSError:
+        pass
+
+
+def replace_from_staging(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{target.name}.staging-", dir=target.parent)
     )
-    start = text.find("```markdown")
-    if start == -1:
-        raise SystemExit("AGENTS routing snippet missing markdown fence")
-    start = text.find("\n", start)
-    end = text.find("```", start + 1)
-    if start == -1 or end == -1:
-        raise SystemExit("AGENTS routing snippet fence is malformed")
-    snippet = text[start + 1 : end].strip()
-    if "COS_BOOT_RECEIPT" not in snippet or SKILL_NAME not in snippet:
-        raise SystemExit("AGENTS routing snippet is missing required routing terms")
-    return f"{BEGIN_ROUTING_MARKER}\n{snippet}\n{END_ROUTING_MARKER}\n"
+    backup: Path | None = None
+    committed = False
+    staging_promoted = False
+    try:
+        copy_runtime(source, staging)
+        if installed_manifest(staging) != runtime_manifest(source):
+            raise RuntimeError("staged runtime manifest does not match source")
 
+        if target.exists():
+            backup_candidate = target.parent / f".{target.name}.backup-{uuid.uuid4().hex}"
+            target.rename(backup_candidate)
+            backup = backup_candidate
+        staging.rename(target)
+        staging_promoted = True
+        if installed_manifest(target) != runtime_manifest(source):
+            raise RuntimeError("installed runtime manifest does not match source")
+        committed = True
+    except Exception:
+        if backup is not None and backup.exists():
+            failed_target: Path | None = None
+            if target.exists():
+                failed_target = target.parent / f".{target.name}.failed-{uuid.uuid4().hex}"
+                target.rename(failed_target)
+            backup.rename(target)
+            if failed_target is not None:
+                best_effort_remove(failed_target)
+        elif staging_promoted and target.exists():
+            best_effort_remove(target)
+        raise
+    finally:
+        if staging.exists():
+            best_effort_remove(staging)
 
-def upsert_agents_routing(path: Path, block: str, dry_run: bool) -> dict[str, str]:
-    result = {"path": str(path), "status": ""}
-    exists = path.exists()
-    text = path.read_text(encoding="utf-8") if exists else ""
-
-    has_begin = BEGIN_ROUTING_MARKER in text
-    has_end = END_ROUTING_MARKER in text
-    if has_begin != has_end:
-        result["status"] = "conflict"
-        result["message"] = "AGENTS routing markers are incomplete"
-        return result
-
-    if has_begin and has_end:
-        before, rest = text.split(BEGIN_ROUTING_MARKER, 1)
-        current, after = rest.split(END_ROUTING_MARKER, 1)
-        current_block = f"{BEGIN_ROUTING_MARKER}{current}{END_ROUTING_MARKER}"
-        if current_block.strip() == block.strip():
-            result["status"] = "unchanged"
-            return result
-        new_text = (
-            (before.rstrip() + "\n\n" if before.strip() else "")
-            + block
-            + ("\n" + after.lstrip() if after.strip() else "")
-        )
-        result["status"] = "would-update" if dry_run else "updated"
-    elif block.strip() in text:
-        result["status"] = "unchanged"
-        return result
-    elif exists:
-        new_text = text.rstrip() + "\n\n" + block
-        result["status"] = "would-append" if dry_run else "appended"
-    else:
-        new_text = block
-        result["status"] = "would-create" if dry_run else "created"
-
-    if not dry_run:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(new_text, encoding="utf-8")
-    return result
-
-
-def agents_routing_targets(scope: str, project_root: Path) -> list[Path]:
-    targets = []
-    if scope in {"project", "both"}:
-        targets.append(project_root.expanduser().resolve() / "AGENTS.md")
-    if scope in {"global", "both"}:
-        targets.append(Path.home() / ".codex" / "AGENTS.md")
-    return targets
+    # The replacement is already committed and verified. Backup cleanup must never
+    # turn a valid install into a failed rollback from a partially deleted backup.
+    if committed and backup is not None and backup.exists():
+        best_effort_remove(backup)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Install this skill bundle into a Codex user skills directory."
+        description=(
+            "Install the minimal runtime bundle. This command never reads or modifies "
+            "project or global AGENTS.md files."
+        )
     )
     parser.add_argument(
         "--target-root",
@@ -122,91 +134,90 @@ def main() -> None:
         default=Path.home() / ".agents" / "skills",
         help="Directory containing user skills. Defaults to ~/.agents/skills.",
     )
-    parser.add_argument("--name", default=SKILL_NAME, help="Installed skill folder name.")
-    parser.add_argument("--force", action="store_true", help="Overwrite a differing install.")
-    parser.add_argument("--dry-run", action="store_true", help="Validate without copying.")
-    parser.add_argument("--json", action="store_true", help="Emit JSON result.")
-    parser.add_argument(
-        "--agents-routing",
-        choices=("none", "project", "global", "both"),
-        default="none",
-        help=(
-            "Optionally install the AGENTS.md routing snippet. Defaults to none. "
-            "Use project for ./AGENTS.md, global for ~/.codex/AGENTS.md, or both."
-        ),
-    )
-    parser.add_argument(
-        "--project-root",
-        type=Path,
-        default=Path.cwd(),
-        help="Project root used with --agents-routing project/both. Defaults to cwd.",
-    )
+    parser.add_argument("--name", default=SKILL_NAME, help="Installed folder name.")
+    parser.add_argument("--force", action="store_true", help="Replace a differing install.")
+    parser.add_argument("--dry-run", action="store_true", help="Check without copying.")
+    parser.add_argument("--json", action="store_true", help="Emit a JSON result.")
     args = parser.parse_args()
 
-    src = Path(__file__).resolve().parents[1]
-    dst = (args.target_root / args.name).expanduser().resolve()
-    src_real = src.resolve()
-    result = {
-        "source": str(src_real),
-        "target": str(dst),
-        "status": "",
-        "files": len(iter_files(src_real)),
-    }
+    if not args.name or Path(args.name).name != args.name or args.name in {".", ".."}:
+        parser.error("--name must be one folder name without path separators")
 
-    if src_real == dst:
-        result["status"] = "source-is-target"
-    elif dst.exists():
-        src_manifest = manifest(src_real)
-        dst_manifest = manifest(dst)
-        if src_manifest != dst_manifest:
-            if not args.force:
-                result["status"] = "conflict"
-                result["message"] = "target exists and differs; re-run with --force to overwrite"
-                if args.json:
-                    print(json.dumps(result, ensure_ascii=False, indent=2))
-                else:
-                    print(result["message"])
-                raise SystemExit(1)
-            result["status"] = "overwritten"
-        else:
-            result["status"] = "already-installed"
+    source = Path(__file__).resolve().parents[1]
+    target = args.target_root.expanduser().resolve() / args.name
+    source_manifest = runtime_manifest(source)
+
+    if target.is_symlink() and target.resolve() != source.resolve():
+        result = {
+            "source": str(source),
+            "target": str(target),
+            "status": "conflict",
+            "runtime_files": len(RUNTIME_FILES),
+            "message": "target is a symlink; refusing to replace or mutate its destination",
+            "agents_md_touched": False,
+        }
+        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else result["message"])
+        raise SystemExit(1)
+
+    if source.resolve() == target.resolve():
+        status = "source-is-target"
+    elif not target.exists():
+        status = "would-install" if args.dry_run else "installed"
     else:
-        result["status"] = "would-install" if args.dry_run else "installed"
-
-    if not args.dry_run and result["status"] in {"installed", "overwritten"}:
-        if dst.exists():
-            shutil.rmtree(dst)
-        dst.mkdir(parents=True, exist_ok=True)
-        copy_skill(src_real, dst)
-    elif not args.dry_run and result["status"] == "source-is-target":
-        pass
-
-    if dst.exists():
-        result["installed_files"] = len(iter_files(dst))
-
-    if args.agents_routing != "none":
-        block = routing_snippet(src_real)
-        result["agents_routing"] = [
-            upsert_agents_routing(target, block, args.dry_run)
-            for target in agents_routing_targets(args.agents_routing, args.project_root)
-        ]
-        conflicts = [
-            item for item in result["agents_routing"] if item["status"] == "conflict"
-        ]
-        if conflicts:
-            if args.json:
-                print(json.dumps(result, ensure_ascii=False, indent=2))
-            else:
-                for item in conflicts:
-                    print(f"conflict: {item['path']}: {item['message']}")
+        try:
+            current_manifest = installed_manifest(target)
+        except (OSError, ValueError) as exc:
+            result = {
+                "source": str(source),
+                "target": str(target),
+                "status": "conflict",
+                "runtime_files": len(RUNTIME_FILES),
+                "message": f"unsafe or unreadable target bundle: {exc}",
+                "agents_md_touched": False,
+            }
+            print(
+                json.dumps(result, ensure_ascii=False, indent=2)
+                if args.json
+                else result["message"]
+            )
             raise SystemExit(1)
+        if current_manifest == source_manifest:
+            status = "already-installed"
+        elif not args.force:
+            result = {
+                "source": str(source),
+                "target": str(target),
+                "status": "conflict",
+                "runtime_files": len(RUNTIME_FILES),
+                "message": "target exists and differs; re-run with --force to replace it",
+                "agents_md_touched": False,
+            }
+            print(
+                json.dumps(result, ensure_ascii=False, indent=2)
+                if args.json
+                else result["message"]
+            )
+            raise SystemExit(1)
+        else:
+            status = "would-replace" if args.dry_run else "replaced"
 
+    if not args.dry_run and status in {"installed", "replaced"}:
+        replace_from_staging(source, target)
+        if installed_manifest(target) != source_manifest:
+            raise SystemExit("installed runtime manifest does not match source")
+
+    result = {
+        "source": str(source),
+        "target": str(target),
+        "status": status,
+        "runtime_files": len(RUNTIME_FILES),
+        "manifest": source_manifest,
+        "agents_md_touched": False,
+    }
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:
-        print(f"{result['status']}: {dst}")
-        for item in result.get("agents_routing", []):
-            print(f"agents-routing {item['status']}: {item['path']}")
+        print(f"{status}: {target}")
 
 
 if __name__ == "__main__":
