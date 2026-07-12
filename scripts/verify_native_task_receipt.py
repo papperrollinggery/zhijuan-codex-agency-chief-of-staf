@@ -109,6 +109,7 @@ def verify_reviewer_read(
     if artifact_path.is_symlink() or not artifact_path.is_file():
         raise ValueError("reviewer artifact is not a regular file")
     artifact_text = artifact_path.read_text(encoding="utf-8")
+    artifact_text_json = json.dumps(artifact_text, ensure_ascii=False)[1:-1]
     completion_indexes = [
         index
         for index, record in enumerate(records)
@@ -156,7 +157,7 @@ def verify_reviewer_read(
             has_path
             and any(token in call_input for token in allowed_reads)
             and not any(token in call_input for token in forbidden_prints)
-            and artifact_text in output
+            and (artifact_text in output or artifact_text_json in output)
             and all(marker in output for marker in markers)
         ):
             bound_calls.append(call_id)
