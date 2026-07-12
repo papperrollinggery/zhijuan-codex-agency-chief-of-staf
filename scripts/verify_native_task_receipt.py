@@ -95,6 +95,10 @@ def reviewer_binding(
 def verify_reviewer_read(
     records: list[dict[str, Any]], markers: list[str], artifact: str
 ) -> dict[str, Any]:
+    artifact_path = Path(artifact).resolve()
+    if artifact_path.is_symlink() or not artifact_path.is_file():
+        raise ValueError("reviewer artifact is not a regular file")
+    artifact_text = artifact_path.read_text(encoding="utf-8")
     completion_indexes = [
         index
         for index, record in enumerate(records)
@@ -126,13 +130,35 @@ def verify_reviewer_read(
     }
     if not outputs:
         raise ValueError("reviewer has no completed exec call with bound output")
-    combined = "\n".join([*calls.values(), *outputs.values()])
-    if artifact not in combined:
-        raise ValueError("reviewer tool evidence is not bound to the target artifact")
-    for marker in markers:
-        if marker not in combined:
-            raise ValueError(f"reviewer tool read is missing marker {marker!r}")
-    return {"paired_exec_outputs": len(outputs), "artifact": artifact, "markers": markers}
+    allowed_reads = ("sed ", "cat ", "rg ", "git diff", "git show")
+    forbidden_prints = ("printf ", "echo ")
+    bound_calls = []
+    for call_id, output in outputs.items():
+        call_input = calls[call_id]
+        has_path = (
+            str(artifact_path) in call_input
+            or (
+                str(artifact_path.parent) in call_input
+                and artifact_path.name in call_input
+            )
+        )
+        if (
+            has_path
+            and any(token in call_input for token in allowed_reads)
+            and not any(token in call_input for token in forbidden_prints)
+            and artifact_text in output
+            and all(marker in output for marker in markers)
+        ):
+            bound_calls.append(call_id)
+    if not bound_calls:
+        raise ValueError("no single reviewer exec/output pair proves the artifact read")
+    return {
+        "paired_exec_outputs": len(outputs),
+        "bound_read_calls": len(bound_calls),
+        "artifact": str(artifact_path),
+        "artifact_sha256": sha256(artifact_path),
+        "markers": markers,
+    }
 
 
 def completed_message(records: list[dict[str, Any]]) -> str:

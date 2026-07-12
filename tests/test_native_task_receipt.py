@@ -20,7 +20,12 @@ class NativeTaskReceiptTests(unittest.TestCase):
     reviewer_id = "019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"
 
     def write_rollout(
-        self, path: Path, thread_id: str, final: str, parent_id: str | None = None
+        self,
+        path: Path,
+        thread_id: str,
+        final: str,
+        parent_id: str | None = None,
+        artifact: Path | None = None,
     ) -> None:
         session = {
             "id": thread_id,
@@ -45,7 +50,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
                     "name": "exec",
                     "status": "completed",
                     "call_id": "call-read",
-                    "input": "read /fixture/README.md",
+                    "input": (
+                        f"sed -n '1,20p' {artifact}"
+                        if artifact
+                        else "sed -n '1,20p' README.md"
+                    ),
                 },
             },
             {
@@ -53,7 +62,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "payload": {
                     "type": "custom_tool_call_output",
                     "call_id": "call-read",
-                    "output": "Delivery status: ready-for-review.",
+                    "output": (
+                        artifact.read_text(encoding="utf-8")
+                        if artifact
+                        else "Delivery status: ready-for-review."
+                    ),
                 },
             },
             {
@@ -77,6 +90,8 @@ class NativeTaskReceiptTests(unittest.TestCase):
 
         parent_rollout = base / "parent.jsonl"
         reviewer_rollout = base / "reviewer.jsonl"
+        artifact = base / "README.md"
+        artifact.write_text("Delivery status: ready-for-review.\n", encoding="utf-8")
         self.write_rollout(
             parent_rollout,
             self.parent_id,
@@ -91,6 +106,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
             "REVIEW_RESIDUAL_RISK: fixture only\n"
             "REVIEW_VERDICT: PASS",
             parent_id=self.parent_id,
+            artifact=artifact,
         )
 
         database_path = base / "state.sqlite"
@@ -175,7 +191,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "--reviewer-read-marker",
                 "Delivery status: ready-for-review.",
                 "--reviewer-artifact",
-                "/fixture/README.md",
+                str(database.parent / "README.md"),
                 "--require-archived",
                 "--require-clean-source",
             ],
@@ -209,6 +225,31 @@ class NativeTaskReceiptTests(unittest.TestCase):
             result = self.run_verifier(database, installed_root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("no native spawn edge", result.stderr)
+
+    def test_rejects_printed_artifact_path_as_direct_read(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            connection = sqlite3.connect(database)
+            rollout_path = Path(
+                connection.execute(
+                    "SELECT rollout_path FROM threads WHERE id = ?", (self.reviewer_id,)
+                ).fetchone()[0]
+            )
+            connection.close()
+            records = [json.loads(line) for line in rollout_path.read_text().splitlines()]
+            for record in records:
+                payload = record.get("payload", {})
+                if payload.get("type") == "custom_tool_call":
+                    payload["input"] = (
+                        f"printf '{database.parent / 'README.md'}'  # no artifact read"
+                    )
+            rollout_path.write_text(
+                "\n".join(json.dumps(record) for record in records) + "\n",
+                encoding="utf-8",
+            )
+            result = self.run_verifier(database, installed_root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("no single reviewer exec/output pair", result.stderr)
 
     def test_requires_reviewer_markers_and_release_state(self) -> None:
         result = subprocess.run(
