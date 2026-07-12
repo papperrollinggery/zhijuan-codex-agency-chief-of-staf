@@ -16,6 +16,13 @@ from install_skill import INSTALL_NAMES, installed_manifest, runtime_manifest
 
 
 THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
+REVIEWER_FINAL_FIELDS = (
+    "REVIEW_TARGET:",
+    "REVIEW_READBACK:",
+    "REVIEW_FINDINGS:",
+    "REVIEW_RESIDUAL_RISK:",
+    "REVIEW_VERDICT: PASS",
+)
 
 
 def sha256(path: Path) -> str:
@@ -77,10 +84,20 @@ def reviewer_binding(
 
 
 def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> dict[str, Any]:
+    completion_indexes = [
+        index
+        for index, record in enumerate(records)
+        if record.get("type") == "event_msg"
+        and isinstance(record.get("payload"), dict)
+        and record["payload"].get("type") == "task_complete"
+    ]
+    if len(completion_indexes) != 1:
+        raise ValueError("reviewer tool-read ordering cannot be established")
     calls = {
         payload.get("call_id")
-        for record in records
+        for index, record in enumerate(records)
         if record.get("type") == "response_item"
+        and index < completion_indexes[0]
         and isinstance((payload := record.get("payload")), dict)
         and payload.get("type") == "custom_tool_call"
         and payload.get("name") == "exec"
@@ -89,8 +106,9 @@ def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> d
     }
     outputs = {
         payload.get("call_id"): json.dumps(payload.get("output"), ensure_ascii=False)
-        for record in records
+        for index, record in enumerate(records)
         if record.get("type") == "response_item"
+        and index < completion_indexes[0]
         and isinstance((payload := record.get("payload")), dict)
         and payload.get("type") == "custom_tool_call_output"
         and payload.get("call_id") in calls
@@ -223,6 +241,13 @@ def main() -> None:
         raise SystemExit("at least one --reviewer-final-marker is required")
     if not args.reviewer_read_marker:
         raise SystemExit("at least one --reviewer-read-marker is required")
+    supplied_markers = (
+        args.parent_final_marker
+        + args.reviewer_final_marker
+        + args.reviewer_read_marker
+    )
+    if any(len(marker.strip()) < 16 for marker in supplied_markers):
+        raise SystemExit("receipt markers must be exact facts of at least 16 characters")
     if not args.require_archived or not args.require_clean_source:
         raise SystemExit("native task receipt requires archived tasks and a clean source")
     source = args.source_root.resolve()
@@ -263,7 +288,7 @@ def main() -> None:
             expected_model=args.model,
             expected_effort=args.reasoning_effort,
             require_archived=args.require_archived,
-            final_markers=args.reviewer_final_marker,
+            final_markers=args.reviewer_final_marker + list(REVIEWER_FINAL_FIELDS),
         )
         reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
         binding = reviewer_binding(

@@ -76,6 +76,10 @@ class NativeTaskReceiptTests(unittest.TestCase):
         self.write_rollout(
             reviewer_rollout,
             self.reviewer_id,
+            "REVIEW_TARGET: README.md\n"
+            "REVIEW_READBACK: Delivery status: ready-for-review.\n"
+            "REVIEW_FINDINGS: NONE\n"
+            "REVIEW_RESIDUAL_RISK: fixture only\n"
             "REVIEW_VERDICT: PASS",
             parent_id=self.parent_id,
         )
@@ -228,6 +232,17 @@ class NativeTaskReceiptTests(unittest.TestCase):
             )
             self.assertNotEqual(missing_marker.returncode, 0)
             self.assertIn("--reviewer-final-marker is required", missing_marker.stderr)
+
+            weak_command = [":" if item in {
+                "RESULT: complete",
+                "REVIEW_VERDICT: PASS",
+                "Delivery status: ready-for-review.",
+            } else item for item in self.run_verifier(database, installed_root).args]
+            weak_marker = subprocess.run(
+                weak_command, text=True, capture_output=True, check=False
+            )
+            self.assertNotEqual(weak_marker.returncode, 0)
+            self.assertIn("at least 16 characters", weak_marker.stderr)
 
     def test_rejects_wrong_model_and_luna(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
