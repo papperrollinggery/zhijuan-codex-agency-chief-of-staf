@@ -25,8 +25,10 @@ if dry_run["status"] != "already-installed":
     raise SystemExit(f"unexpected dry-run status: {dry_run['status']}")
 if install.get("agents_md_touched") is not False:
     raise SystemExit("installer did not prove AGENTS.md remained untouched")
-if set(install["manifest"]) != set(dry_run["manifest"]):
-    raise SystemExit("runtime manifest drift after install")
+if install["manifests"] != dry_run["manifests"]:
+    raise SystemExit("runtime pair manifest drift after install")
+if set(install["targets"]) != {"agency-chief-of-staff", "zhijuan-codex-agency-chief-of-staf"}:
+    raise SystemExit("installer did not produce the canonical and legacy pair")
 PY
 
-echo "Release smoke passed: minimal install matches source; model behavior not claimed."
+echo "Release smoke passed: canonical and legacy bundles match source; model behavior not claimed."

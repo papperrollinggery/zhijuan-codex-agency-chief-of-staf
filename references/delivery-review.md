@@ -39,12 +39,14 @@
 - 当前工作树和目标 commit。
 - runtime bundle/安装产物与源文件一致。
 - 结构与 contract 测试。
-- 隔离项目/配置中的真实模型前测；禁用无关 plugins/apps，绑定当前 manifest/case/runner，并确认专用 eval 凭据风险。same-user 临时 auth 不是 secret sandbox。
+- 当前模型行为证据至少满足一条：隔离 CLI model-smoke，或 Codex Desktop native-task smoke。前者绑定 manifest/case/runner 并确认专用 eval 凭据风险；后者必须绑定已安装双 bundle、state DB 中的 OpenAI provider/model/effort、持久化 rollout、唯一 task-complete、真实 reviewer（如任务要求）和 cleanup。native-task receipt 只证明当前宿主用户路径，不证明凭据隔离或跨平台稳定发布。
 - 用户明确要求的真实 ThreadOps 证据。
 - 独立 cold review 已收敛。
 - 发布、push、tag、PR 等外部动作已获明确授权。
 
 缺任何当前证据时写 `未验证`，不要用旧 release receipt 补位。
+
+合并主分支并交付当前 Codex Desktop 用户时，可以使用 native-task smoke 作为当前宿主的模型行为证据；宣称无人值守、跨宿主或 stable 公共发布时，仍必须使用专用低权限凭据的隔离 CLI model-smoke。
 
 ## 领域交付物
 

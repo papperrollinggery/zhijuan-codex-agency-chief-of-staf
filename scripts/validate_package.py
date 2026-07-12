@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-from install_skill import RUNTIME_FILES, SKILL_NAME, runtime_manifest
+from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
 
 
 # Keep this list independent from install_skill.py. A mutation of the installer
@@ -31,6 +31,7 @@ PROHIBITED_ROUTING_MARKERS = (
     "--agents-routing",
     "upsert_agents_routing",
     f"BEGIN {SKILL_NAME} routing",
+    f"BEGIN {LEGACY_SKILL_NAME} routing",
     "AGENTS routing shim",
 )
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")

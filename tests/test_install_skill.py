@@ -42,15 +42,21 @@ class InstallSkillTests(unittest.TestCase):
             self.assertFalse(payload["agents_md_touched"])
             self.assertEqual(agents.read_text(encoding="utf-8"), "USER SENTINEL\n")
 
-            installed = target_root / "zhijuan-codex-agency-chief-of-staf"
-            files = {
-                str(path.relative_to(installed))
-                for path in installed.rglob("*")
-                if path.is_file()
-            }
-            self.assertEqual(files, set(payload["manifest"]))
-            self.assertNotIn("README.md", files)
-            self.assertNotIn("AGENTS.md", files)
+            self.assertEqual(set(payload["targets"]), set(install_skill.INSTALL_NAMES))
+            for skill_name in install_skill.INSTALL_NAMES:
+                installed = target_root / skill_name
+                files = {
+                    str(path.relative_to(installed))
+                    for path in installed.rglob("*")
+                    if path.is_file()
+                }
+                self.assertEqual(files, set(payload["manifests"][skill_name]))
+                self.assertNotIn("README.md", files)
+                self.assertNotIn("AGENTS.md", files)
+            legacy_yaml = (
+                target_root / install_skill.LEGACY_SKILL_NAME / "agents/openai.yaml"
+            ).read_text(encoding="utf-8")
+            self.assertIn("allow_implicit_invocation: false", legacy_yaml)
 
     def test_force_replaces_stale_runtime_atomically(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -81,13 +87,13 @@ class InstallSkillTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(agents.read_text(encoding="utf-8"), "USER SENTINEL\n")
 
-    def test_rejects_unsafe_install_name(self) -> None:
+    def test_removed_name_flag_cannot_select_a_partial_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = self.run_installer(
                 "--target-root", str(Path(tmp) / "skills"), "--name", "../escape"
             )
             self.assertEqual(result.returncode, 2)
-            self.assertIn("one folder name", result.stderr)
+            self.assertIn("unrecognized arguments", result.stderr)
             self.assertFalse((Path(tmp) / "escape").exists())
 
     def test_refuses_to_replace_symlink_destination(self) -> None:
@@ -165,7 +171,7 @@ class InstallSkillTests(unittest.TestCase):
 
             self.assertEqual(
                 install_skill.installed_manifest(target),
-                install_skill.runtime_manifest(ROOT),
+                install_skill.runtime_manifest(ROOT, install_skill.LEGACY_SKILL_NAME),
             )
             self.assertFalse((target / "stale.txt").exists())
 
@@ -181,7 +187,7 @@ class InstallSkillTests(unittest.TestCase):
             self.assertTrue(target.is_dir())
             self.assertEqual(
                 install_skill.installed_manifest(target),
-                install_skill.runtime_manifest(ROOT),
+                install_skill.runtime_manifest(ROOT, install_skill.LEGACY_SKILL_NAME),
             )
             self.assertFalse(list(target_root.glob(".*.backup-*")))
 

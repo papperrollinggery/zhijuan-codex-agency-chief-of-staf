@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the minimal runtime skill bundle without touching project guidance."""
+"""Install canonical and legacy-compatible runtime bundles without AGENTS routing."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ import uuid
 from pathlib import Path
 
 
-SKILL_NAME = "zhijuan-codex-agency-chief-of-staf"
+CANONICAL_SKILL_NAME = "agency-chief-of-staff"
+LEGACY_SKILL_NAME = "zhijuan-codex-agency-chief-of-staf"
+INSTALL_NAMES = (CANONICAL_SKILL_NAME, LEGACY_SKILL_NAME)
+SKILL_NAME = CANONICAL_SKILL_NAME
 RUNTIME_FILES = (
     "SKILL.md",
     "agents/openai.yaml",
@@ -26,10 +29,12 @@ RUNTIME_FILES = (
 )
 
 
+def digest_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
 def digest(path: Path) -> str:
-    hasher = hashlib.sha256()
-    hasher.update(path.read_bytes())
-    return hasher.hexdigest()
+    return digest_bytes(path.read_bytes())
 
 
 def runtime_source_path(root: Path, rel: str) -> Path:
@@ -43,8 +48,47 @@ def runtime_source_path(root: Path, rel: str) -> Path:
     return path
 
 
-def runtime_manifest(root: Path) -> dict[str, str]:
-    return {rel: digest(runtime_source_path(root, rel)) for rel in RUNTIME_FILES}
+def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> bytes:
+    source = runtime_source_path(root, rel)
+    data = source.read_bytes()
+    if skill_name == CANONICAL_SKILL_NAME:
+        return data
+    if skill_name != LEGACY_SKILL_NAME:
+        raise ValueError(f"unsupported install name: {skill_name}")
+
+    text = data.decode("utf-8")
+    if rel == "SKILL.md":
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("name:"):
+                lines[index] = f"name: {LEGACY_SKILL_NAME}"
+            elif line.startswith("description:"):
+                description = (
+                    "Legacy explicit-call compatibility entry for $zhijuan-codex-agency-"
+                    "chief-of-staf. Use only when the user explicitly invokes that exact "
+                    "slug; new and implicit use must select $agency-chief-of-staff."
+                )
+                lines[index] = "description: " + json.dumps(description)
+        text = "\n".join(lines) + "\n"
+    elif rel == "agents/openai.yaml":
+        text = text.replace(
+            'display_name: "Zhijuan 结果负责型 Codex 幕僚长"',
+            'display_name: "Zhijuan Codex 幕僚长（旧入口兼容）"',
+        ).replace(
+            'short_description: "从目标研究到执行、验证、独立审核与最终交付的结果闭环"',
+            'short_description: "旧显式调用兼容入口；新任务请使用 agency-chief-of-staff"',
+        ).replace(
+            f'default_prompt: "使用 ${CANONICAL_SKILL_NAME}',
+            f'default_prompt: "使用 ${LEGACY_SKILL_NAME}',
+        ).replace("allow_implicit_invocation: true", "allow_implicit_invocation: false")
+    return text.encode("utf-8")
+
+
+def runtime_manifest(root: Path, skill_name: str = SKILL_NAME) -> dict[str, str]:
+    return {
+        rel: digest_bytes(render_runtime_bytes(root, rel, skill_name))
+        for rel in RUNTIME_FILES
+    }
 
 
 def installed_manifest(root: Path) -> dict[str, str]:
@@ -59,12 +103,13 @@ def installed_manifest(root: Path) -> dict[str, str]:
     return manifest
 
 
-def copy_runtime(source: Path, target: Path) -> None:
+def copy_runtime(
+    source: Path, target: Path, skill_name: str = SKILL_NAME
+) -> None:
     for rel in RUNTIME_FILES:
-        source_path = runtime_source_path(source, rel)
         destination = target / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination)
+        destination.write_bytes(render_runtime_bytes(source, rel, skill_name))
 
 
 def best_effort_remove(path: Path) -> None:
@@ -77,55 +122,74 @@ def best_effort_remove(path: Path) -> None:
         pass
 
 
-def replace_from_staging(source: Path, target: Path) -> None:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    staging = Path(
-        tempfile.mkdtemp(prefix=f".{target.name}.staging-", dir=target.parent)
-    )
-    backup: Path | None = None
+def replace_many_from_staging(source: Path, targets: dict[str, Path]) -> None:
+    """Replace every managed bundle as one rollback-capable pair transaction."""
+    staged: dict[str, Path] = {}
+    backups: dict[str, Path] = {}
+    promoted: set[str] = set()
     committed = False
-    staging_promoted = False
     try:
-        copy_runtime(source, staging)
-        if installed_manifest(staging) != runtime_manifest(source):
-            raise RuntimeError("staged runtime manifest does not match source")
+        for skill_name, target in targets.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staging = Path(
+                tempfile.mkdtemp(prefix=f".{target.name}.staging-", dir=target.parent)
+            )
+            staged[skill_name] = staging
+            copy_runtime(source, staging, skill_name)
+            if installed_manifest(staging) != runtime_manifest(source, skill_name):
+                raise RuntimeError(f"staged runtime manifest mismatch: {skill_name}")
 
-        if target.exists():
-            backup_candidate = target.parent / f".{target.name}.backup-{uuid.uuid4().hex}"
-            target.rename(backup_candidate)
-            backup = backup_candidate
-        staging.rename(target)
-        staging_promoted = True
-        if installed_manifest(target) != runtime_manifest(source):
-            raise RuntimeError("installed runtime manifest does not match source")
+        for skill_name, target in targets.items():
+            if target.exists():
+                backup = target.parent / f".{target.name}.backup-{uuid.uuid4().hex}"
+                target.rename(backup)
+                backups[skill_name] = backup
+
+        for skill_name, target in targets.items():
+            staged[skill_name].rename(target)
+            promoted.add(skill_name)
+            if installed_manifest(target) != runtime_manifest(source, skill_name):
+                raise RuntimeError(f"installed runtime manifest mismatch: {skill_name}")
         committed = True
     except Exception:
-        if backup is not None and backup.exists():
-            failed_target: Path | None = None
-            if target.exists():
-                failed_target = target.parent / f".{target.name}.failed-{uuid.uuid4().hex}"
-                target.rename(failed_target)
-            backup.rename(target)
-            if failed_target is not None:
-                best_effort_remove(failed_target)
-        elif staging_promoted and target.exists():
-            best_effort_remove(target)
+        for skill_name, target in reversed(tuple(targets.items())):
+            if skill_name in promoted and target.exists():
+                best_effort_remove(target)
+            backup = backups.get(skill_name)
+            if backup is not None and backup.exists() and not target.exists():
+                backup.rename(target)
         raise
     finally:
-        if staging.exists():
-            best_effort_remove(staging)
+        for staging in staged.values():
+            if staging.exists():
+                best_effort_remove(staging)
 
-    # The replacement is already committed and verified. Backup cleanup must never
-    # turn a valid install into a failed rollback from a partially deleted backup.
-    if committed and backup is not None and backup.exists():
-        best_effort_remove(backup)
+    if committed:
+        for backup in backups.values():
+            if backup.exists():
+                best_effort_remove(backup)
+
+
+def replace_from_staging(
+    source: Path, target: Path, skill_name: str = SKILL_NAME
+) -> None:
+    """Compatibility helper for focused installer tests."""
+    effective_name = target.name if target.name in INSTALL_NAMES else skill_name
+    replace_many_from_staging(source, {effective_name: target})
+
+
+def emit(result: dict[str, object], as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"{result['status']}: {result['target_root']}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Install the minimal runtime bundle. This command never reads or modifies "
-            "project or global AGENTS.md files."
+            "Install canonical and legacy-compatible runtime bundles. This command "
+            "never reads or modifies project or global AGENTS.md files."
         )
     )
     parser.add_argument(
@@ -134,90 +198,92 @@ def main() -> None:
         default=Path.home() / ".agents" / "skills",
         help="Directory containing user skills. Defaults to ~/.agents/skills.",
     )
-    parser.add_argument("--name", default=SKILL_NAME, help="Installed folder name.")
-    parser.add_argument("--force", action="store_true", help="Replace a differing install.")
+    parser.add_argument("--force", action="store_true", help="Replace a differing pair.")
     parser.add_argument("--dry-run", action="store_true", help="Check without copying.")
     parser.add_argument("--json", action="store_true", help="Emit a JSON result.")
     args = parser.parse_args()
 
-    if not args.name or Path(args.name).name != args.name or args.name in {".", ".."}:
-        parser.error("--name must be one folder name without path separators")
-
     source = Path(__file__).resolve().parents[1]
-    target = args.target_root.expanduser().resolve() / args.name
-    source_manifest = runtime_manifest(source)
-
-    if target.is_symlink() and target.resolve() != source.resolve():
+    raw_target_root = args.target_root.expanduser()
+    if raw_target_root.is_symlink():
         result = {
             "source": str(source),
-            "target": str(target),
+            "target_root": str(raw_target_root),
             "status": "conflict",
-            "runtime_files": len(RUNTIME_FILES),
-            "message": "target is a symlink; refusing to replace or mutate its destination",
+            "message": "target root is a symlink; refusing to follow it",
             "agents_md_touched": False,
         }
-        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else result["message"])
+        emit(result, args.json)
+        raise SystemExit(1)
+    target_root = raw_target_root.resolve()
+    targets = {name: target_root / name for name in INSTALL_NAMES}
+    expected = {name: runtime_manifest(source, name) for name in INSTALL_NAMES}
+
+    for name, target in targets.items():
+        if target.is_symlink():
+            result = {
+                "source": str(source),
+                "target_root": str(target_root),
+                "status": "conflict",
+                "message": f"target is a symlink; refusing to replace it: {name}",
+                "agents_md_touched": False,
+            }
+            emit(result, args.json)
+            raise SystemExit(1)
+
+    states: dict[str, str] = {}
+    try:
+        for name, target in targets.items():
+            if not target.exists():
+                states[name] = "missing"
+            elif installed_manifest(target) == expected[name]:
+                states[name] = "current"
+            else:
+                states[name] = "different"
+    except (OSError, ValueError) as exc:
+        result = {
+            "source": str(source),
+            "target_root": str(target_root),
+            "status": "conflict",
+            "message": f"unsafe or unreadable target bundle: {exc}",
+            "agents_md_touched": False,
+        }
+        emit(result, args.json)
         raise SystemExit(1)
 
-    if source.resolve() == target.resolve():
-        status = "source-is-target"
-    elif not target.exists():
-        status = "would-install" if args.dry_run else "installed"
+    if all(state == "current" for state in states.values()):
+        status = "already-installed"
+    elif any(state != "missing" for state in states.values()) and not args.force:
+        result = {
+            "source": str(source),
+            "target_root": str(target_root),
+            "status": "conflict",
+            "states": states,
+            "message": "installed pair differs; re-run with --force to replace both bundles",
+            "agents_md_touched": False,
+        }
+        emit(result, args.json)
+        raise SystemExit(1)
+    elif args.dry_run:
+        status = "would-install" if all(v == "missing" for v in states.values()) else "would-replace"
     else:
-        try:
-            current_manifest = installed_manifest(target)
-        except (OSError, ValueError) as exc:
-            result = {
-                "source": str(source),
-                "target": str(target),
-                "status": "conflict",
-                "runtime_files": len(RUNTIME_FILES),
-                "message": f"unsafe or unreadable target bundle: {exc}",
-                "agents_md_touched": False,
-            }
-            print(
-                json.dumps(result, ensure_ascii=False, indent=2)
-                if args.json
-                else result["message"]
-            )
-            raise SystemExit(1)
-        if current_manifest == source_manifest:
-            status = "already-installed"
-        elif not args.force:
-            result = {
-                "source": str(source),
-                "target": str(target),
-                "status": "conflict",
-                "runtime_files": len(RUNTIME_FILES),
-                "message": "target exists and differs; re-run with --force to replace it",
-                "agents_md_touched": False,
-            }
-            print(
-                json.dumps(result, ensure_ascii=False, indent=2)
-                if args.json
-                else result["message"]
-            )
-            raise SystemExit(1)
-        else:
-            status = "would-replace" if args.dry_run else "replaced"
-
-    if not args.dry_run and status in {"installed", "replaced"}:
-        replace_from_staging(source, target)
-        if installed_manifest(target) != source_manifest:
-            raise SystemExit("installed runtime manifest does not match source")
+        status = "installed" if all(v == "missing" for v in states.values()) else "replaced"
+        replace_many_from_staging(source, targets)
+        for name, target in targets.items():
+            if installed_manifest(target) != expected[name]:
+                raise SystemExit(f"installed runtime manifest does not match source: {name}")
 
     result = {
         "source": str(source),
-        "target": str(target),
+        "target_root": str(target_root),
+        "targets": {name: str(path) for name, path in targets.items()},
         "status": status,
-        "runtime_files": len(RUNTIME_FILES),
-        "manifest": source_manifest,
+        "states_before": states,
+        "runtime_files_per_bundle": len(RUNTIME_FILES),
+        "manifests": expected,
         "agents_md_touched": False,
     }
-    if args.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-    else:
-        print(f"{status}: {target}")
+    emit(result, args.json)
 
 
 if __name__ == "__main__":

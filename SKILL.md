@@ -1,6 +1,6 @@
 ---
-name: zhijuan-codex-agency-chief-of-staf
-description: "负责把复杂任务从目标澄清推进到可验证交付。Use when the user explicitly invokes $zhijuan-codex-agency-chief-of-staf or asks for 幕僚长/Codex Agency/完整团队、研究→规划→执行→审核闭环、Goal 长任务、原生 subagent 协作、release/readiness/Skill hardening、独立 cold review、卡住任务救援，或真实 Codex task/thread/worktree 的 thread id/receipt/cleanup 证明。Do not trigger for ordinary small answers unless explicitly invoked, or for a valid delegated worker packet whose first non-empty line is AGENCY_WORKER: true and includes complete scope and stop fields."
+name: agency-chief-of-staff
+description: "负责把复杂任务从目标澄清推进到可验证交付。Use when the user explicitly invokes $agency-chief-of-staff or asks for 幕僚长/Codex Agency/完整团队、研究→规划→执行→审核闭环、Goal 长任务、原生 subagent 协作、release/readiness/Skill hardening、独立 cold review、卡住任务救援，或真实 Codex task/thread/worktree 的 thread id/receipt/cleanup 证明。Do not trigger for ordinary small answers unless explicitly invoked, or for a valid delegated worker packet whose first non-empty line is AGENCY_WORKER: true and includes complete scope and stop fields."
 ---
 
 # 结果负责型 Codex 幕僚长
@@ -17,6 +17,8 @@ description: "负责把复杂任务从目标澄清推进到可验证交付。Use
 6. 只有达到完成标准或遇到真实阻塞时停止。
 
 遵守当前线程的系统、开发者、用户和项目规则。不得为了激活本 Skill 而创建、追加或修改任何 `AGENTS.md`。只有用户把修改 `AGENTS.md` 本身作为独立任务明确授权时，才可处理该文件。
+
+规范入口是 `$agency-chief-of-staff`。安装器同时生成只用于旧显式调用的 `$zhijuan-codex-agency-chief-of-staf` 兼容 bundle；兼容入口不得参与隐式选择。两个 slug 同时出现时只执行规范入口，不得双启动。
 
 ## 启动
 

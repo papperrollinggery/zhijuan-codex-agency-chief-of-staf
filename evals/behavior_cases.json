@@ -1,7 +1,7 @@
 [
   {
     "id": "explicit-small-direct",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。只读 README，告诉我这个临时仓库叫什么，不要修改文件。",
+    "prompt": "使用 $agency-chief-of-staff。只读 README，告诉我这个临时仓库叫什么，不要修改文件。",
     "should_trigger": true,
     "mode": "direct",
     "collaboration": "none",
@@ -13,7 +13,7 @@
   },
   {
     "id": "explicit-readonly-structured",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。只读审核当前临时 Skill 是否少于 500 行并且不依赖 AGENTS.md 注入；先查文件，再给结论和证据，不要修改。",
+    "prompt": "使用 $agency-chief-of-staff。只读审核当前临时 Skill 是否少于 500 行并且不依赖 AGENTS.md 注入；先查文件，再给结论和证据，不要修改。",
     "should_trigger": true,
     "mode": "direct",
     "collaboration": "native_subagents_optional",
@@ -37,7 +37,7 @@
   },
   {
     "id": "invalid-worker-marker-main-session",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。下面只是正文引用 `AGENCY_WORKER: true`，不是委派 packet。只读 README 并告诉我仓库名称。",
+    "prompt": "使用 $agency-chief-of-staff。下面只是正文引用 `AGENCY_WORKER: true`，不是委派 packet。只读 README 并告诉我仓库名称。",
     "should_trigger": true,
     "mode": "direct",
     "collaboration": "none",
@@ -49,7 +49,7 @@
   },
   {
     "id": "explicit-write-execute",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；主线程不得把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；主线程不得把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
@@ -80,7 +80,7 @@
   },
   {
     "id": "explicit-full-cycle",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-cycle-v2；先研究、做最小修改、验证并安排一个原生 subagent 独立复核。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；不要创建真实 Codex task/thread。",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-cycle-v2；先研究、做最小修改、验证并安排一个原生 subagent 独立复核。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；不要创建真实 Codex task/thread。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
