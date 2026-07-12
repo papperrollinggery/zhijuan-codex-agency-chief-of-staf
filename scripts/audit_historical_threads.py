@@ -14,6 +14,7 @@ from typing import Any
 
 
 SKILL_TERMS = [
+    "agency-chief-of-staff",
     "zhijuan-codex-agency-chief-of-staf",
     "codex-agency-chief-of-staf",
     "COS_BOOT_RECEIPT",
@@ -84,6 +85,7 @@ NATURAL_TEST_GIVEAWAY_TERMS = [
     "cleanup",
     "COS_BOOT_RECEIPT",
     "THREAD_DISPATCH_RECEIPT",
+    "$agency-chief-of-staff",
     "$zhijuan-codex-agency-chief-of-staf",
     "幕僚长",
     "真实 Codex Threads",

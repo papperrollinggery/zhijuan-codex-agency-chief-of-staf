@@ -24,9 +24,9 @@
 
 要求 reviewer 直接读取审核时的当前 artifact，并返回至少一个未在委派 prompt 中披露的具体读回事实。主线程不得先读取该事实再转述给 reviewer。这个事实只证明实际读回，不能替代 diff、测试或领域判断。
 
-不要给 reviewer 主线程的结论、预期答案或“应该找出的问题”。
+不要给 reviewer 主线程的结论、预期答案或“应该找出的问题”。Reviewer packet 的`期望产物`只描述证据类型、必需标签和终态 schema；不得预填 artifact 原文、目标值、隐藏 marker 或其他本应由 reviewer 直接读回的事实。如果 reviewer 不读当前 artifact 也能只靠 packet 拼出成功终态，该 packet 不合格。默认 packet 也不含任何 `$slug` 或 guard-read 指令，避免 worker 再次进入主流程；真实 task/thread id 记录在工具 readback 或 receipt，不附加到六字段 packet。
 
-同一主线程再次读 diff、运行 grep 或复跑测试是验证，不是独立 cold review。仅请求 `none` / `fork_context:false` 不算隔离 readback；若工具返回事件没有显式回显上下文隔离，最终必须披露 `cold-context isolation 未验证`。若当前环境没有独立 reviewer 能力，结论必须是 `独立审核未验证`。
+同一主线程再次读 diff、运行 grep 或复跑测试是验证，不是独立 cold review。仅请求 `none` / `fork_context:false` 不算隔离 readback；若工具返回事件没有显式回显上下文隔离，最终必须原样包含机器可核验行 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。不能从 reviewer id 绑定其直接读取事件时，还必须原样包含 `reviewer-owned read 未验证`。若当前环境没有独立 reviewer 能力，结论必须是 `独立审核未验证`。
 
 代码审查按严重度输出文件、行号、影响和最小修复。文档/Skill/方案审查优先找会导致误触发、执行偏差、假完成、权限扩大或验证缺口的问题。
 

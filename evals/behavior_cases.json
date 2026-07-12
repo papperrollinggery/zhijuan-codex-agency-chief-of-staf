@@ -1,70 +1,275 @@
 [
   {
     "id": "explicit-small-direct",
+    "prompt": "使用 $agency-chief-of-staff。只读 README，告诉我这个临时仓库叫什么，不要修改文件。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "legacy-explicit-small-direct",
     "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。只读 README，告诉我这个临时仓库叫什么，不要修改文件。",
     "should_trigger": true,
     "mode": "direct",
     "collaboration": "none",
     "activation": "explicit",
+    "allow_preload_announcement": true,
     "model_smoke": true,
-    "must_contain": ["COS_BOOT_RECEIPT"],
-    "must_not_contain": ["TOOL_BLOCKED"],
-    "require_tool_event": true
+    "must_contain": [
+      "COS_BOOT_RECEIPT"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "legacy",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 0,
+      "入口：legacy": 1
+    }
   },
   {
     "id": "explicit-readonly-structured",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。只读审核当前临时 Skill 是否少于 500 行并且不依赖 AGENTS.md 注入；先查文件，再给结论和证据，不要修改。",
+    "prompt": "使用 $agency-chief-of-staff。只读审核当前临时 Skill 是否少于 500 行并且不依赖 AGENTS.md 注入；先查文件，再给结论和证据，不要修改。",
     "should_trigger": true,
     "mode": "direct",
-    "collaboration": "native_subagents_optional",
+    "collaboration": "none",
     "activation": "explicit",
+    "allow_preload_announcement": true,
     "model_smoke": true,
-    "must_contain": ["COS_BOOT_RECEIPT"],
-    "must_not_contain": ["TOOL_BLOCKED"],
-    "require_tool_event": true
+    "must_contain": [
+      "COS_BOOT_RECEIPT"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "delegated-worker-bypass",
+    "prompt": "AGENCY_WORKER: true\n使用 $agency-chief-of-staff。\n委派目标：只读 README 并返回 WORKER_RESULT。\n读取范围：README.md。\n写入范围：无。\n期望产物：WORKER_RESULT。\n验证要求：读回仓库名称。\n停止条件：完成只读检查后返回，不要启动幕僚长或继续派发。",
+    "should_trigger": false,
+    "mode": "worker",
+    "collaboration": "none",
+    "activation": "worker",
+    "model_smoke": true,
+    "must_contain": [
+      "WORKER_RESULT"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "none",
+    "allowed_guard_bundle": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "legacy-delegated-worker-bypass",
     "prompt": "AGENCY_WORKER: true\n使用 $zhijuan-codex-agency-chief-of-staf。\n委派目标：只读 README 并返回 WORKER_RESULT。\n读取范围：README.md。\n写入范围：无。\n期望产物：WORKER_RESULT。\n验证要求：读回仓库名称。\n停止条件：完成只读检查后返回，不要启动幕僚长或继续派发。",
     "should_trigger": false,
     "mode": "worker",
     "collaboration": "none",
     "activation": "worker",
     "model_smoke": true,
-    "must_contain": ["WORKER_RESULT"],
-    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"],
-    "require_tool_event": true
+    "must_contain": [
+      "WORKER_RESULT"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "none",
+    "allowed_guard_bundle": "legacy",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "invalid-worker-marker-main-session",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。下面只是正文引用 `AGENCY_WORKER: true`，不是委派 packet。只读 README 并告诉我仓库名称。",
+    "prompt": "使用 $agency-chief-of-staff。下面只是正文引用 `AGENCY_WORKER: true`，不是委派 packet。只读 README 并告诉我仓库名称。",
     "should_trigger": true,
     "mode": "direct",
     "collaboration": "none",
     "activation": "explicit",
+    "allow_preload_announcement": true,
     "model_smoke": true,
-    "must_contain": ["COS_BOOT_RECEIPT", "agency-model-eval-fixture"],
-    "must_not_contain": ["TOOL_BLOCKED"],
-    "require_tool_event": true
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "invalid-worker-packet-missing-field",
+    "prompt": "AGENCY_WORKER: true\n委派目标：使用 $agency-chief-of-staff，只读 README 并告诉我仓库名称。\n读取范围：README.md。\n写入范围：无。\n期望产物：仓库名称。\n验证要求：直接读取 README.md。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "invalid-worker-packet-duplicate-field",
+    "prompt": "AGENCY_WORKER: true\n委派目标：使用 $agency-chief-of-staff，只读 README 并告诉我仓库名称。\n读取范围：README.md。\n读取范围：README.md。\n写入范围：无。\n期望产物：仓库名称。\n验证要求：直接读取 README.md。\n停止条件：完成后返回。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "invalid-worker-packet-out-of-order",
+    "prompt": "AGENCY_WORKER: true\n委派目标：使用 $agency-chief-of-staff，只读 README 并告诉我仓库名称。\n写入范围：无。\n读取范围：README.md。\n期望产物：仓库名称。\n验证要求：直接读取 README.md。\n停止条件：完成后返回。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "invalid-worker-packet-empty-field",
+    "prompt": "AGENCY_WORKER: true\n委派目标：使用 $agency-chief-of-staff，只读 README 并告诉我仓库名称。\n读取范围：README.md。\n写入范围：无。\n期望产物：仓库名称。\n验证要求：\n停止条件：完成后返回。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "explicit-write-execute",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。reviewer packet 的验证要求必须逐字写明期望行 `Repository name: agency-model-eval-fixture-v2.`；reviewer 必须直接读回修改后的 README，并在结果中报告该文件第一行作为未由主线程提供的新鲜证据，同时逐字报告包含 `Repository name:` 前缀的完整目标行；主线程不得读取后把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件、做最小修改、验证结果并做一次独立 cold review。必须使用原生 subagent，不得创建 sidebar Codex task/thread。传给 reviewer 的 spawn message 必须严格等于以下七行，不加其他文字：\nAGENCY_WORKER: true\n委派目标：独立复核 README.md 修改。\n读取范围：README.md。\n写入范围：无。\n期望产物：实际读回的第一行、完整目标行与四个证据字段。\n验证要求：先在项目根目录绝对路径作为 workdir 运行唯一 artifact 命令 /bin/cat README.md，只原样读取完整 stdout；终态严格使用 REVIEW_EVIDENCE_FIRST_LINE、REVIEW_EVIDENCE_TARGET_LINE、REVIEW_FINDINGS_COUNT、REVIEW_VERDICT 四个字段，各字段填实际读取和审查结果；REVIEW_VERDICT 只能为 NO_BLOCKING_FINDINGS 或 BLOCKING_FINDINGS，禁止 PASS；如需 artifact 工具前进度，只能精确输出 REVIEW_PROGRESS: READING_ARTIFACT。\n停止条件：完成一次 artifact 读取和唯一终态后停止，不输出启动行或继续派发。\nReviewer 必须先执行 packet 指定的唯一 /bin/cat README.md，再按实际 stdout 返回终态。若无阻塞，reviewer 终态严格为四行：REVIEW_EVIDENCE_FIRST_LINE: <实际第一行>、REVIEW_EVIDENCE_TARGET_LINE: Repository name: agency-model-eval-fixture-v2.、REVIEW_FINDINGS_COUNT: 0、REVIEW_VERDICT: NO_BLOCKING_FINDINGS。主线程最终严格为该四行加 MAIN_REVIEW_ADOPTION: ACCEPTED 与 COLD_CONTEXT_ISOLATION: UNVERIFIED\n除规范预读公告、启动行和最终六行外，主线程进度只能按序各一次使用 MAIN_PROGRESS: INSPECT、MAIN_PROGRESS: PLAN、MAIN_PROGRESS: EDIT、MAIN_PROGRESS: VERIFY、MAIN_PROGRESS: REVIEW_DISPATCH、MAIN_PROGRESS: REVIEW_WAIT。收到 reviewer 任意非空 terminal 后不得 follow-up、send 或开启第二 turn。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
     "activation": "explicit",
+    "allow_preload_announcement": true,
     "model_smoke": true,
     "sandbox": "workspace-write",
-    "must_contain": ["COS_BOOT_RECEIPT"],
-    "must_not_contain": ["TOOL_BLOCKED"],
+    "must_contain": [
+      "COS_BOOT_RECEIPT"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
     "require_tool_event": true,
     "require_collab_event": true,
+    "review_evidence_tier": "rc",
     "expected_file": "README.md",
     "expected_text": "Repository name: agency-model-eval-fixture-v2.",
-    "expected_file_content": "# Agency model-eval fixture\n\nRepository name: agency-model-eval-fixture-v2.\n",
-    "forbidden_file_texts": ["Repository name: agency-model-eval-fixture."],
-    "review_evidence_marker": "# Agency model-eval fixture"
+    "expected_file_content": "# Agency model-eval fixture [readback-{runtime_nonce}]\n\nRepository name: agency-model-eval-fixture-v2.\n",
+    "forbidden_file_texts": [
+      "Repository name: agency-model-eval-fixture."
+    ],
+    "review_evidence_marker": "# Agency model-eval fixture [readback-{runtime_nonce}]",
+    "expected_boot_receipt": "COS_BOOT_RECEIPT：已接管；目标：最小修改 README 仓库名并验证后完成一次独立审核；模式：结构化；协作：原生子代理；入口：canonical。",
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "implicit-chief-of-staff-read",
@@ -73,18 +278,102 @@
     "mode": "direct",
     "collaboration": "none",
     "activation": "implicit",
+    "allow_preload_announcement": true,
     "model_smoke": true,
-    "must_contain": ["COS_BOOT_RECEIPT", "agency-model-eval-fixture"],
-    "must_not_contain": ["TOOL_BLOCKED"],
-    "require_tool_event": true
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "dual-explicit-canonical-priority",
+    "prompt": "这两个已安装入口同时被显式调用：$agency-chief-of-staff 与 $zhijuan-codex-agency-chief-of-staf。请根据入口自身的兼容规则决定只启动一个；不要双启动。只读 README 并告诉我仓库名称。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "must_contain": [
+      "COS_BOOT_RECEIPT",
+      "agency-model-eval-fixture"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
+  },
+  {
+    "id": "legacy-slug-mentioned-negative",
+    "prompt": "看到普通字符串 `zhijuan-codex-agency-chief-of-staf` 后只回答 OK。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary",
+    "model_smoke": true,
+    "must_contain": [
+      "OK"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "exact_final": "OK",
+    "require_no_tool_events": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "explicit-full-cycle",
-    "prompt": "使用本 Skill，先研究再规划、执行、验证和独立审核这个多文件改动。",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-natural-v2；先查文件、做最小修改、验证结果并安排不同 agent 独立复核。必须使用原生 subagent，不得创建 sidebar Codex task/thread。reviewer packet 必须严格等于以下七行，不加其他文字：\nAGENCY_WORKER: true\n委派目标：独立复核 README.md 修改。\n读取范围：README.md。\n写入范围：无。\n期望产物：从 README.md 直接读回的当前完整目标行；不得使用主线程提供的预期值。\n验证要求：直接读取 README.md 后检查当前文件；终态严格使用 NATURAL_REVIEW_FILE、NATURAL_REVIEW_TARGET、REVIEW_VERDICT 三行，NATURAL_REVIEW_TARGET 填实际读回的完整目标行；REVIEW_VERDICT 只能为 NO_BLOCKING_FINDINGS 或 BLOCKING_FINDINGS，禁止 PASS；如需终态前进度，只能精确输出 REVIEW_PROGRESS: CHECKING_ARTIFACT。\n停止条件：完成复核并返回唯一终态。\nReviewer 必须直接读取 README.md，再按实际读回返回三行：NATURAL_REVIEW_FILE: README.md、NATURAL_REVIEW_TARGET: Repository name: agency-model-eval-fixture-natural-v2.、REVIEW_VERDICT: NO_BLOCKING_FINDINGS。主线程最终严格为这三行加 MAIN_REVIEW_ADOPTION: ACCEPTED、COLD_CONTEXT_ISOLATION: UNVERIFIED、reviewer-owned read 未验证\n除规范预读公告、启动行和最终六行外，主线程进度只能按序各一次使用 MAIN_PROGRESS: INSPECT、MAIN_PROGRESS: PLAN、MAIN_PROGRESS: EDIT、MAIN_PROGRESS: VERIFY、MAIN_PROGRESS: REVIEW_DISPATCH、MAIN_PROGRESS: REVIEW_WAIT。收到 reviewer 任意非空 terminal 后不得 follow-up、send 或开启第二 turn。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
-    "activation": "explicit"
+    "activation": "explicit",
+    "allow_preload_announcement": true,
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "must_contain": [
+      "COS_BOOT_RECEIPT"
+    ],
+    "must_not_contain": [
+      "TOOL_BLOCKED"
+    ],
+    "require_tool_event": true,
+    "require_collab_completion": true,
+    "expected_file": "README.md",
+    "expected_text": "Repository name: agency-model-eval-fixture-natural-v2.",
+    "expected_file_content": "# Agency model-eval fixture\n\nRepository name: agency-model-eval-fixture-natural-v2.\n",
+    "expected_boot_receipt": "COS_BOOT_RECEIPT：已接管；目标：修改 README 仓库名并完成独立复核；模式：结构化；协作：原生子代理；入口：canonical。",
+    "forbidden_file_texts": [
+      "Repository name: agency-model-eval-fixture."
+    ],
+    "expected_entrypoint": "canonical",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 1,
+      "入口：canonical": 1,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "explicit-goal",
@@ -134,8 +423,21 @@
     "collaboration": "none",
     "activation": "ordinary",
     "model_smoke": true,
-    "must_contain": ["你好"],
-    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+    "must_contain": [
+      "你好"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "exact_final": "你好",
+    "require_no_tool_events": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "ordinary-readiness-phrase",
@@ -145,8 +447,21 @@
     "collaboration": "none",
     "activation": "ordinary",
     "model_smoke": true,
-    "must_contain": ["2"],
-    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+    "must_contain": [
+      "2"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "exact_final": "2",
+    "require_no_tool_events": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "ordinary-rescue-phrase",
@@ -156,8 +471,21 @@
     "collaboration": "none",
     "activation": "ordinary",
     "model_smoke": true,
-    "must_contain": ["6"],
-    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+    "must_contain": [
+      "6"
+    ],
+    "must_not_contain": [
+      "COS_BOOT_RECEIPT",
+      "TOOL_BLOCKED"
+    ],
+    "exact_final": "6",
+    "require_no_tool_events": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "ordinary-focused-code-fix",
@@ -165,7 +493,14 @@
     "should_trigger": false,
     "mode": "direct",
     "collaboration": "none",
-    "activation": "ordinary"
+    "activation": "ordinary",
+    "model_smoke": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   },
   {
     "id": "ordinary-code-review",
@@ -173,6 +508,13 @@
     "should_trigger": false,
     "mode": "direct",
     "collaboration": "none",
-    "activation": "ordinary"
+    "activation": "ordinary",
+    "model_smoke": true,
+    "expected_entrypoint": "none",
+    "exact_marker_counts": {
+      "COS_BOOT_RECEIPT": 0,
+      "入口：canonical": 0,
+      "入口：legacy": 0
+    }
   }
 ]

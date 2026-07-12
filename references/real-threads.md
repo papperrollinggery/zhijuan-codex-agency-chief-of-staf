@@ -29,7 +29,7 @@ TOOL_BLOCKED：缺少真实 Codex task/thread 或 isolated worktree 能力；未
 
 使用工具返回的真实 id。不要填写 `pending`、`unknown`、`same-thread`、主线程 id 或猜测值。
 
-给 worker 的 prompt 至少包含：
+给 worker 的 prompt 只能包含以下七行：
 
 ```text
 AGENCY_WORKER: true
@@ -39,8 +39,9 @@ AGENCY_WORKER: true
 期望产物：<expected artifact/receipt>。
 验证要求：<checks and evidence>。
 停止条件：完成范围后返回；不要重分级或继续派发。
-真实 task/thread id：<id>。
 ```
+
+真实 task/thread id 只能由工具 readback 和 receipt 记录，不附加到 worker packet；默认 packet 不含 `$slug` 或 guard-read 指令。
 
 工具只返回 pending worktree id 时，状态只能是 `dispatch_pending`。等真实 task/thread id 可读回后再记为 `dispatched`。
 
