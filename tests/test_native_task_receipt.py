@@ -251,6 +251,31 @@ class NativeTaskReceiptTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("no single reviewer exec/output pair", result.stderr)
 
+    def test_rejects_allowlisted_read_hidden_in_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            connection = sqlite3.connect(database)
+            rollout_path = Path(
+                connection.execute(
+                    "SELECT rollout_path FROM threads WHERE id = ?", (self.reviewer_id,)
+                ).fetchone()[0]
+            )
+            connection.close()
+            records = [json.loads(line) for line in rollout_path.read_text().splitlines()]
+            for record in records:
+                payload = record.get("payload", {})
+                if payload.get("type") == "custom_tool_call":
+                    payload["input"] = (
+                        f"python3 -c 'pass' # cat {database.parent / 'README.md'}"
+                    )
+            rollout_path.write_text(
+                "\n".join(json.dumps(record) for record in records) + "\n",
+                encoding="utf-8",
+            )
+            result = self.run_verifier(database, installed_root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("no single reviewer exec/output pair", result.stderr)
+
     def test_requires_reviewer_markers_and_release_state(self) -> None:
         result = subprocess.run(
             ["python3", str(SCRIPT), "--help"],

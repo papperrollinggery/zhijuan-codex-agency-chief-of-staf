@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -37,6 +38,43 @@ def string_content(value: Any) -> str:
     if isinstance(value, dict):
         return "\n".join(string_content(item) for item in value.values())
     return ""
+
+
+def command_reads_artifact(call_input: str, artifact: Path) -> bool:
+    if any(token in call_input for token in ("#", "//", "|", ">", "<", ";", "&&", "||")):
+        return False
+    candidates: list[tuple[str, Path | None]] = []
+    variables = {
+        match.group(1): Path(match.group(2)).expanduser().absolute()
+        for match in re.finditer(r'const\s+(\w+)\s*=\s*"([^"]+)"', call_input)
+    }
+    for match in re.finditer(
+        r'cmd:\s*"([^"]+)"\s*,\s*workdir:\s*(?:"([^"]+)"|(\w+))', call_input
+    ):
+        cwd = Path(match.group(2)).expanduser().absolute() if match.group(2) else variables.get(match.group(3))
+        candidates.append((match.group(1), cwd))
+    if not candidates:
+        candidates.append((call_input, None))
+
+    for command, cwd in candidates:
+        try:
+            argv = shlex.split(command)
+        except ValueError:
+            continue
+        if not argv:
+            continue
+        executable = Path(argv[0]).name
+        if executable not in {"sed", "cat", "rg", "git"}:
+            continue
+        if executable == "git" and (len(argv) < 2 or argv[1] not in {"diff", "show"}):
+            continue
+        for argument in argv[1:]:
+            candidate = Path(argument).expanduser()
+            if not candidate.is_absolute() and cwd is not None:
+                candidate = cwd / candidate
+            if candidate.absolute() == artifact:
+                return True
+    return False
 
 
 def thread_row(database: sqlite3.Connection, thread_id: str) -> dict[str, Any]:
@@ -141,22 +179,11 @@ def verify_reviewer_read(
     }
     if not outputs:
         raise ValueError("reviewer has no completed exec call with bound output")
-    allowed_reads = ("sed ", "cat ", "rg ", "git diff", "git show")
-    forbidden_prints = ("printf ", "echo ")
     bound_calls = []
     for call_id, output in outputs.items():
         call_input = calls[call_id]
-        has_path = (
-            str(artifact_path) in call_input
-            or (
-                str(artifact_path.parent) in call_input
-                and artifact_path.name in call_input
-            )
-        )
         if (
-            has_path
-            and any(token in call_input for token in allowed_reads)
-            and not any(token in call_input for token in forbidden_prints)
+            command_reads_artifact(call_input, artifact_path)
             and (artifact_text in output or artifact_text_json in output)
             and all(marker in output for marker in markers)
         ):
