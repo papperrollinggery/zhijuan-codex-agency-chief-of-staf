@@ -32,11 +32,12 @@
 关键设计：
 
 - 主线程是 outcome owner，可以直接研究、编辑、测试、整合和交付。
-- 动态使用 1–3 个边界清晰的 subagent，不维护固定 16 角色组织。
+- 按收益使用最少必要的 subagent：普通任务不派发，独立审核通常只需 1 名 reviewer；不维护固定 16 角色组织。
 - Goal 只用于明确的长期目标，不为短任务生成 Goal Ledger。
 - 真实 task/thread 只在用户明确要求真实独立执行面时使用。
 - 只有机器审计确实需要时才输出结构化 receipt。
 - 默认一次 cold review 加一次修复后的定向复核，避免无限 review wave。
+- 声称独立审核已完成时，必须能回查非空 reviewer/task id、与该 id 绑定的唯一终态，以及 reviewer 对当前 artifact 的直接读回；空 `wait`、主线程自审、或只声明 `none` / `fork_context:false` 均不算。工具未明确回显上下文隔离时，必须披露 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。
 
 ## 不依赖 AGENTS.md
 
@@ -119,6 +120,7 @@ bash scripts/quality_gate.sh .
 
 ```bash
 export CODEX_EVAL_AUTH_JSON=/path/to/dedicated-eval-auth.json
+export CODEX_EVAL_CODEX=/absolute/path/to/codex
 ```
 
 运行全量真实模型前测：
@@ -127,12 +129,15 @@ export CODEX_EVAL_AUTH_JSON=/path/to/dedicated-eval-auth.json
 python3 scripts/run_model_evals.py \
   --root . \
   --out validation/current/model-smoke-$(date +%Y%m%d-%H%M%S) \
+  --codex-executable "$CODEX_EVAL_CODEX" \
+  --model gpt-5.6-sol \
+  --reasoning-effort max \
   --auth-json "$CODEX_EVAL_AUTH_JSON" \
   --auth-credential-class dedicated \
   --acknowledge-auth-readable-to-eval-process
 ```
 
-Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界 case id/artifact 路径、既有输出目录和 symlink；全部 case 复用冻结的 runtime snapshot，收据绑定 Skill manifest、case 文件和 runner hash，并检测运行中源码漂移。host-default 的模型名若只能从诊断日志推断，不会被视为稳定的 release model identity；prerelease eligibility 要求显式模型和专用凭据，stable eligibility 还要求没有未测能力。
+Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界 case id/artifact 路径、既有输出目录和 symlink；全部 case 复用冻结的 runtime snapshot，收据绑定 Skill manifest、case 文件和 runner hash，并检测运行中源码漂移。host-default 的模型名若只能从诊断日志推断，不会被视为稳定的 release model identity；本 RC 的 prerelease eligibility 要求显式 `gpt-5.6-sol`、`max`、同一 session 内的身份三元组和专用凭据，stable eligibility 还要求没有未测能力。
 
 `--auth-credential-class primary` 只允许生成诊断收据，永远不具备 prerelease/stable eligibility；公开发布证据必须使用 `dedicated`。
 

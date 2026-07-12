@@ -100,6 +100,39 @@ class ValidatePackageMutationTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("unsafe behavior case id", result.stderr)
 
+    def test_rejects_worker_and_reviewer_packet_outcome_leaks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "evals" / "behavior_cases.json"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "返回唯一终态；不启动、不派发。",
+                    "返回唯一终态；不启动、不派发。SENTINEL_Z9K4",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("complete packet", result.stderr)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "evals" / "behavior_cases.json"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    "reviewer 不得输出 COS_BOOT_RECEIPT 或进度；主线程不得把第一行内容转述给 reviewer。",
+                    "reviewer 不得输出 COS_BOOT_RECEIPT 或进度；REVIEW_VERDICT: GO。",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review verdict", result.stderr)
+
     def test_rejects_machine_specific_fixture_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.make_copy(Path(tmp))

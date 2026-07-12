@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import stat
 import subprocess
 import sys
@@ -23,6 +24,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from install_skill import SKILL_NAME, copy_runtime, runtime_manifest
+from validate_package import (
+    REVIEW_OUTCOME_RE,
+    SKILL_SLUG_RE,
+    valid_worker_packet as package_valid_worker_packet,
+    worker_packet_fields,
+)
 
 
 TOOL_ITEM_TYPES = {
@@ -35,6 +42,7 @@ TOOL_ITEM_TYPES = {
 ASSISTANT_ITEM_TYPES = {"agent_message", "assistant_message"}
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 MODEL_RE = re.compile(r"\bmodel=([A-Za-z0-9._-]+)")
+PROGRESS_RE = re.compile(r"(?:MAIN_PROGRESS|\bprogress\b|进度)", re.IGNORECASE)
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ALLOWED_MODES = {"direct", "structured", "goal", "worker"}
 ALLOWED_COLLABORATION = {
@@ -44,6 +52,13 @@ ALLOWED_COLLABORATION = {
     "real_task",
 }
 ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker"}
+ALLOWED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
+RC_PRERELEASE_MODEL = "gpt-5.6-sol"
+RC_PRERELEASE_REASONING_EFFORT = "max"
+EVALUATOR_DEPENDENCIES = (
+    "scripts/install_skill.py",
+    "scripts/validate_package.py",
+)
 REQUIRED_SMOKE_CONTRACT = {
     "explicit-small-direct": {
         "should_trigger": True,
@@ -70,6 +85,14 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "explicit",
     },
     "explicit-write-execute": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents",
+        "activation": "explicit",
+        "sandbox": "workspace-write",
+        "require_collab_event": True,
+    },
+    "explicit-full-cycle": {
         "should_trigger": True,
         "mode": "structured",
         "collaboration": "native_subagents",
@@ -142,6 +165,75 @@ def read_regular_nofollow(path: Path) -> bytes:
         os.close(descriptor)
 
 
+def native_executable_format(path: Path) -> str | None:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            return None
+        header = os.read(descriptor, 4)
+    finally:
+        os.close(descriptor)
+    if header == b"\x7fELF":
+        return "elf"
+    if header[:2] == b"MZ":
+        return "pe"
+    if header in {
+        b"\xfe\xed\xfa\xce",
+        b"\xce\xfa\xed\xfe",
+        b"\xfe\xed\xfa\xcf",
+        b"\xcf\xfa\xed\xfe",
+        b"\xca\xfe\xba\xbe",
+        b"\xbe\xba\xfe\xca",
+    }:
+        return "macho"
+    return None
+
+
+def sha256_regular_nofollow(path: Path) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RuntimeError(f"cannot safely open regular file: {path}") from exc
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise RuntimeError(f"expected a regular file: {path}")
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        os.close(descriptor)
+
+
+def source_git_state(root: Path) -> dict[str, object]:
+    """Fingerprint the evaluated worktree without embedding its diff in a receipt."""
+    revision = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    status = subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if revision.returncode != 0 or status.returncode != 0:
+        return {"available": False}
+    return {
+        "available": True,
+        "head": revision.stdout.strip(),
+        "worktree_dirty": bool(status.stdout.strip()),
+        "worktree_status_sha256": sha256_bytes(status.stdout.encode()),
+    }
+
+
 def receipt_status(full_run: bool, results: list[dict[str, object]]) -> str:
     if not results or not all(item.get("status") == "passed" for item in results):
         return "failed"
@@ -151,14 +243,18 @@ def receipt_status(full_run: bool, results: list[dict[str, object]]) -> str:
 def release_eligibility(
     status: str,
     full_run: bool,
-    explicit_model: bool,
+    requested_model: str | None,
+    requested_reasoning_effort: str | None,
+    model_identity_verified: bool,
     credential_class: str,
     untested_capabilities: list[str],
 ) -> tuple[bool, bool]:
     prerelease = (
         status == "passed"
         and full_run
-        and explicit_model
+        and requested_model == RC_PRERELEASE_MODEL
+        and requested_reasoning_effort == RC_PRERELEASE_REASONING_EFFORT
+        and model_identity_verified
         and credential_class == "dedicated"
     )
     stable = prerelease and not untested_capabilities
@@ -195,6 +291,20 @@ def build_isolated_env(
     return env
 
 
+def resolve_codex_executable(value: str | None) -> Path:
+    if value is None:
+        raise RuntimeError("--codex-executable is required")
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        raise RuntimeError("--codex-executable must be an absolute path")
+    if candidate.is_symlink() or not candidate.is_file() or not os.access(candidate, os.X_OK):
+        raise RuntimeError("codex executable must be one executable non-symlink file")
+    resolved = candidate.resolve()
+    if native_executable_format(resolved) is None:
+        raise RuntimeError("codex executable must use a native executable format")
+    return resolved
+
+
 def collect_auth_secrets(value: object) -> set[str]:
     secrets: set[str] = set()
     if isinstance(value, dict):
@@ -219,17 +329,30 @@ def redact_exact_auth_values(text: str, secrets: set[str]) -> tuple[str, bool]:
 
 
 def is_valid_worker_packet(prompt: str) -> bool:
-    first_nonempty = next((line.strip() for line in prompt.splitlines() if line.strip()), "")
-    required_labels = (
-        "委派目标",
-        "读取范围",
-        "写入范围",
-        "期望产物",
-        "验证要求",
-        "停止条件",
-    )
-    return first_nonempty == "AGENCY_WORKER: true" and all(
-        label in prompt for label in required_labels
+    return package_valid_worker_packet(prompt)
+
+
+def is_passive_skill_read(
+    item: dict[str, object], installed_skill_path: Path | None, fixture_root: Path | None
+) -> bool:
+    """Allow only the host's one passive direct read of the installed skill."""
+    if item.get("type") != "command_execution" or installed_skill_path is None:
+        return False
+    command = item.get("command")
+    if not isinstance(command, str):
+        return False
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return False
+    candidate = Path(parts[1]) if len(parts) == 2 else None
+    if candidate is not None and not candidate.is_absolute() and fixture_root is not None:
+        candidate = fixture_root / candidate
+    return (
+        len(parts) == 2
+        and Path(parts[0]).name == "cat"
+        and candidate is not None
+        and candidate.resolve(strict=False) == installed_skill_path.resolve(strict=False)
     )
 
 
@@ -240,6 +363,110 @@ def safe_relative_artifact(value: object, case_id: str) -> PurePosixPath:
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
         raise RuntimeError(f"case {case_id} expected_file escapes the fixture")
     return path
+
+
+def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, object]:
+    expected_cwd = str(fixture.resolve())
+    models: set[str] = set()
+    providers: set[str] = set()
+    efforts: set[str] = set()
+    session_count = 0
+    turn_count = 0
+    session_observations: list[dict[str, object]] = []
+    sessions_root = codex_home / "sessions"
+    if not sessions_root.is_dir():
+        return {
+            "models": [],
+            "providers": [],
+            "reasoning_efforts": [],
+            "session_count": 0,
+            "turn_count": 0,
+            "session_observations": [],
+        }
+    for path in sorted(sessions_root.rglob("*.jsonl")):
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        file_models: set[str] = set()
+        file_providers: set[str] = set()
+        file_efforts: set[str] = set()
+        file_session_count = 0
+        file_turn_count = 0
+        for line in lines:
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            payload = record.get("payload")
+            if not isinstance(payload, dict) or str(payload.get("cwd", "")) != expected_cwd:
+                continue
+            if record.get("type") == "session_meta":
+                session_count += 1
+                file_session_count += 1
+                provider = payload.get("model_provider")
+                if isinstance(provider, str) and provider:
+                    providers.add(provider)
+                    file_providers.add(provider)
+            if record.get("type") == "turn_context":
+                turn_count += 1
+                file_turn_count += 1
+                model = payload.get("model")
+                effort = payload.get("effort")
+                if isinstance(model, str) and model:
+                    models.add(model)
+                    file_models.add(model)
+                if isinstance(effort, str) and effort:
+                    efforts.add(effort)
+                    file_efforts.add(effort)
+        if file_session_count or file_turn_count:
+            session_observations.append(
+                {
+                    "providers": sorted(file_providers),
+                    "models": sorted(file_models),
+                    "reasoning_efforts": sorted(file_efforts),
+                    "session_count": file_session_count,
+                    "turn_count": file_turn_count,
+                }
+            )
+    return {
+        "models": sorted(models),
+        "providers": sorted(providers),
+        "reasoning_efforts": sorted(efforts),
+        "session_count": session_count,
+        "turn_count": turn_count,
+        "session_observations": session_observations,
+    }
+
+
+def execution_identity_matches(
+    identity: dict[str, object], model: str | None, reasoning_effort: str | None
+) -> bool:
+    raw_session_observations = identity.get("session_observations", [])
+    session_observations = (
+        [item for item in raw_session_observations if isinstance(item, dict)]
+        if isinstance(raw_session_observations, list)
+        else []
+    )
+    return bool(session_observations) and all(
+        observation.get("providers") == ["openai"]
+        and isinstance(observation.get("models"), list)
+        and len(observation["models"]) == 1
+        and isinstance(observation.get("reasoning_efforts"), list)
+        and len(observation["reasoning_efforts"]) == 1
+        and (model is None or observation["models"] == [model])
+        and (
+            reasoning_effort is None
+            or observation["reasoning_efforts"] == [reasoning_effort]
+        )
+        and observation.get("session_count", 0) >= 1
+        and observation.get("turn_count", 0) >= 1
+        for observation in session_observations
+    )
 
 
 def validate_runtime_case(case: object) -> dict[str, Any]:
@@ -302,8 +529,28 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} file assertions need expected_file")
     if case["activation"] == "worker" and not is_valid_worker_packet(str(case["prompt"])):
         raise RuntimeError(f"case {case_id} worker activation needs a complete first-line packet")
-    if case.get("require_collab_event") and "review_evidence_marker" not in case:
-        raise RuntimeError(f"case {case_id} cold review needs an undisclosed evidence marker")
+    if case.get("require_collab_event"):
+        if (
+            not has_file
+            or not isinstance(case.get("expected_file_content"), str)
+            or not case["expected_file_content"]
+        ):
+            raise RuntimeError(
+                f"case {case_id} cold review needs one exact expected artifact"
+            )
+        if case["collaboration"] != "native_subagents" or not case.get("model_smoke"):
+            raise RuntimeError(
+                f"case {case_id} cold review must be a native-subagent model smoke"
+            )
+        if "review_evidence_marker" not in case:
+            raise RuntimeError(f"case {case_id} cold review needs an undisclosed evidence marker")
+        prompt = str(case["prompt"])
+        if str(case["expected_text"]) in prompt:
+            raise RuntimeError(f"case {case_id} cold review discloses the expected target")
+        if str(case["review_evidence_marker"]) in prompt:
+            raise RuntimeError(f"case {case_id} cold review discloses the evidence marker")
+        if REVIEW_OUTCOME_RE.search(prompt):
+            raise RuntimeError(f"case {case_id} cold review discloses the reviewer verdict")
     return case
 
 
@@ -330,41 +577,74 @@ def validate_smoke_suite(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [case for case in cases if case.get("model_smoke")]
 
 
-def event_surface(events_text: str, final_text: str) -> dict[str, object]:
+def event_surface(
+    events_text: str,
+    final_text: str,
+    installed_skill_path: Path | None = None,
+    fixture_root: Path | None = None,
+) -> dict[str, object]:
     messages: list[str] = []
+    message_events: list[dict[str, object]] = []
     tool_item_ids: set[str] = set()
     spawns: dict[str, dict[str, object]] = {}
     waits: dict[str, dict[str, object]] = {}
     successful_tool_event_indexes: list[int] = []
+    task_action_event_indexes: list[int] = []
+    collaboration_event_indexes: list[int] = []
     last_file_change_event_index = -1
+    passive_skill_read_ids: set[str] = set()
     for index, line in enumerate(events_text.splitlines()):
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if not isinstance(event, dict) or event.get("type") != "item.completed":
+        if not isinstance(event, dict) or event.get("type") not in {
+            "item.started",
+            "item.completed",
+        }:
             continue
         item = event.get("item")
         if not isinstance(item, dict):
             continue
         item_type = item.get("type")
-        if item_type in ASSISTANT_ITEM_TYPES:
+        completed = event.get("type") == "item.completed"
+        if completed and item_type in ASSISTANT_ITEM_TYPES:
             for key in ("text", "content", "message"):
                 value = item.get(key)
                 if isinstance(value, str):
                     messages.append(value)
+                    message_events.append({"event_index": index, "text": value})
                     break
         if item_type in TOOL_ITEM_TYPES:
             status = item.get("status")
             exit_code = item.get("exit_code")
             command_ok = item_type != "command_execution" or exit_code in {None, 0}
             status_ok = status not in {"failed", "cancelled"}
-            if command_ok and status_ok:
+            passive_skill_read = is_passive_skill_read(
+                item, installed_skill_path, fixture_root
+            )
+            # The startup contract is about attempted task actions, not only
+            # successful ones: a started or failed edit/read before boot is still an action.
+            item_id = item.get("id")
+            if (
+                passive_skill_read
+                and isinstance(item_id, str)
+                and (not passive_skill_read_ids or item_id in passive_skill_read_ids)
+            ):
+                passive_skill_read_ids.add(item_id)
+            else:
+                task_action_event_indexes.append(index)
+            if completed and command_ok and status_ok:
                 tool_item_ids.add(str(item.get("id", f"event-{index}")))
                 successful_tool_event_indexes.append(index)
                 if item_type == "file_change":
                     last_file_change_event_index = index
-        if item_type != "collab_tool_call" or item.get("status") != "completed":
+        if item_type == "collab_tool_call":
+            # Any collaboration attempt, including wait/follow-up and a failed
+            # dispatch, is a task action and is forbidden for a worker.
+            task_action_event_indexes.append(index)
+            collaboration_event_indexes.append(index)
+        if item_type != "collab_tool_call" or not completed or item.get("status") != "completed":
             continue
         receiver_ids = item.get("receiver_thread_ids")
         if not isinstance(receiver_ids, list):
@@ -376,12 +656,11 @@ def event_surface(events_text: str, final_text: str) -> dict[str, object]:
                         "spawn_event_index": index,
                         "prompt": item.get("prompt") if isinstance(item.get("prompt"), str) else "",
                         "sender_thread_id": item.get("sender_thread_id"),
-                        "context_isolation_verified": (
-                            item.get("fork_turns") == "none"
-                            or item.get("context_mode") in {"none", "isolated"}
-                        ),
+                        # Requested isolation is not a readback. Only an explicit
+                        # tool-returned verification may establish this fact.
+                        "context_isolation_verified": item.get("context_isolation_verified") is True,
                     }
-        if item.get("tool") == "wait":
+        if item.get("tool") in {"wait", "wait_agent"}:
             states = item.get("agents_states")
             if not isinstance(states, dict):
                 continue
@@ -405,23 +684,91 @@ def event_surface(events_text: str, final_text: str) -> dict[str, object]:
         messages.append(final_text)
     return {
         "surface": "\n".join(messages),
+        "assistant_messages": message_events,
         "tool_events": len(tool_item_ids),
         "spawn_completed": spawns,
         "reviews_completed": completed_reviews,
         "successful_tool_event_indexes": successful_tool_event_indexes,
+        "task_action_event_indexes": task_action_event_indexes,
+        "collaboration_event_indexes": collaboration_event_indexes,
         "last_file_change_event_index": last_file_change_event_index,
     }
 
 
-def contract_failures(case: dict[str, Any], surface: str) -> list[str]:
+def contract_failures(
+    case: dict[str, Any], surface_or_events: str | dict[str, object]
+) -> list[str]:
     failures: list[str] = []
-    booted = "COS_BOOT_RECEIPT" in surface
+    if isinstance(surface_or_events, str):
+        surface = surface_or_events
+        message_events: list[dict[str, object]] = []
+        spawns: dict[str, dict[str, object]] = {}
+    else:
+        surface = str(surface_or_events["surface"])
+        raw_messages = surface_or_events.get("assistant_messages", [])
+        message_events = [
+            item for item in raw_messages if isinstance(item, dict)
+        ] if isinstance(raw_messages, list) else []
+        raw_spawns = surface_or_events.get("spawn_completed", {})
+        spawns = raw_spawns if isinstance(raw_spawns, dict) else {}
+        raw_actions = surface_or_events.get("task_action_event_indexes", [])
+        task_actions = [int(item) for item in raw_actions] if isinstance(raw_actions, list) else []
+        raw_collaboration = surface_or_events.get("collaboration_event_indexes", [])
+        collaboration_actions = (
+            [int(item) for item in raw_collaboration]
+            if isinstance(raw_collaboration, list)
+            else []
+        )
+    if isinstance(surface_or_events, str):
+        task_actions = []
+        collaboration_actions = []
+    boot_indexes = [
+        int(item["event_index"])
+        for item in message_events
+        if str(item.get("text", "")).lstrip().startswith("COS_BOOT_RECEIPT")
+    ]
+    booted = (
+        "COS_BOOT_RECEIPT" in surface
+        if isinstance(surface_or_events, str)
+        else len(boot_indexes) == 1
+    )
     if case["should_trigger"] and not booted:
         failures.append("should_trigger=true but no COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"]:
+        if case["activation"] == "worker" and len(message_events) != 1:
+            failures.append("worker must return exactly one terminal message")
+        if case["activation"] == "worker" and PROGRESS_RE.search(surface):
+            failures.append("worker or ordinary case emitted main-thread progress")
+        if collaboration_actions:
+            failures.append("worker or ordinary case attempted collaboration")
         return failures
+
+    if message_events and len(boot_indexes) != 1:
+        failures.append("main session must emit exactly one boot receipt")
+    if boot_indexes:
+        boot_index = boot_indexes[0]
+        if any(
+            int(item["event_index"]) < boot_index
+            for item in message_events
+        ):
+            failures.append("assistant message preceded COS_BOOT_RECEIPT")
+        progress_indexes = [
+            int(item["event_index"])
+            for item in message_events
+            if PROGRESS_RE.search(str(item.get("text", "")))
+        ]
+        if any(index <= boot_index for index in progress_indexes):
+            failures.append("main progress preceded COS_BOOT_RECEIPT")
+        if any(index <= boot_index for index in task_actions):
+            failures.append("task action preceded COS_BOOT_RECEIPT")
+        if any(
+            int(spawn.get("spawn_event_index", -1)) <= boot_index
+            for spawn in spawns.values()
+            if isinstance(spawn, dict)
+        ):
+            failures.append("reviewer spawn preceded COS_BOOT_RECEIPT")
 
     mode_markers = {
         "direct": "模式：直接",
@@ -446,21 +793,98 @@ def contract_failures(case: dict[str, Any], surface: str) -> list[str]:
     return failures
 
 
+def expected_reviewer_packet_fields(expected_file: str) -> dict[str, str]:
+    return {
+        "委派目标": f"独立复核当前 {expected_file} 是否完成本次最小修改。",
+        "读取范围": f"{expected_file}；git diff -- {expected_file}；git diff --check。",
+        "写入范围": "无。",
+        "期望产物": "REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。",
+        "验证要求": "直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。",
+        "停止条件": "返回唯一终态；不启动、不派发。",
+    }
+
+
 def review_prompt_is_self_contained(
-    prompt: str, expected_file: str, expected_text: str
+    prompt: str, expected_file: str, expected_text: str, evidence_marker: str
 ) -> bool:
-    prompt_lower = prompt.lower()
-    has_goal = any(marker in prompt_lower for marker in ("目标", "goal:", "objective:"))
-    has_scope = any(
-        marker in prompt_lower for marker in ("范围", "scope:", "read scope", "write scope")
-    )
+    fields = worker_packet_fields(prompt)
     return (
-        is_valid_worker_packet(prompt)
-        and has_goal
-        and has_scope
-        and expected_file in prompt
-        and expected_text in prompt
+        fields == expected_reviewer_packet_fields(expected_file)
+        and expected_text not in prompt
+        and evidence_marker not in prompt
+        and SKILL_SLUG_RE.search(prompt) is None
+        and REVIEW_OUTCOME_RE.search(prompt) is None
+        and "guard" not in prompt.lower()
+        and "启动幕僚长" not in prompt
+        and "使用本 skill" not in prompt.lower()
+        and "COS_BOOT_RECEIPT" not in prompt
     )
+
+
+def reviewer_terminal_fields(message: str) -> dict[str, str] | None:
+    """Accept one and only one normalized reviewer terminal schema."""
+    lines = [line.strip() for line in message.splitlines() if line.strip()]
+    labels = ("REVIEW_READBACK", "REVIEW_TARGET", "REVIEW_VERDICT")
+    if len(lines) != len(labels):
+        return None
+    fields: dict[str, str] = {}
+    for line, label in zip(lines, labels):
+        prefix = f"{label}:"
+        if not line.startswith(prefix):
+            return None
+        value = line[len(prefix) :].strip()
+        if len(value) >= 2 and value.startswith("`") and value.endswith("`"):
+            value = value[1:-1].strip()
+        if not value:
+            return None
+        fields[label] = value
+    return fields
+
+
+def verified_reviewer_terminal(
+    message: str, expected_file: str, expected_text: str
+) -> dict[str, str] | None:
+    fields = reviewer_terminal_fields(message)
+    if fields is None:
+        return None
+    if fields["REVIEW_TARGET"] != expected_file:
+        return None
+    if expected_text not in fields["REVIEW_READBACK"]:
+        return None
+    if fields["REVIEW_VERDICT"] != "PASS":
+        return None
+    return fields
+
+
+def independent_review_final_failures(
+    final_text: str,
+    completed_reviews: dict[str, object],
+    reviewer_terminals: dict[str, dict[str, str]],
+) -> list[str]:
+    """Reject a claimed reviewer result when the host never proved one."""
+    failures: list[str] = []
+    if not reviewer_terminals:
+        if "独立审核未验证" not in final_text:
+            failures.append("final answer did not disclose independent review unverified")
+        if not completed_reviews and (
+            "REVIEW_READBACK" in final_text
+            or "采纳" in final_text
+            or "reviewer 已返回" in final_text.lower()
+            or "reviewer 结论" in final_text.lower()
+        ):
+            failures.append("final answer claimed reviewer evidence without a completed spawn chain")
+        return failures
+    adopted = any(
+        "采纳" in final_text
+        and all(
+            label in final_text and value in final_text
+            for label, value in terminal.items()
+        )
+        for terminal in reviewer_terminals.values()
+    )
+    if not adopted:
+        failures.append("final answer did not adopt or report the independent review result")
+    return failures
 
 
 def checked_artifact(fixture: Path, relative: PurePosixPath) -> Path:
@@ -496,7 +920,9 @@ def run_case(
     case: dict[str, Any],
     fixture: Path,
     case_dir: Path,
+    codex_executable: Path,
     model: str | None,
+    reasoning_effort: str | None,
     timeout: int,
     env: dict[str, str],
     auth_secrets: set[str],
@@ -510,15 +936,16 @@ def run_case(
     if sandbox not in ALLOWED_SANDBOXES:
         raise RuntimeError(f"case {case['id']} requests unsafe sandbox {sandbox!r}")
     command = [
-        "codex",
+        str(codex_executable),
         "exec",
-        "--ephemeral",
         "--ignore-user-config",
         "--ignore-rules",
         "--disable",
         "plugins",
         "--disable",
         "apps",
+        "--enable",
+        "multi_agent",
         "-c",
         "shell_environment_policy.inherit=none",
         "--sandbox",
@@ -531,6 +958,8 @@ def run_case(
     ]
     if model:
         command.extend(["--model", model])
+    if reasoning_effort:
+        command.extend(["-c", f"model_reasoning_effort={json.dumps(reasoning_effort)}"])
     command.append(str(case["prompt"]))
 
     completed = subprocess.run(
@@ -558,9 +987,14 @@ def run_case(
     write_new_text(case_dir / "events.jsonl", events_text)
     write_new_text(case_dir / "stderr.txt", stderr_text)
 
-    parsed = event_surface(events_text, final_text)
+    parsed = event_surface(
+        events_text,
+        final_text,
+        fixture / ".agents" / "skills" / SKILL_NAME / "SKILL.md",
+        fixture,
+    )
     surface = str(parsed["surface"])
-    failures = contract_failures(case, surface)
+    failures = contract_failures(case, parsed)
     if completed.returncode != 0:
         failures.append(f"codex exit code {completed.returncode}")
     if final_output_unsafe:
@@ -575,6 +1009,24 @@ def run_case(
         failures.append("no completed tool event observed")
     if events_leak or stderr_leak or final_leak:
         failures.append("exact auth value appeared in model output and was redacted")
+
+    execution_identity = observed_execution_identity(Path(env["CODEX_HOME"]), fixture)
+    observed_models = execution_identity["models"]
+    observed_providers = execution_identity["providers"]
+    observed_efforts = execution_identity["reasoning_efforts"]
+    raw_session_observations = execution_identity.get("session_observations", [])
+    session_observations = (
+        [item for item in raw_session_observations if isinstance(item, dict)]
+        if isinstance(raw_session_observations, list)
+        else []
+    )
+    model_identity_verified = execution_identity_matches(
+        execution_identity, model, reasoning_effort
+    )
+    if not model_identity_verified:
+        failures.append(
+            "isolated session did not bind OpenAI provider, model, and reasoning effort together"
+        )
 
     expected_file = case.get("expected_file")
     expected_text = case.get("expected_text")
@@ -624,6 +1076,7 @@ def run_case(
     assert isinstance(completed_reviews, dict)
     review_ids: list[str] = []
     context_verified_review_ids: list[str] = []
+    reviewer_terminals: dict[str, dict[str, str]] = {}
     review_prompt_self_contained = False
     if case.get("require_collab_event"):
         if not completed_reviews:
@@ -642,14 +1095,18 @@ def run_case(
                 continue
             if review_evidence_marker and review_evidence_marker in prompt:
                 continue
-            if review_evidence_marker and review_evidence_marker not in message:
-                continue
             review_prompt_self_contained = review_prompt_is_self_contained(
-                prompt, str(expected_file), str(expected_text)
+                prompt,
+                str(expected_file),
+                str(expected_text),
+                str(review_evidence_marker),
             )
             if not review_prompt_self_contained:
                 continue
-            if "COS_BOOT_RECEIPT" in message:
+            terminal = verified_reviewer_terminal(
+                message, str(expected_file), str(expected_text)
+            )
+            if terminal is None:
                 continue
             spawn_index = int(review.get("spawn_event_index", -1))
             last_file_change = int(parsed["last_file_change_event_index"])
@@ -660,22 +1117,18 @@ def run_case(
             if not any(last_file_change < int(index) < spawn_index for index in successful_indexes):
                 continue
             review_ids.append(receiver_id)
+            reviewer_terminals[receiver_id] = terminal
             if review.get("context_isolation_verified") is True:
                 context_verified_review_ids.append(receiver_id)
         if not review_ids:
             failures.append(
                 "reviewer result did not prove post-change artifact readback with fresh evidence"
             )
-        final_lower = final_text.lower()
-        if not (
-            "独立" in final_text
-            and ("审核" in final_text or "review" in final_lower)
-            and any(
-                marker in final_text
-                for marker in ("结论", "采纳", "未发现", "发现", "满足", "残余")
+        failures.extend(
+            independent_review_final_failures(
+                final_text, completed_reviews, reviewer_terminals
             )
-        ):
-            failures.append("final answer did not adopt or report the independent review result")
+        )
         if review_ids and not context_verified_review_ids:
             isolation_disclosed = (
                 "未验证" in final_text
@@ -690,7 +1143,6 @@ def run_case(
                     "review context isolation was not observable and final answer did not disclose it"
                 )
 
-    observed_models = sorted(set(MODEL_RE.findall(raw_stderr)))
     return {
         "id": case["id"],
         "status": "passed" if not failures else "failed",
@@ -709,6 +1161,10 @@ def run_case(
         "review_receiver_ids": review_ids,
         "review_prompt_self_contained": review_prompt_self_contained,
         "observed_models": observed_models,
+        "observed_model_providers": observed_providers,
+        "observed_reasoning_efforts": observed_efforts,
+        "model_identity_verified": model_identity_verified,
+        "model_identity_session_count": len(session_observations),
         "auth_exact_value_leak_detected": (
             events_leak or stderr_leak or final_leak or artifact_leak
         ),
@@ -732,9 +1188,9 @@ def check_contamination(root: Path) -> None:
             raise RuntimeError(f"contaminated AGENTS context: {path}")
 
 
-def codex_version() -> str:
+def codex_version(codex_executable: Path) -> str:
     result = subprocess.run(
-        ["codex", "--version"], text=True, capture_output=True, check=True
+        [str(codex_executable), "--version"], text=True, capture_output=True, check=True
     )
     return result.stdout.strip()
 
@@ -754,7 +1210,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run real Codex model smoke cases.")
     parser.add_argument("--root", type=Path, default=Path("."))
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--codex-executable",
+        required=True,
+        help="Absolute native Codex executable used for every evaluated case.",
+    )
     parser.add_argument("--model", help="Optional explicit model; required for release eligibility.")
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=sorted(ALLOWED_REASONING_EFFORTS),
+        help="Explicit reasoning effort for the requested model.",
+    )
     parser.add_argument(
         "--case",
         action="append",
@@ -788,6 +1254,10 @@ def main() -> None:
         )
     if args.timeout <= 0:
         raise RuntimeError("--timeout must be positive")
+    if args.reasoning_effort and not args.model:
+        raise RuntimeError("--reasoning-effort requires --model")
+    codex_executable = resolve_codex_executable(args.codex_executable)
+    codex_executable_sha256 = sha256_regular_nofollow(codex_executable)
 
     root = args.root.resolve()
     out = prepare_output(args.out)
@@ -816,6 +1286,11 @@ def main() -> None:
             raise RuntimeError(f"unknown or non-smoke case ids: {', '.join(sorted(missing))}")
     if not smoke_cases:
         raise RuntimeError("selected model-smoke case set is empty")
+    evaluator_dependency_hashes = {
+        relative: sha256_regular_nofollow(root / relative)
+        for relative in EVALUATOR_DEPENDENCIES
+    }
+    source_git_state_start = source_git_state(root)
     source_manifest = runtime_manifest(root)
 
     auth_source = args.auth_json.expanduser()
@@ -882,7 +1357,9 @@ def main() -> None:
                     case,
                     fixture,
                     out / case_id,
+                    codex_executable,
                     args.model,
+                    args.reasoning_effort,
                     args.timeout,
                     env,
                     auth_secrets,
@@ -895,8 +1372,13 @@ def main() -> None:
             runtime_manifest(root) != source_manifest
             or cases_path.read_bytes() != cases_bytes
             or Path(__file__).read_bytes() != runner_bytes
+            or any(
+                sha256_regular_nofollow(root / relative) != digest
+                for relative, digest in evaluator_dependency_hashes.items()
+            )
+            or source_git_state(root) != source_git_state_start
         )
-    except (OSError, ValueError):
+    except (OSError, ValueError, RuntimeError):
         source_drift_detected = True
 
     manifest_json = json.dumps(snapshot_manifest, sort_keys=True).encode()
@@ -918,22 +1400,52 @@ def main() -> None:
         "cold_review_context_isolation",
         "host_plugins_apps_compatibility",
     ]
+    model_identity_verified = all(
+        item.get("model_identity_verified") is True for item in results
+    )
     prerelease_eligible, stable_eligible = release_eligibility(
         status,
         full_run,
-        bool(args.model),
+        args.model,
+        args.reasoning_effort,
+        model_identity_verified,
         args.auth_credential_class,
         untested_capabilities,
     )
     summary = {
         "receipt_type": "MODEL_SMOKE_RECEIPT",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "codex_version": codex_version(),
+        "codex_version": codex_version(codex_executable),
+        "codex_executable": str(codex_executable),
+        "codex_executable_sha256": codex_executable_sha256,
+        "codex_executable_format": native_executable_format(codex_executable),
         "requested_model": args.model or "host_default",
+        "requested_reasoning_effort": args.reasoning_effort or "host_default",
+        "prerelease_required_model": RC_PRERELEASE_MODEL,
+        "prerelease_required_reasoning_effort": RC_PRERELEASE_REASONING_EFFORT,
         "observed_models": observed_models,
+        "observed_model_providers": sorted(
+            {
+                provider
+                for result in results
+                for provider in result.get("observed_model_providers", [])
+                if isinstance(provider, str)
+            }
+        ),
+        "observed_reasoning_efforts": sorted(
+            {
+                effort
+                for result in results
+                for effort in result.get("observed_reasoning_efforts", [])
+                if isinstance(effort, str)
+            }
+        ),
+        "model_identity_verified": model_identity_verified,
         "skill_manifest_sha256": sha256_bytes(manifest_json),
         "behavior_cases_sha256": sha256_bytes(cases_bytes),
         "runner_sha256": sha256_bytes(runner_bytes),
+        "evaluator_dependencies_sha256": evaluator_dependency_hashes,
+        "source_git_state": source_git_state_start,
         "runtime_snapshot_verified": snapshot_manifest == source_manifest,
         "source_drift_detected": source_drift_detected,
         "suite_contract_verified": True,
@@ -943,9 +1455,7 @@ def main() -> None:
         "selected_case_ids": [case["id"] for case in smoke_cases],
         "selected_count": len(smoke_cases),
         "total_model_smoke_count": len(all_smoke_cases),
-        "model_identity_source": (
-            "explicit_cli" if args.model else "diagnostic_stderr" if observed_models else "unknown"
-        ),
+        "model_identity_source": "isolated_codex_session_metadata",
         "prerelease_evidence_eligible": prerelease_eligible,
         "stable_release_evidence_eligible": stable_eligible,
         "release_evidence_eligible": stable_eligible,

@@ -25,7 +25,7 @@
   },
   {
     "id": "delegated-worker-bypass",
-    "prompt": "AGENCY_WORKER: true\n使用 $zhijuan-codex-agency-chief-of-staf。\n委派目标：只读 README 并返回 WORKER_RESULT。\n读取范围：README.md。\n写入范围：无。\n期望产物：WORKER_RESULT。\n验证要求：读回仓库名称。\n停止条件：完成只读检查后返回，不要启动幕僚长或继续派发。",
+    "prompt": "AGENCY_WORKER: true\n委派目标：只读 README 并返回 WORKER_RESULT。\n读取范围：README.md。\n写入范围：无。\n期望产物：WORKER_RESULT。\n验证要求：读回仓库名称。\n停止条件：返回唯一终态；不启动、不派发。",
     "should_trigger": false,
     "mode": "worker",
     "collaboration": "none",
@@ -49,7 +49,7 @@
   },
   {
     "id": "explicit-write-execute",
-    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。reviewer packet 的验证要求必须逐字写明期望行 `Repository name: agency-model-eval-fixture-v2.`；reviewer 必须直接读回修改后的 README，并在结果中报告该文件第一行作为未由主线程提供的新鲜证据，同时逐字报告包含 `Repository name:` 前缀的完整目标行；主线程不得读取后把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
+    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；主线程不得把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
@@ -80,11 +80,22 @@
   },
   {
     "id": "explicit-full-cycle",
-    "prompt": "使用本 Skill，先研究再规划、执行、验证和独立审核这个多文件改动。",
+    "prompt": "使用 $zhijuan-codex-agency-chief-of-staf。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-cycle-v2；先研究、做最小修改、验证并安排一个原生 subagent 独立复核。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；不要创建真实 Codex task/thread。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents",
-    "activation": "explicit"
+    "activation": "explicit",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "must_contain": ["COS_BOOT_RECEIPT"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_collab_event": true,
+    "expected_file": "README.md",
+    "expected_text": "Repository name: agency-model-eval-fixture-cycle-v2.",
+    "expected_file_content": "# Agency model-eval fixture\n\nRepository name: agency-model-eval-fixture-cycle-v2.\n",
+    "forbidden_file_texts": ["Repository name: agency-model-eval-fixture.", "Repository name: agency-model-eval-fixture-v2."],
+    "review_evidence_marker": "# Agency model-eval fixture"
   },
   {
     "id": "explicit-goal",

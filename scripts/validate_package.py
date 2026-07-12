@@ -34,6 +34,50 @@ PROHIBITED_ROUTING_MARKERS = (
     "AGENTS routing shim",
 )
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
+SKILL_SLUG_RE = re.compile(r"\$(?:[a-z][a-z0-9]*)(?:-[a-z0-9]+)+")
+REVIEW_OUTCOME_RE = re.compile(
+    r"(?:\b(?:NO-?GO|GO|PASS|FAIL)\b|预期结论|预判结论|预期判定|预判判定|通过|失败)",
+    re.IGNORECASE,
+)
+PACKET_VALUE_LEAK_RE = re.compile(
+    r"(?:[\x60#=]|(?:\b(?:expected|hidden)\b)|(?:\b(?:target|marker|verdict)\s+(?:is|value)\b)|"
+    r"(?:目标值|隐藏(?:标记|marker)|(?:标记|marker)(?:是|为)|(?:结论|判定)(?:是|为)|"
+    r"(?:是|为|等于|包含)\s*(?:[\x60#]|[A-Za-z0-9_-]{4,})))",
+    re.IGNORECASE,
+)
+OUTPUT_SCHEMA_RE = re.compile(
+    r"^[A-Z][A-Z0-9_]*(?:、[A-Z][A-Z0-9_]*)*(?:，(?:均填)?实际读回值)?[。.]?$"
+)
+WORKER_PACKET_LABELS = (
+    "委派目标",
+    "读取范围",
+    "写入范围",
+    "期望产物",
+    "验证要求",
+    "停止条件",
+)
+WORKER_PACKET_FORBIDDEN_TERMS = (
+    "启动幕僚长",
+    "激活本技能",
+    "激活此技能",
+    "使用本 skill",
+    "guard-read",
+    "guard read",
+)
+SAFE_STOP_CONDITION = "返回唯一终态；不启动、不派发。"
+
+
+def safe_worker_packet_value(label: str, value: str) -> bool:
+    """Reject packet values that can smuggle an expected readback or verdict."""
+    if PACKET_VALUE_LEAK_RE.search(value):
+        return False
+    if label == "期望产物":
+        return "实际读回" in value or OUTPUT_SCHEMA_RE.fullmatch(value) is not None
+    if label == "验证要求":
+        return "读" in value and ("回" in value or "当前" in value)
+    if label == "停止条件":
+        return value == SAFE_STOP_CONDITION
+    return True
 ALLOWED_MODES = {"direct", "structured", "goal", "worker"}
 ALLOWED_COLLABORATION = {
     "none",
@@ -187,19 +231,38 @@ def validate_string_list(case: dict[str, object], key: str, case_id: str) -> Non
         fail(f"behavior case {case_id} {key} must be a list of non-empty strings")
 
 
+def worker_packet_fields(prompt: str) -> dict[str, str] | None:
+    lines = [line.strip() for line in prompt.splitlines() if line.strip()]
+    if not lines or lines[0] != "AGENCY_WORKER: true":
+        return None
+    lowered = prompt.lower()
+    if (
+        SKILL_SLUG_RE.search(prompt)
+        or REVIEW_OUTCOME_RE.search(prompt)
+        or any(term in lowered for term in WORKER_PACKET_FORBIDDEN_TERMS)
+    ):
+        return None
+    fields: dict[str, str] = {}
+    for line in lines[1:]:
+        matched = next(
+            (
+                label
+                for label in WORKER_PACKET_LABELS
+                if line.startswith(f"{label}：") or line.startswith(f"{label}:")
+            ),
+            None,
+        )
+        if matched is None or matched in fields:
+            return None
+        value = line.split("：", 1)[1] if "：" in line else line.split(":", 1)[1]
+        if not value.strip() or not safe_worker_packet_value(matched, value.strip()):
+            return None
+        fields[matched] = value.strip()
+    return fields if tuple(fields) == WORKER_PACKET_LABELS else None
+
+
 def valid_worker_packet(prompt: str) -> bool:
-    first_nonempty = next((line.strip() for line in prompt.splitlines() if line.strip()), "")
-    required_labels = (
-        "委派目标",
-        "读取范围",
-        "写入范围",
-        "期望产物",
-        "验证要求",
-        "停止条件",
-    )
-    return first_nonempty == "AGENCY_WORKER: true" and all(
-        label in prompt for label in required_labels
-    )
+    return worker_packet_fields(prompt) is not None
 
 
 def validate_behavior_cases(path: Path) -> int:
@@ -281,6 +344,10 @@ def validate_behavior_cases(path: Path) -> int:
                 fail(f"behavior case {case_id} review marker must exist in expected artifact")
             if marker in str(case["prompt"]):
                 fail(f"behavior case {case_id} review marker must not be disclosed in prompt")
+            if str(case["expected_text"]) in str(case["prompt"]):
+                fail(f"behavior case {case_id} review target must not be disclosed in prompt")
+            if REVIEW_OUTCOME_RE.search(str(case["prompt"])):
+                fail(f"behavior case {case_id} review verdict must not be disclosed in prompt")
         if case["activation"] == "worker" and case["should_trigger"] is not False:
             fail(f"behavior case {case_id} worker activation must bypass the skill")
         if case["activation"] == "worker" and not valid_worker_packet(str(case["prompt"])):
