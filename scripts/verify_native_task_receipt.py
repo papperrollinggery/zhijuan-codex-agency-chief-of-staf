@@ -204,7 +204,7 @@ def main() -> None:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--installed-root", type=Path, required=True)
     parser.add_argument("--parent-id", required=True)
-    parser.add_argument("--reviewer-id")
+    parser.add_argument("--reviewer-id", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--reasoning-effort", required=True)
     parser.add_argument("--parent-final-marker", action="append", default=[])
@@ -217,6 +217,14 @@ def main() -> None:
 
     if "luna" in args.model.lower():
         raise SystemExit("Luna is not allowed for this release receipt")
+    if not args.parent_final_marker:
+        raise SystemExit("at least one --parent-final-marker is required")
+    if not args.reviewer_final_marker:
+        raise SystemExit("at least one --reviewer-final-marker is required")
+    if not args.reviewer_read_marker:
+        raise SystemExit("at least one --reviewer-read-marker is required")
+    if not args.require_archived or not args.require_clean_source:
+        raise SystemExit("native task receipt requires archived tasks and a clean source")
     source = args.source_root.resolve()
     installed_root = args.installed_root.resolve()
     state_db = args.state_db.resolve()
@@ -249,28 +257,22 @@ def main() -> None:
         if "$agency-chief-of-staff" not in str(parent_row["first_user_message"]):
             raise ValueError("parent task did not explicitly invoke canonical skill")
 
-        reviewer = None
-        binding = None
-        reviewer_read = None
-        if args.reviewer_id:
-            reviewer_row = thread_row(database, args.reviewer_id)
-            reviewer = verify_thread(
-                reviewer_row,
-                expected_model=args.model,
-                expected_effort=args.reasoning_effort,
-                require_archived=args.require_archived,
-                final_markers=args.reviewer_final_marker,
-            )
-            reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
-            binding = reviewer_binding(
-                database,
-                parent_id=args.parent_id,
-                reviewer_id=args.reviewer_id,
-                records=reviewer_records,
-            )
-            reviewer_read = verify_reviewer_read(
-                reviewer_records, args.reviewer_read_marker
-            )
+        reviewer_row = thread_row(database, args.reviewer_id)
+        reviewer = verify_thread(
+            reviewer_row,
+            expected_model=args.model,
+            expected_effort=args.reasoning_effort,
+            require_archived=args.require_archived,
+            final_markers=args.reviewer_final_marker,
+        )
+        reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
+        binding = reviewer_binding(
+            database,
+            parent_id=args.parent_id,
+            reviewer_id=args.reviewer_id,
+            records=reviewer_records,
+        )
+        reviewer_read = verify_reviewer_read(reviewer_records, args.reviewer_read_marker)
     finally:
         database.close()
 

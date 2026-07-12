@@ -162,6 +162,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "--reviewer-read-marker",
                 "Delivery status: ready-for-review.",
                 "--require-archived",
+                "--require-clean-source",
             ],
             text=True,
             capture_output=True,
@@ -193,6 +194,40 @@ class NativeTaskReceiptTests(unittest.TestCase):
             result = self.run_verifier(database, installed_root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("no native spawn edge", result.stderr)
+
+    def test_requires_reviewer_markers_and_release_state(self) -> None:
+        result = subprocess.run(
+            ["python3", str(SCRIPT), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--reviewer-id REVIEWER_ID", result.stdout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            command = self.run_verifier(database, installed_root).args
+            reviewer_index = command.index("--reviewer-id")
+            missing_reviewer_command = (
+                command[:reviewer_index] + command[reviewer_index + 2 :]
+            )
+            missing_reviewer = subprocess.run(
+                missing_reviewer_command, text=True, capture_output=True, check=False
+            )
+            self.assertNotEqual(missing_reviewer.returncode, 0)
+            self.assertIn("--reviewer-id", missing_reviewer.stderr)
+
+            command = [
+                item
+                for item in command
+                if item not in {"--reviewer-final-marker", "REVIEW_VERDICT: PASS"}
+            ]
+            missing_marker = subprocess.run(
+                command, text=True, capture_output=True, check=False
+            )
+            self.assertNotEqual(missing_marker.returncode, 0)
+            self.assertIn("--reviewer-final-marker is required", missing_marker.stderr)
 
     def test_rejects_wrong_model_and_luna(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

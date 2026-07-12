@@ -159,6 +159,9 @@ python3 scripts/verify_native_task_receipt.py \
   --reviewer-id <reviewer-thread-id> \
   --model gpt-5.6-sol \
   --reasoning-effort max \
+  --parent-final-marker '<expected parent completion marker>' \
+  --reviewer-final-marker 'REVIEW_VERDICT: PASS' \
+  --reviewer-read-marker '<exact artifact fact read by reviewer>' \
   --require-archived \
   --require-clean-source
 ```
