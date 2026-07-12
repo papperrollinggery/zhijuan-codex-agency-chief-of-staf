@@ -41,8 +41,6 @@ def string_content(value: Any) -> str:
 
 
 def command_reads_artifact(call_input: str, artifact: Path) -> bool:
-    if any(token in call_input for token in ("#", "//", "|", ">", "<", ";", "&&", "||")):
-        return False
     candidates: list[tuple[str, Path | None]] = []
     variables = {
         match.group(1): Path(match.group(2)).expanduser().absolute()
@@ -57,6 +55,8 @@ def command_reads_artifact(call_input: str, artifact: Path) -> bool:
         candidates.append((call_input, None))
 
     for command, cwd in candidates:
+        if any(token in command for token in ("#", "//", "|", ">", "<", ";", "&&", "||")):
+            continue
         try:
             argv = shlex.split(command)
         except ValueError:
