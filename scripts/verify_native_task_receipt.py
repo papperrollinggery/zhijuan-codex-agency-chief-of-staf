@@ -64,6 +64,7 @@ def reviewer_binding(
     parent_id: str,
     reviewer_id: str,
     records: list[dict[str, Any]],
+    parent_final: str,
 ) -> dict[str, str]:
     edge = database.execute(
         "SELECT status FROM thread_spawn_edges WHERE parent_thread_id = ? AND child_thread_id = ?",
@@ -80,10 +81,20 @@ def reviewer_binding(
     ]
     if len(metas) != 1 or metas[0].get("parent_thread_id") != parent_id:
         raise ValueError("reviewer rollout is not bound to parent thread")
-    return {"parent_thread_id": parent_id, "spawn_edge_status": str(edge[0])}
+    agent_path = metas[0].get("agent_path")
+    if not isinstance(agent_path, str) or not agent_path or agent_path not in parent_final:
+        raise ValueError("parent final does not expose the reviewer agent identifier")
+    return {
+        "parent_thread_id": parent_id,
+        "reviewer_thread_id": reviewer_id,
+        "reviewer_agent_path": agent_path,
+        "spawn_edge_status": str(edge[0]),
+    }
 
 
-def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> dict[str, Any]:
+def verify_reviewer_read(
+    records: list[dict[str, Any]], markers: list[str], artifact: str
+) -> dict[str, Any]:
     completion_indexes = [
         index
         for index, record in enumerate(records)
@@ -94,7 +105,7 @@ def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> d
     if len(completion_indexes) != 1:
         raise ValueError("reviewer tool-read ordering cannot be established")
     calls = {
-        payload.get("call_id")
+        payload.get("call_id"): str(payload.get("input", ""))
         for index, record in enumerate(records)
         if record.get("type") == "response_item"
         and index < completion_indexes[0]
@@ -115,11 +126,41 @@ def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> d
     }
     if not outputs:
         raise ValueError("reviewer has no completed exec call with bound output")
-    combined = "\n".join(outputs.values())
+    combined = "\n".join([*calls.values(), *outputs.values()])
+    if artifact not in combined:
+        raise ValueError("reviewer tool evidence is not bound to the target artifact")
     for marker in markers:
         if marker not in combined:
             raise ValueError(f"reviewer tool read is missing marker {marker!r}")
-    return {"paired_exec_outputs": len(outputs), "markers": markers}
+    return {"paired_exec_outputs": len(outputs), "artifact": artifact, "markers": markers}
+
+
+def completed_message(records: list[dict[str, Any]]) -> str:
+    messages = [
+        record["payload"].get("last_agent_message")
+        for record in records
+        if record.get("type") == "event_msg"
+        and isinstance(record.get("payload"), dict)
+        and record["payload"].get("type") == "task_complete"
+    ]
+    if len(messages) != 1 or not isinstance(messages[0], str):
+        raise ValueError("task completion message is not unique")
+    return messages[0]
+
+
+def verify_reviewer_schema(final_message: str) -> None:
+    fields: dict[str, str] = {}
+    for line in final_message.splitlines():
+        for field in REVIEWER_FINAL_FIELDS[:-1]:
+            if line.startswith(field):
+                fields[field] = line[len(field) :].strip()
+        if line.startswith("REVIEW_VERDICT:"):
+            fields["REVIEW_VERDICT:"] = line.removeprefix("REVIEW_VERDICT:").strip()
+    required = [*REVIEWER_FINAL_FIELDS[:-1], "REVIEW_VERDICT:"]
+    if any(not fields.get(field) for field in required):
+        raise ValueError("reviewer final does not contain the required line schema")
+    if not fields["REVIEW_VERDICT:"].startswith("PASS"):
+        raise ValueError("reviewer verdict is not PASS")
 
 
 def verify_thread(
@@ -228,6 +269,7 @@ def main() -> None:
     parser.add_argument("--parent-final-marker", action="append", default=[])
     parser.add_argument("--reviewer-final-marker", action="append", default=[])
     parser.add_argument("--reviewer-read-marker", action="append", default=[])
+    parser.add_argument("--reviewer-artifact", required=True)
     parser.add_argument("--require-archived", action="store_true")
     parser.add_argument("--require-clean-source", action="store_true")
     parser.add_argument("--out", type=Path)
@@ -281,6 +323,8 @@ def main() -> None:
         )
         if "$agency-chief-of-staff" not in str(parent_row["first_user_message"]):
             raise ValueError("parent task did not explicitly invoke canonical skill")
+        parent_records = rollout_records(Path(str(parent_row["rollout_path"])))
+        parent_final = completed_message(parent_records)
 
         reviewer_row = thread_row(database, args.reviewer_id)
         reviewer = verify_thread(
@@ -291,13 +335,17 @@ def main() -> None:
             final_markers=args.reviewer_final_marker + list(REVIEWER_FINAL_FIELDS),
         )
         reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
+        verify_reviewer_schema(completed_message(reviewer_records))
         binding = reviewer_binding(
             database,
             parent_id=args.parent_id,
             reviewer_id=args.reviewer_id,
             records=reviewer_records,
+            parent_final=parent_final,
         )
-        reviewer_read = verify_reviewer_read(reviewer_records, args.reviewer_read_marker)
+        reviewer_read = verify_reviewer_read(
+            reviewer_records, args.reviewer_read_marker, args.reviewer_artifact
+        )
     finally:
         database.close()
 

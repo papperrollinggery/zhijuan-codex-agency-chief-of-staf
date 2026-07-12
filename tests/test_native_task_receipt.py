@@ -22,7 +22,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
     def write_rollout(
         self, path: Path, thread_id: str, final: str, parent_id: str | None = None
     ) -> None:
-        session = {"id": thread_id, "model_provider": "openai"}
+        session = {
+            "id": thread_id,
+            "model_provider": "openai",
+            "agent_path": "/root/reviewer",
+        }
         if parent_id:
             session["parent_thread_id"] = parent_id
         records = [
@@ -41,6 +45,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
                     "name": "exec",
                     "status": "completed",
                     "call_id": "call-read",
+                    "input": "read /fixture/README.md",
                 },
             },
             {
@@ -72,7 +77,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
 
         parent_rollout = base / "parent.jsonl"
         reviewer_rollout = base / "reviewer.jsonl"
-        self.write_rollout(parent_rollout, self.parent_id, "RESULT: complete\nREVIEW: accepted")
+        self.write_rollout(
+            parent_rollout,
+            self.parent_id,
+            "RESULT: complete\nREVIEW: accepted by /root/reviewer",
+        )
         self.write_rollout(
             reviewer_rollout,
             self.reviewer_id,
@@ -165,6 +174,8 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "REVIEW_VERDICT: PASS",
                 "--reviewer-read-marker",
                 "Delivery status: ready-for-review.",
+                "--reviewer-artifact",
+                "/fixture/README.md",
                 "--require-archived",
                 "--require-clean-source",
             ],
