@@ -105,7 +105,7 @@ def reviewer_binding(
 def verify_reviewer_read(
     records: list[dict[str, Any]], markers: list[str], artifact: str
 ) -> dict[str, Any]:
-    artifact_path = Path(artifact).resolve()
+    artifact_path = Path(artifact).expanduser().absolute()
     if artifact_path.is_symlink() or not artifact_path.is_file():
         raise ValueError("reviewer artifact is not a regular file")
     artifact_text = artifact_path.read_text(encoding="utf-8")
