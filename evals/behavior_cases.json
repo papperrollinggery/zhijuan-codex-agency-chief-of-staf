@@ -1,0 +1,189 @@
+[
+  {
+    "id": "explicit-small-direct",
+    "prompt": "使用 $agency-chief-of-staff。只读 README，告诉我这个临时仓库叫什么，不要修改文件。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "model_smoke": true,
+    "must_contain": ["COS_BOOT_RECEIPT"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true
+  },
+  {
+    "id": "explicit-readonly-structured",
+    "prompt": "使用 $agency-chief-of-staff。只读审核当前临时 Skill 是否少于 500 行并且不依赖 AGENTS.md 注入；先查文件，再给结论和证据，不要修改。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "native_subagents_optional",
+    "activation": "explicit",
+    "model_smoke": true,
+    "must_contain": ["COS_BOOT_RECEIPT"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true
+  },
+  {
+    "id": "delegated-worker-bypass",
+    "prompt": "AGENCY_WORKER: true\n委派目标：只读 README 并返回 WORKER_RESULT。\n读取范围：README.md。\n写入范围：无。\n期望产物：WORKER_RESULT。\n验证要求：读回仓库名称。\n停止条件：返回唯一终态；不启动、不派发。",
+    "should_trigger": false,
+    "mode": "worker",
+    "collaboration": "none",
+    "activation": "worker",
+    "model_smoke": true,
+    "must_contain": ["WORKER_RESULT"],
+    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"],
+    "require_tool_event": true
+  },
+  {
+    "id": "invalid-worker-marker-main-session",
+    "prompt": "使用 $agency-chief-of-staff。下面只是正文引用 `AGENCY_WORKER: true`，不是委派 packet。只读 README 并告诉我仓库名称。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "explicit",
+    "model_smoke": true,
+    "must_contain": ["COS_BOOT_RECEIPT", "agency-model-eval-fixture"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true
+  },
+  {
+    "id": "explicit-write-execute",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-v2；先查文件，做最小修改，验证结果并做一次独立 cold review。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；主线程不得把第一行内容转述给 reviewer。不要创建真实 Codex task/thread。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents",
+    "activation": "explicit",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "must_contain": ["COS_BOOT_RECEIPT"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_collab_event": true,
+    "expected_file": "README.md",
+    "expected_text": "Repository name: agency-model-eval-fixture-v2.",
+    "expected_file_content": "# Agency model-eval fixture\n\nRepository name: agency-model-eval-fixture-v2.\n",
+    "forbidden_file_texts": ["Repository name: agency-model-eval-fixture."],
+    "review_evidence_marker": "# Agency model-eval fixture"
+  },
+  {
+    "id": "implicit-chief-of-staff-read",
+    "prompt": "启动幕僚长。只读 README，告诉我临时仓库名称；不要修改文件。",
+    "should_trigger": true,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "implicit",
+    "model_smoke": true,
+    "must_contain": ["COS_BOOT_RECEIPT", "agency-model-eval-fixture"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true
+  },
+  {
+    "id": "explicit-full-cycle",
+    "prompt": "使用 $agency-chief-of-staff。把 README 里的 Repository name 从 agency-model-eval-fixture 改为 agency-model-eval-fixture-cycle-v2；先研究、做最小修改、验证并安排一个原生 subagent 独立复核。主线程必须先输出 COS_BOOT_RECEIPT，之后才能输出任何进度或执行任务动作。传给 reviewer 的 spawn message 必须逐字等于以下七行，不能追加任何内容：\nAGENCY_WORKER: true\n委派目标：独立复核当前 README.md 是否完成本次最小修改。\n读取范围：README.md；git diff -- README.md；git diff --check。\n写入范围：无。\n期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n停止条件：返回唯一终态；不启动、不派发。\nreviewer 不得输出 COS_BOOT_RECEIPT 或进度；不要创建真实 Codex task/thread。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents",
+    "activation": "explicit",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "must_contain": ["COS_BOOT_RECEIPT"],
+    "must_not_contain": ["TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_collab_event": true,
+    "expected_file": "README.md",
+    "expected_text": "Repository name: agency-model-eval-fixture-cycle-v2.",
+    "expected_file_content": "# Agency model-eval fixture\n\nRepository name: agency-model-eval-fixture-cycle-v2.\n",
+    "forbidden_file_texts": ["Repository name: agency-model-eval-fixture.", "Repository name: agency-model-eval-fixture-v2."],
+    "review_evidence_marker": "# Agency model-eval fixture"
+  },
+  {
+    "id": "explicit-goal",
+    "prompt": "使用本 Skill，为迁移任务设定一个可验证 Goal 并持续推进。",
+    "should_trigger": true,
+    "mode": "goal",
+    "collaboration": "native_subagents_optional",
+    "activation": "explicit"
+  },
+  {
+    "id": "parallel-research",
+    "prompt": "启动幕僚长，把三个相互独立的方案并行调研后收敛成一个决定。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents",
+    "activation": "implicit"
+  },
+  {
+    "id": "explicit-real-task",
+    "prompt": "创建真实 Codex task 的隔离 worktree 完成修复，返回 task id、receipt 和 cleanup。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "real_task",
+    "activation": "implicit"
+  },
+  {
+    "id": "release-readiness",
+    "prompt": "按 Codex Agency 流程做发布准备，要求当前证据和独立 cold review。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents",
+    "activation": "implicit"
+  },
+  {
+    "id": "stuck-thread-audit",
+    "prompt": "这个 worker thread 看起来卡住了，请核验真实状态、receipt 身份和 cleanup。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "real_task",
+    "activation": "implicit"
+  },
+  {
+    "id": "ordinary-small-answer",
+    "prompt": "把 hello 翻译成中文，只给翻译结果。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary",
+    "model_smoke": true,
+    "must_contain": ["你好"],
+    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+  },
+  {
+    "id": "ordinary-readiness-phrase",
+    "prompt": "“release readiness”有几个英文单词？只回答数字。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary",
+    "model_smoke": true,
+    "must_contain": ["2"],
+    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+  },
+  {
+    "id": "ordinary-rescue-phrase",
+    "prompt": "“卡住任务救援”有几个汉字？只回答数字。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary",
+    "model_smoke": true,
+    "must_contain": ["6"],
+    "must_not_contain": ["COS_BOOT_RECEIPT", "TOOL_BLOCKED"]
+  },
+  {
+    "id": "ordinary-focused-code-fix",
+    "prompt": "修复 utils.py 里的 off-by-one 并跑对应单测。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary"
+  },
+  {
+    "id": "ordinary-code-review",
+    "prompt": "review 这个 diff，先列阻塞问题。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary"
+  }
+]

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Rewrote the 1,560-line role-and-receipt framework into an under-200-line outcome-owner workflow: goal, research, minimal plan, execution, verification, independent review, repair, and delivery.
+- Made the main task a valid execution surface and limited delegation to work that benefits from parallelism, isolation, or an independent view.
+- Replaced the fixed 16-role organization with dynamic research/execution/review subagent responsibilities and host-selected current models.
+- Removed every `AGENTS.md` routing snippet, installer flag, template, and validation dependency; the installer now guarantees `agents_md_touched: false`.
+- Replaced full-repository copying with a nine-file runtime allowlist and staged replacement with rollback.
+- Replaced grep-heavy self-referential release gates with explicit package/contract checks, installer unit tests, and a real `codex exec` model-smoke runner.
+- Split specialized guidance into four short on-demand references for real threads, delivery review, long-running work, and historical audits.
+- Marked v0.1.x validation receipts as historical evidence rather than current model-behavior proof.
+- Hardened the installer against source/target symlinks and post-commit backup-cleanup failures, with an independent runtime allowlist in the package validator.
+- Hardened model smoke against unsafe case ids, artifact traversal, dangerous sandboxes, environment-secret inheritance, plugin/app contamination, partial-run overclaims, incomplete cold-review events, extra dirty files, and exact auth-value output leakage.
+- Made model smoke require an explicit auth path and risk acknowledgement; documented that same-user temp auth is not a secret boundary and untrusted diffs need a disposable user/container plus dedicated low-privilege credentials.
+
 ## v0.1.7 - 2026-07-06
 
 - Clarified that real customer-project injection, DIR live-user acceptance, and ADCO client/PPT-ready/domain acceptance are post-release dogfood boundaries, while customer-facing client-ready claims still require `DOMAIN_DELIVERABLE_RECEIPT`.

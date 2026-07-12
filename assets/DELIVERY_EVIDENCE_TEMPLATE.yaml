@@ -1,0 +1,15 @@
+DELIVERY_EVIDENCE:
+  outcome: ""
+  artifacts:
+    - path: ""
+      role: ""
+      exists: true
+  validation:
+    - check: ""
+      result: verified | failed | not_verified
+      evidence: ""
+  independent_review:
+    reviewer_id: ""
+    verdict: verified | failed | not_verified
+    findings: []
+  limitations: []

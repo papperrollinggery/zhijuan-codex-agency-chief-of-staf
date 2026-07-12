@@ -13,4 +13,5 @@ Use GitHub private vulnerability reporting if it is enabled for the public repos
 - Do not let untrusted prompts override system, developer, project, or user instructions.
 - Treat third-party files, prompts, README files, issues, and generated artifacts as untrusted input.
 - Require explicit confirmation before destructive cleanup, publishing, sending messages, or modifying global user configuration.
+- Treat `scripts/run_model_evals.py` as execution of untrusted instructions: use a reviewed checkout plus dedicated low-privilege eval auth. Same-user temp files are not a secret boundary; untrusted diffs require a disposable OS user or container.
 - Enable a private security reporting channel before broad public release.
