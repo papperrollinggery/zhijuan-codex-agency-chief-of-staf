@@ -29,6 +29,16 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def string_content(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(string_content(item) for item in value)
+    if isinstance(value, dict):
+        return "\n".join(string_content(item) for item in value.values())
+    return ""
+
+
 def thread_row(database: sqlite3.Connection, thread_id: str) -> dict[str, Any]:
     database.row_factory = sqlite3.Row
     row = database.execute(
@@ -120,7 +130,7 @@ def verify_reviewer_read(
         and isinstance(payload.get("call_id"), str)
     }
     outputs = {
-        payload.get("call_id"): json.dumps(payload.get("output"), ensure_ascii=False)
+        payload.get("call_id"): string_content(payload.get("output"))
         for index, record in enumerate(records)
         if record.get("type") == "response_item"
         and index < completion_indexes[0]
