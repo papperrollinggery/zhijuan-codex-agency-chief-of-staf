@@ -19,15 +19,37 @@ class NativeTaskReceiptTests(unittest.TestCase):
     parent_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
     reviewer_id = "019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"
 
-    def write_rollout(self, path: Path, thread_id: str, final: str) -> None:
+    def write_rollout(
+        self, path: Path, thread_id: str, final: str, parent_id: str | None = None
+    ) -> None:
+        session = {"id": thread_id, "model_provider": "openai"}
+        if parent_id:
+            session["parent_thread_id"] = parent_id
         records = [
             {
                 "type": "session_meta",
-                "payload": {"id": thread_id, "model_provider": "openai"},
+                "payload": session,
             },
             {
                 "type": "turn_context",
                 "payload": {"model": "gpt-5.6-sol", "effort": "max"},
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "custom_tool_call",
+                    "name": "exec",
+                    "status": "completed",
+                    "call_id": "call-read",
+                },
+            },
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "custom_tool_call_output",
+                    "call_id": "call-read",
+                    "output": "Delivery status: ready-for-review.",
+                },
             },
             {
                 "type": "event_msg",
@@ -51,7 +73,12 @@ class NativeTaskReceiptTests(unittest.TestCase):
         parent_rollout = base / "parent.jsonl"
         reviewer_rollout = base / "reviewer.jsonl"
         self.write_rollout(parent_rollout, self.parent_id, "RESULT: complete\nREVIEW: accepted")
-        self.write_rollout(reviewer_rollout, self.reviewer_id, "REVIEW_VERDICT: PASS")
+        self.write_rollout(
+            reviewer_rollout,
+            self.reviewer_id,
+            "REVIEW_VERDICT: PASS",
+            parent_id=self.parent_id,
+        )
 
         database_path = base / "state.sqlite"
         database = sqlite3.connect(database_path)
@@ -64,6 +91,9 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 created_at_ms INTEGER, updated_at_ms INTEGER
             )
             """
+        )
+        database.execute(
+            "CREATE TABLE thread_spawn_edges (parent_thread_id TEXT, child_thread_id TEXT PRIMARY KEY, status TEXT)"
         )
         database.executemany(
             "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -96,6 +126,10 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 ),
             ],
         )
+        database.execute(
+            "INSERT INTO thread_spawn_edges VALUES (?, ?, ?)",
+            (self.parent_id, self.reviewer_id, "open"),
+        )
         database.commit()
         database.close()
         return database_path, installed_root
@@ -125,6 +159,8 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "RESULT: complete",
                 "--reviewer-final-marker",
                 "REVIEW_VERDICT: PASS",
+                "--reviewer-read-marker",
+                "Delivery status: ready-for-review.",
                 "--require-archived",
             ],
             text=True,
@@ -141,7 +177,22 @@ class NativeTaskReceiptTests(unittest.TestCase):
             self.assertEqual(payload["status"], "verified")
             self.assertEqual(payload["parent"]["thread_id"], self.parent_id)
             self.assertEqual(payload["reviewer"]["thread_id"], self.reviewer_id)
+            self.assertEqual(
+                payload["reviewer_binding"]["parent_thread_id"], self.parent_id
+            )
+            self.assertEqual(payload["reviewer_tool_read"]["paired_exec_outputs"], 1)
             self.assertFalse(payload["agents_md_routing_dependency"])
+
+    def test_rejects_missing_native_spawn_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            connection = sqlite3.connect(database)
+            connection.execute("DELETE FROM thread_spawn_edges")
+            connection.commit()
+            connection.close()
+            result = self.run_verifier(database, installed_root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("no native spawn edge", result.stderr)
 
     def test_rejects_wrong_model_and_luna(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

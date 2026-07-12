@@ -51,6 +51,59 @@ def rollout_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def reviewer_binding(
+    database: sqlite3.Connection,
+    *,
+    parent_id: str,
+    reviewer_id: str,
+    records: list[dict[str, Any]],
+) -> dict[str, str]:
+    edge = database.execute(
+        "SELECT status FROM thread_spawn_edges WHERE parent_thread_id = ? AND child_thread_id = ?",
+        (parent_id, reviewer_id),
+    ).fetchone()
+    if edge is None:
+        raise ValueError("reviewer has no native spawn edge from parent")
+    metas = [
+        record.get("payload", {})
+        for record in records
+        if record.get("type") == "session_meta"
+        and isinstance(record.get("payload"), dict)
+        and record["payload"].get("id") == reviewer_id
+    ]
+    if len(metas) != 1 or metas[0].get("parent_thread_id") != parent_id:
+        raise ValueError("reviewer rollout is not bound to parent thread")
+    return {"parent_thread_id": parent_id, "spawn_edge_status": str(edge[0])}
+
+
+def verify_reviewer_read(records: list[dict[str, Any]], markers: list[str]) -> dict[str, Any]:
+    calls = {
+        payload.get("call_id")
+        for record in records
+        if record.get("type") == "response_item"
+        and isinstance((payload := record.get("payload")), dict)
+        and payload.get("type") == "custom_tool_call"
+        and payload.get("name") == "exec"
+        and payload.get("status") == "completed"
+        and isinstance(payload.get("call_id"), str)
+    }
+    outputs = {
+        payload.get("call_id"): json.dumps(payload.get("output"), ensure_ascii=False)
+        for record in records
+        if record.get("type") == "response_item"
+        and isinstance((payload := record.get("payload")), dict)
+        and payload.get("type") == "custom_tool_call_output"
+        and payload.get("call_id") in calls
+    }
+    if not outputs:
+        raise ValueError("reviewer has no completed exec call with bound output")
+    combined = "\n".join(outputs.values())
+    for marker in markers:
+        if marker not in combined:
+            raise ValueError(f"reviewer tool read is missing marker {marker!r}")
+    return {"paired_exec_outputs": len(outputs), "markers": markers}
+
+
 def verify_thread(
     row: dict[str, Any],
     *,
@@ -156,6 +209,7 @@ def main() -> None:
     parser.add_argument("--reasoning-effort", required=True)
     parser.add_argument("--parent-final-marker", action="append", default=[])
     parser.add_argument("--reviewer-final-marker", action="append", default=[])
+    parser.add_argument("--reviewer-read-marker", action="append", default=[])
     parser.add_argument("--require-archived", action="store_true")
     parser.add_argument("--require-clean-source", action="store_true")
     parser.add_argument("--out", type=Path)
@@ -196,6 +250,8 @@ def main() -> None:
             raise ValueError("parent task did not explicitly invoke canonical skill")
 
         reviewer = None
+        binding = None
+        reviewer_read = None
         if args.reviewer_id:
             reviewer_row = thread_row(database, args.reviewer_id)
             reviewer = verify_thread(
@@ -205,9 +261,16 @@ def main() -> None:
                 require_archived=args.require_archived,
                 final_markers=args.reviewer_final_marker,
             )
-            first_message = str(reviewer_row["first_user_message"])
-            if args.parent_id not in first_message or "AGENCY_WORKER: true" not in first_message:
-                raise ValueError("reviewer task is not bound to the parent worker packet")
+            reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
+            binding = reviewer_binding(
+                database,
+                parent_id=args.parent_id,
+                reviewer_id=args.reviewer_id,
+                records=reviewer_records,
+            )
+            reviewer_read = verify_reviewer_read(
+                reviewer_records, args.reviewer_read_marker
+            )
     finally:
         database.close()
 
@@ -218,6 +281,8 @@ def main() -> None:
         "installed_bundle_manifests": installed,
         "parent": parent,
         "reviewer": reviewer,
+        "reviewer_binding": binding,
+        "reviewer_tool_read": reviewer_read,
         "cold_context_isolation": "unverified",
         "agents_md_routing_dependency": False,
     }
