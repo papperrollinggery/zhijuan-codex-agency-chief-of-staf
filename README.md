@@ -2,7 +2,7 @@
 
 一个结果负责型 Codex 幕僚长 Skill：把复杂任务从目标澄清推进到研究、规划、执行、验证、独立审核和最终交付。
 
-它不靠堆角色或 receipt 证明自己工作，也不向 `AGENTS.md` 注入路由。主线程对结果负责；原生 subagents、Goal、真实 task/thread/worktree 都按任务需要使用。
+它不靠堆角色或 receipt 证明自己工作，也不向用户全局、仓库主工作区或项目根 `AGENTS.md` 注入路由。主线程对结果负责；原生 subagents、Goal、真实 task/thread/worktree 都按任务需要使用。
 
 ## 适用场景
 
@@ -32,7 +32,8 @@
 关键设计：
 
 - 主线程是 outcome owner，可以直接研究、编辑、测试、整合和交付。
-- 按收益使用最少必要的 subagent：普通任务不派发，独立审核通常只需 1 名 reviewer；不维护固定 16 角色组织。
+- 按收益使用最少必要的 subagent：提供 codebase researcher、technical architect、developer、reviewer 和按需 test-debugger 五个窄职责 profile，不恢复固定 16 角色组织。
+- 领域 Skill 可以显式绑定给专业 Agent；只禁止两个主控入口递归调用，不再一刀切禁止全部 `$slug`。
 - Goal 只用于明确的长期目标，不为短任务生成 Goal Ledger。
 - 真实 task/thread 只在用户明确要求真实独立执行面时使用。
 - 只有机器审计确实需要时才输出结构化 receipt。
@@ -50,7 +51,7 @@
 
 旧入口关闭隐式调用；同一请求同时出现两个 slug 时只执行 canonical 入口。
 
-安装器不会读取、创建、追加或修改项目/全局 `AGENTS.md`，也不提供 routing 注入参数。已有 `AGENTS.md` 仍作为项目规则正常生效，但不是本 Skill 的安装或激活机制。
+安装器不会读取、创建、追加或修改项目/全局 `AGENTS.md`，也不提供 routing 注入参数。已有 `AGENTS.md` 仍作为项目规则正常生效，但不是本 Skill 的安装或激活机制。隔离 subagent/task 可以通过 worker packet、项目 `.codex/agents/*.toml`、`skills.config` 或临时任务指令获得专业上下文；验证必须证明这些配置没有覆盖主位置规则。
 
 ## 安装
 
@@ -76,6 +77,23 @@ python3 scripts/install_skill.py --force
 ```
 
 安装器只复制运行时 allowlist，并把两个 bundle 作为一个可回滚的 pair transaction 更新；不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
+
+专业 Agent 模板随 runtime 分发，但不会默认写入任何项目或用户配置。只有显式选择目标项目时才安装：
+
+```bash
+python3 scripts/install_agent_profiles.py \
+  --target-root /absolute/project/.codex/agents
+```
+
+可把已安装领域 Skill 确定性绑定给一个 profile：
+
+```bash
+python3 scripts/install_agent_profiles.py \
+  --target-root /absolute/project/.codex/agents \
+  --skill developer=/absolute/path/to/domain-skill/SKILL.md
+```
+
+该脚本只管理五个同名 TOML，保留目标目录中的其他文件；冲突时 fail closed，显式 `--force` 才替换。它拒绝把 canonical/legacy 主控 Skill 绑定回子 Agent。
 
 ## 使用
 
@@ -104,7 +122,8 @@ python3 scripts/install_skill.py --force
 相关官方说明：
 
 - [Build skills](https://learn.chatgpt.com/docs/build-skills)
-- [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+- [Custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents#custom-agents)
+- [Why subagent workflows help](https://learn.chatgpt.com/docs/agent-configuration/subagents#why-subagent-workflows-help)
 - [Long-running work](https://learn.chatgpt.com/docs/long-running-work)
 - [Latest model guidance](https://developers.openai.com/api/docs/guides/latest-model)
 
@@ -112,7 +131,7 @@ python3 scripts/install_skill.py --force
 
 验证名称必须诚实区分：
 
-1. `package/contract`：离线检查 frontmatter、runtime manifest、引用、场景 schema 和安装行为；不声称证明模型行为。
+1. `package/contract`：离线检查 frontmatter、runtime manifest、五个 Agent TOML、项目/模板 parity、领域 Skill 绑定、场景 schema 和安装行为；不声称证明模型行为。
 2. `model-smoke`：在无本项目 routing、禁用 plugins/apps、最小环境变量的临时仓库里真实调用当前 Codex 模型，保存 event JSONL 和最终输出；子集运行只会得到 `passed_partial`。
 3. `native-task-smoke`：从已安装 canonical bundle 发起真实 Codex Desktop task；只读核验 state DB 与 rollout 中的 provider/model/effort、唯一终态、reviewer 绑定、安装 manifest 和 cleanup，不复制 auth。
 4. `threadops-smoke`：只有发布目标明确要求真实 task/thread 证明时，使用 Codex Desktop 工具核验真实 id、readback、worktree 和 cleanup。
@@ -187,11 +206,16 @@ references/
   delivery-review.md
   long-running-work.md
   history-audit.md
+  software-development.md
 assets/
   WORK_RECEIPT_TEMPLATE.yaml
   DELIVERY_EVIDENCE_TEMPLATE.yaml
+  agent-routing.json
+  codex_agents/*.toml
 scripts/
   audit_historical_threads.py
+  install_agent_profiles.py
+  validate_agent_profiles.py
 ```
 
 兼容说明：slug 中的 `staf` 保留原包名，避免破坏现有显式调用。

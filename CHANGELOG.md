@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-- Rewrote the 1,560-line role-and-receipt framework into an under-200-line outcome-owner workflow: goal, research, minimal plan, execution, verification, independent review, repair, and delivery.
+- Added five bounded project custom-agent profiles plus distributable templates for codebase research, architecture, scoped development, independent review, and on-demand test diagnosis.
+- Added an explicit opt-in agent-profile installer with conflict-safe replacement and `skills.config` domain-skill bindings; default Skill installation still writes no Agent or `AGENTS.md` configuration.
+- Replaced the blanket worker-packet `$slug` ban with an exact self-recursion denylist, allowing selected domain Skills while blocking both Chief-of-Staff entrypoints.
+- Added a software-development routing matrix, profile/template/schema validation, install tests, and isolation checks for project-level professional context.
+- Made synthetic native-receipt tests use their own clean Git fixture so the offline quality gate remains runnable while legitimate source changes are uncommitted.
+- Rewrote the 1,560-line role-and-receipt framework into a roughly 200-line outcome-owner workflow: goal, research, minimal plan, execution, verification, independent review, repair, and delivery.
 - Made the main task a valid execution surface and limited delegation to work that benefits from parallelism, isolation, or an independent view.
 - Replaced the fixed 16-role organization with dynamic research/execution/review subagent responsibilities and host-selected current models.
 - Removed every `AGENTS.md` routing snippet, installer flag, template, and validation dependency; the installer now guarantees `agents_md_touched: false`.

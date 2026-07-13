@@ -10,6 +10,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
+from validate_agent_profiles import PROFILE_NAMES, validate_profile_set
 
 
 # Keep this list independent from install_skill.py. A mutation of the installer
@@ -21,9 +22,18 @@ EXPECTED_RUNTIME_FILES = (
     "references/delivery-review.md",
     "references/long-running-work.md",
     "references/history-audit.md",
+    "references/software-development.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
+    "assets/agent-routing.json",
+    "assets/codex_agents/codebase-researcher.toml",
+    "assets/codex_agents/technical-architect.toml",
+    "assets/codex_agents/developer.toml",
+    "assets/codex_agents/reviewer.toml",
+    "assets/codex_agents/test-debugger.toml",
     "scripts/audit_historical_threads.py",
+    "scripts/install_agent_profiles.py",
+    "scripts/validate_agent_profiles.py",
 )
 
 PROHIBITED_ROUTING_MARKERS = (
@@ -36,6 +46,9 @@ PROHIBITED_ROUTING_MARKERS = (
 )
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 SKILL_SLUG_RE = re.compile(r"\$(?:[a-z][a-z0-9]*)(?:-[a-z0-9]+)+")
+SELF_SKILL_SLUG_RE = re.compile(
+    rf"\$(?:{re.escape(SKILL_NAME)}|{re.escape(LEGACY_SKILL_NAME)})(?![a-z0-9-])"
+)
 REVIEW_OUTCOME_RE = re.compile(
     r"(?:\b(?:NO-?GO|GO|PASS|FAIL)\b|预期结论|预判结论|预期判定|预判判定|通过|失败)",
     re.IGNORECASE,
@@ -238,7 +251,7 @@ def worker_packet_fields(prompt: str) -> dict[str, str] | None:
         return None
     lowered = prompt.lower()
     if (
-        SKILL_SLUG_RE.search(prompt)
+        SELF_SKILL_SLUG_RE.search(prompt)
         or REVIEW_OUTCOME_RE.search(prompt)
         or any(term in lowered for term in WORKER_PACKET_FORBIDDEN_TERMS)
     ):
@@ -409,6 +422,7 @@ def main() -> None:
         fail(f"SKILL.md exceeds 500 lines: {line_count}")
     validate_links(root, skill_text)
     validate_openai_yaml(root / "agents" / "openai.yaml")
+    agent_profiles = validate_profile_set(root)
     manifest = runtime_manifest(root)
 
     authored_files = authored_text_files(root)
@@ -450,6 +464,8 @@ def main() -> None:
         "skill": fields["name"],
         "skill_lines": line_count,
         "runtime_files": len(manifest),
+        "custom_agent_profiles": len(PROFILE_NAMES),
+        "custom_agent_template_parity": agent_profiles["project_template_parity"],
         "behavior_contract_cases": case_count,
         "model_behavior_verified": False,
         "note": "Offline package/contract validation does not prove model behavior.",

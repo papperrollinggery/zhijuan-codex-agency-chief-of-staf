@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "self_skill_names": [
+    "agency-chief-of-staff",
+    "zhijuan-codex-agency-chief-of-staf"
+  ],
+  "profiles": {
+    "codebase-researcher": {
+      "sandbox": "read-only",
+      "dispatch_when": ["independent code map", "reproduction path", "dependency evidence"],
+      "domain_skill_policy": "explicit-selected-only"
+    },
+    "technical-architect": {
+      "sandbox": "read-only",
+      "dispatch_when": ["cross-module interface", "migration boundary", "architecture risk"],
+      "domain_skill_policy": "explicit-selected-only"
+    },
+    "developer": {
+      "sandbox": "workspace-write",
+      "dispatch_when": ["isolated implementation lane", "non-overlapping write scope"],
+      "domain_skill_policy": "explicit-selected-only"
+    },
+    "reviewer": {
+      "sandbox": "read-only",
+      "dispatch_when": ["independent cold review"],
+      "domain_skill_policy": "explicit-selected-only"
+    },
+    "test-debugger": {
+      "sandbox": "read-only",
+      "dispatch_when": ["failing test", "log diagnosis", "flaky environment classification"],
+      "domain_skill_policy": "explicit-selected-only"
+    }
+  },
+  "scenarios": {
+    "small-bug": {
+      "owner": "main",
+      "optional_profiles": ["codebase-researcher", "reviewer"]
+    },
+    "cross-file-feature": {
+      "owner": "main",
+      "optional_profiles": ["technical-architect", "developer", "reviewer"]
+    },
+    "architecture-refactor": {
+      "owner": "main",
+      "optional_profiles": ["codebase-researcher", "technical-architect", "developer", "reviewer"]
+    },
+    "test-debug": {
+      "owner": "main",
+      "optional_profiles": ["test-debugger", "developer", "reviewer"]
+    },
+    "domain-development": {
+      "owner": "main",
+      "optional_profiles": ["technical-architect", "developer", "reviewer"],
+      "requires_explicit_domain_skill_when_material": true
+    },
+    "security-release": {
+      "owner": "main",
+      "optional_profiles": ["codebase-researcher", "reviewer"],
+      "requires_fresh_release_evidence": true
+    }
+  }
+}

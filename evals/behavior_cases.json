@@ -185,5 +185,13 @@
     "mode": "direct",
     "collaboration": "none",
     "activation": "ordinary"
+  },
+  {
+    "id": "delegated-domain-skill-bypass",
+    "prompt": "AGENCY_WORKER: true\n委派目标：使用 $openai-docs 核对一项官方配置。\n读取范围：当前官方文档。\n写入范围：无。\n期望产物：RESEARCH_READBACK、RESEARCH_STATUS，均填实际读回值。\n验证要求：直接读取当前官方文档并回查来源。\n停止条件：返回唯一终态；不启动、不派发。",
+    "should_trigger": false,
+    "mode": "worker",
+    "collaboration": "none",
+    "activation": "worker"
   }
 ]

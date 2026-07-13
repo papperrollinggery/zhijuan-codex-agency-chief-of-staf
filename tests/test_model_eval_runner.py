@@ -396,8 +396,18 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "停止条件：返回唯一终态；不启动、不派发。"
         )
         self.assertTrue(runner.is_valid_worker_packet(valid))
+        self.assertTrue(
+            runner.is_valid_worker_packet(
+                valid.replace("审查 README。", "使用 $openai-docs 核对 README。", 1)
+            )
+        )
         self.assertFalse(
             runner.is_valid_worker_packet(valid + "\n使用 $agency-chief-of-staff。")
+        )
+        self.assertFalse(
+            runner.is_valid_worker_packet(
+                valid.replace("审查 README。", "使用 $zhijuan-codex-agency-chief-of-staf 审查 README。", 1)
+            )
         )
         self.assertFalse(runner.is_valid_worker_packet(valid.replace("读取范围", "验证范围", 1)))
         self.assertFalse(

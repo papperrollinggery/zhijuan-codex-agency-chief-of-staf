@@ -23,9 +23,18 @@ RUNTIME_FILES = (
     "references/delivery-review.md",
     "references/long-running-work.md",
     "references/history-audit.md",
+    "references/software-development.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
+    "assets/agent-routing.json",
+    "assets/codex_agents/codebase-researcher.toml",
+    "assets/codex_agents/technical-architect.toml",
+    "assets/codex_agents/developer.toml",
+    "assets/codex_agents/reviewer.toml",
+    "assets/codex_agents/test-debugger.toml",
     "scripts/audit_historical_threads.py",
+    "scripts/install_agent_profiles.py",
+    "scripts/validate_agent_profiles.py",
 )
 
 

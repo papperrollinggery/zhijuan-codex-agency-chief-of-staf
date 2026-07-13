@@ -84,9 +84,26 @@ class NativeTaskReceiptTests(unittest.TestCase):
         )
 
     def make_fixture(self, base: Path) -> tuple[Path, Path]:
+        source_root = base / "source"
+        source_root.mkdir()
+        install_skill.copy_runtime(ROOT, source_root)
+        subprocess.run(["git", "init", "-q", str(source_root)], check=True)
+        subprocess.run(
+            ["git", "-C", str(source_root), "config", "user.name", "Receipt Test"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(source_root), "config", "user.email", "receipt@example.invalid"],
+            check=True,
+        )
+        subprocess.run(["git", "-C", str(source_root), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(source_root), "commit", "-qm", "receipt source"],
+            check=True,
+        )
         installed_root = base / "skills"
         for skill_name in install_skill.INSTALL_NAMES:
-            install_skill.copy_runtime(ROOT, installed_root / skill_name, skill_name)
+            install_skill.copy_runtime(source_root, installed_root / skill_name, skill_name)
 
         parent_rollout = base / "parent.jsonl"
         reviewer_rollout = base / "reviewer.jsonl"
@@ -173,7 +190,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 "--state-db",
                 str(database),
                 "--source-root",
-                str(ROOT),
+                str(database.parent / "source"),
                 "--installed-root",
                 str(installed_root),
                 "--parent-id",
