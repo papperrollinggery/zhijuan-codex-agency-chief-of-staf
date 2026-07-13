@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added a permanent `cli-profile-compat` path for read-only professional roles when the host cannot select named custom agents, with an independent standalone CLI session, explicit context-injection disclosure, strict managed/restricted/read sandbox verification, immutable-input and tool-output binding, recursion-disabled execution, bounded timeout, AGENTS invariance, and automatic archive verification; cold-context isolation remains explicitly unverified.
+- Added a fixed system-only tool `PATH` plus mandatory exit-0 `git diff` call/output receipts for reviewer and codebase-researcher compatibility runs; exit status is read only from the bound wrapper's structured top-level field, so missing `git` or misleading stdout cannot be reported as verified review evidence.
+- Kept native named custom agents as an optional enhancement instead of a release dependency; write-capable developer work remains in the main outcome-owner session or an isolated worktree.
+- Hardened reviewer terminal prompts and receipts to require an exact five-line schema and reject duplicate fields, extra lines, reordered fields, translated verdict decorations, and `PASS_*` prefix tricks.
 - Added five bounded project custom-agent profiles plus distributable templates for codebase research, architecture, scoped development, independent review, and on-demand test diagnosis.
 - Added an explicit opt-in agent-profile installer with conflict-safe replacement and `skills.config` domain-skill bindings; default Skill installation still writes no Agent or `AGENTS.md` configuration.
 - Replaced the blanket worker-packet `$slug` ban with an exact self-recursion denylist, allowing selected domain Skills while blocking both Chief-of-Staff entrypoints.

@@ -213,18 +213,20 @@ def completed_message(records: list[dict[str, Any]]) -> str:
 
 
 def verify_reviewer_schema(final_message: str) -> None:
-    fields: dict[str, str] = {}
-    for line in final_message.splitlines():
-        for field in REVIEWER_FINAL_FIELDS[:-1]:
-            if line.startswith(field):
-                fields[field] = line[len(field) :].strip()
-        if line.startswith("REVIEW_VERDICT:"):
-            fields["REVIEW_VERDICT:"] = line.removeprefix("REVIEW_VERDICT:").strip()
-    required = [*REVIEWER_FINAL_FIELDS[:-1], "REVIEW_VERDICT:"]
-    if any(not fields.get(field) for field in required):
-        raise ValueError("reviewer final does not contain the required line schema")
-    if not fields["REVIEW_VERDICT:"].startswith("PASS"):
-        raise ValueError("reviewer verdict is not PASS")
+    prefixes = (*REVIEWER_FINAL_FIELDS[:-1], "REVIEW_VERDICT:")
+    lines = final_message.splitlines()
+    if len(lines) != len(prefixes):
+        raise ValueError("reviewer final must contain exactly five schema lines")
+    values: dict[str, str] = {}
+    for line, prefix in zip(lines, prefixes, strict=True):
+        if not line.startswith(prefix):
+            raise ValueError(f"reviewer final field order mismatch: {prefix}")
+        value = line[len(prefix) :].strip()
+        if not value:
+            raise ValueError(f"reviewer final field is empty: {prefix}")
+        values[prefix] = value
+    if values["REVIEW_VERDICT:"] != "PASS":
+        raise ValueError("reviewer verdict is not exactly PASS")
 
 
 def verify_thread(

@@ -61,13 +61,36 @@ python3 scripts/install_agent_profiles.py \
 ## 派发与回收
 
 1. 使用主 `SKILL.md` 的完整 worker packet；在委派目标中点名 profile 和必要领域 Skill。
-2. 记录 spawn 返回的非空 id/path；真实 task/thread 还要用相应工具 readback 状态、cwd/worktree 和产物。
-3. 主线程验证 diff、测试和范围后记录采纳、部分采纳或拒绝。
-4. 完成、失败或替换的 task/thread 及时归档；native subagent 终态返回后不重复唤醒。
+2. native schema 能按名称选择并读回 profile 时，记录 spawn 返回的非空 id/path；真实 task/thread 还要 readback 状态、cwd/worktree 和产物。
+3. native schema 没有 profile 选择字段、拒绝该字段或 state 中没有角色绑定时，read-only profile 立即走下述 CLI 兼容通道；不要等待未来接口，也不要把普通 subagent 的提示词当 profile 证据。
+4. 主线程验证 diff、测试和范围后记录采纳、部分采纳或拒绝。
+5. 完成、失败或替换的 task/thread 及时归档；native subagent 终态返回后不重复唤醒。
+
+## 永久 CLI 兼容通道
+
+`scripts/run_profile_compat.py` 是 custom-agent 接口长期缺失时的正式执行面，不是临时诊断脚本。它只接受 `codebase-researcher`、`technical-architect`、`reviewer` 和 `test-debugger` 四个 `read-only` profile；`developer` 永远由主线程或隔离 worktree 执行。
+
+最小调用：
+
+```bash
+python3 scripts/run_profile_compat.py \
+  --profile reviewer \
+  --packet /absolute/path/reviewer.packet.txt \
+  --cwd /absolute/project \
+  --model <explicit-non-Luna-model> \
+  --reasoning-effort <effort> \
+  --required-read /absolute/project/current-artifact \
+  --required-read-marker '<hidden current fact>' \
+  --required-final-marker '<same current fact>'
+```
+
+Runner 使用参数数组而非 shell 派发，忽略用户 model/provider 配置但保留 execpolicy rules，只向 Codex 进程传最小非敏感环境 allowlist；工具 shell 不继承调用者环境，只注入固定 `/usr/bin:/bin:/usr/sbin:/sbin`，避免 secret 与用户级可执行路径泄漏，同时保证系统 `git` 可调用。Runner 强制 OpenAI、显式非 Luna model、结构化 `read-only` sandbox、禁用 apps/remote plugins/递归 subagent，并设置 1–1800 秒有界超时（默认 300 秒）。无论正常、失败或超时，只要读到 `thread.started` 就先终止进程组并归档。随后从 state DB 和 rollout 读回真实 thread、provider/model/reasoning、直接 artifact read、唯一终态与 archive 状态，并比较全局和 worktree 的 `AGENTS.md` / `AGENTS.override.md` 前后状态。`reviewer` 与 `codebase-researcher` 还必须从项目根以单独命令成功执行 `git diff -- <artifact>`，并把 call/output 绑定进收据；退出码只从绑定 tool wrapper 的唯一结构化顶层数值字段读取，不扫描 stdout 文本。`git` 不可用、diff 未读或结构化退出码非 0 即 fail closed。
+
+成功收据必须写 `execution_mode: cli-profile-compat`、`native_custom_agent_selected: false`、`native_agent_role: null`、`context_mode: standalone-cli-session`，并列出实际注入面、不可变输入哈希和绑定 tool-output 哈希。当前持久化状态不能证明父上下文隔离，必须保留 `cold_context_isolation: unverified`。这证明的是不同 thread 中的独立只读 profile 会话，不得改写成“原生 reviewer 角色已选中”或“cold-context isolation 已验证”。
 
 ## 验证边界
 
 - TOML/schema、template parity 和安装测试只证明配置结构。
-- 模型或原生 task smoke 才证明当前宿主行为；README 单行修改不等于真实开发能力。
+- 模型、native task smoke 或 `cli-profile-compat` 真实行为 smoke 才证明当前宿主行为；README 单行修改不等于真实开发能力。
 - Bug、跨文件/API、架构边界、失败诊断、领域 Skill 和缺陷审核必须分别有当前证据。
 - 隔离执行面指令不得改变用户全局、仓库主工作区或项目根位置的 `AGENTS.md`；验证前后哈希或缺失状态，并确认 runtime manifest 不含该文件。

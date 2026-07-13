@@ -34,6 +34,7 @@ RUNTIME_FILES = (
     "assets/codex_agents/test-debugger.toml",
     "scripts/audit_historical_threads.py",
     "scripts/install_agent_profiles.py",
+    "scripts/run_profile_compat.py",
     "scripts/validate_agent_profiles.py",
 )
 

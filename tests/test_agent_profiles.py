@@ -47,6 +47,8 @@ class AgentProfileTests(unittest.TestCase):
         result = validate_profile_set(ROOT)
         self.assertTrue(result["project_template_parity"])
         self.assertEqual(result["profiles"], list(PROFILE_NAMES))
+        self.assertFalse(result["native_custom_agent_required"])
+        self.assertEqual(result["compat_fallback"], "cli-profile-compat")
 
     def test_explicit_install_preserves_agents_md_and_unmanaged_profiles(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -156,8 +156,8 @@ def validate_profile(path: Path, expected_name: str, allow_bindings: bool) -> di
 
 def validate_routing(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema_version") != 1:
-        fail("agent-routing.json schema_version must be 1")
+    if data.get("schema_version") != 2:
+        fail("agent-routing.json schema_version must be 2")
     if set(data.get("self_skill_names", [])) != SELF_SKILL_NAMES:
         fail("agent-routing.json self-skill denylist mismatch")
     profiles = data.get("profiles")
@@ -169,6 +169,48 @@ def validate_routing(path: Path) -> dict[str, object]:
             fail(f"agent-routing.json sandbox mismatch: {name}")
         if profile.get("domain_skill_policy") != "explicit-selected-only":
             fail(f"agent-routing.json domain skill policy mismatch: {name}")
+        expected_execution = (
+            "main-or-isolated-worktree" if name == "developer" else "cli-profile-compat"
+        )
+        if profile.get("compat_execution") != expected_execution:
+            fail(f"agent-routing.json compatibility execution mismatch: {name}")
+    modes = data.get("execution_modes")
+    if not isinstance(modes, dict) or set(modes) != {
+        "native-custom-agent",
+        "cli-profile-compat",
+        "main-or-isolated-worktree",
+    }:
+        fail("agent-routing.json execution mode set mismatch")
+    native = modes["native-custom-agent"]
+    if not isinstance(native, dict) or native.get("status") != "optional-enhancement":
+        fail("native custom-agent mode must remain an optional enhancement")
+    if native.get("requires_named_profile_selection_readback") is not True:
+        fail("native custom-agent mode must require named-profile readback")
+    compat = modes["cli-profile-compat"]
+    if (
+        not isinstance(compat, dict)
+        or compat.get("status") != "permanent-fallback"
+        or compat.get("runner") != "scripts/run_profile_compat.py"
+        or compat.get("supported_sandboxes") != ["read-only"]
+        or compat.get("native_role_claim") is not False
+        or compat.get("archive_required") is not True
+        or compat.get("bounded_timeout") is not True
+        or compat.get("sanitized_process_environment") is not True
+        or compat.get("tool_shell_path") != "/usr/bin:/bin:/usr/sbin:/sbin"
+        or compat.get("git_diff_receipt_profiles")
+        != ["codebase-researcher", "reviewer"]
+        or compat.get("structured_tool_result_required") is not True
+        or compat.get("cold_context_isolation") != "unverified"
+    ):
+        fail("cli-profile-compat execution contract mismatch")
+    write_path = modes["main-or-isolated-worktree"]
+    if (
+        not isinstance(write_path, dict)
+        or write_path.get("status") != "write-path"
+        or write_path.get("profiles") != ["developer"]
+        or write_path.get("prompt_only_sandbox_claim") is not False
+    ):
+        fail("main-or-isolated-worktree execution contract mismatch")
     return data
 
 
@@ -189,6 +231,8 @@ def validate_profile_set(root: Path) -> dict[str, object]:
         "project_template_parity": True,
         "fixed_model": False,
         "self_skill_binding": False,
+        "native_custom_agent_required": False,
+        "compat_fallback": "cli-profile-compat",
     }
 
 

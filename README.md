@@ -33,6 +33,7 @@
 
 - 主线程是 outcome owner，可以直接研究、编辑、测试、整合和交付。
 - 按收益使用最少必要的 subagent：提供 codebase researcher、technical architect、developer、reviewer 和按需 test-debugger 五个窄职责 profile，不恢复固定 16 角色组织。
+- named custom-agent 接口只是可选增强；接口缺失时，四个只读 profile 走永久 CLI 兼容通道，写入仍由主线程或隔离 worktree 完成。
 - 领域 Skill 可以显式绑定给专业 Agent；只禁止两个主控入口递归调用，不再一刀切禁止全部 `$slug`。
 - Goal 只用于明确的长期目标，不为短任务生成 Goal Ledger。
 - 真实 task/thread 只在用户明确要求真实独立执行面时使用。
@@ -95,6 +96,24 @@ python3 scripts/install_agent_profiles.py \
 
 该脚本只管理五个同名 TOML，保留目标目录中的其他文件；冲突时 fail closed，显式 `--force` 才替换。它拒绝把 canonical/legacy 主控 Skill 绑定回子 Agent。
 
+## 不等待 Custom Agent 接口
+
+如果当前 Codex 的 native subagent schema 不能按 `reviewer` 等名称选择 profile，直接使用随 runtime 安装的永久兼容 runner：
+
+```bash
+python3 scripts/run_profile_compat.py \
+  --profile reviewer \
+  --packet /absolute/path/reviewer.packet.txt \
+  --cwd /absolute/project \
+  --model <explicit-non-Luna-model> \
+  --reasoning-effort <effort> \
+  --required-read /absolute/project/current-artifact \
+  --required-read-marker '<hidden current fact>' \
+  --required-final-marker '<same current fact>'
+```
+
+该通道只支持 `read-only` profile。它创建独立持久化 `codex exec` 会话，以参数数组和最小非敏感进程环境执行，显式禁用递归 subagent，设置有界超时，并核验 OpenAI provider/model/reasoning、结构化只读策略、直接 artifact read、严格终态、`AGENTS.md` 不变与 archive。收据固定写 `execution_mode: cli-profile-compat`、`native_custom_agent_selected: false`，不会把普通会话冒充成原生 `agent_role=reviewer`。`developer` 写任务仍走主线程或隔离 worktree。
+
 ## 使用
 
 最短调用：
@@ -133,8 +152,9 @@ python3 scripts/install_agent_profiles.py \
 
 1. `package/contract`：离线检查 frontmatter、runtime manifest、五个 Agent TOML、项目/模板 parity、领域 Skill 绑定、场景 schema 和安装行为；不声称证明模型行为。
 2. `model-smoke`：在无本项目 routing、禁用 plugins/apps、最小环境变量的临时仓库里真实调用当前 Codex 模型，保存 event JSONL 和最终输出；子集运行只会得到 `passed_partial`。
-3. `native-task-smoke`：从已安装 canonical bundle 发起真实 Codex Desktop task；只读核验 state DB 与 rollout 中的 provider/model/effort、唯一终态、reviewer 绑定、安装 manifest 和 cleanup，不复制 auth。
-4. `threadops-smoke`：只有发布目标明确要求真实 task/thread 证明时，使用 Codex Desktop 工具核验真实 id、readback、worktree 和 cleanup。
+3. `profile-compat-smoke`：当前 named custom-agent 接口不可用时，从已安装 canonical bundle 发起独立只读 CLI profile 会话，核验 state DB/rollout、直接 artifact read、严格 reviewer schema、AGENTS 不变和 cleanup。
+4. `native-task-smoke`：当前接口支持按名称选择并能读回角色时，从已安装 canonical bundle 发起真实 Codex Desktop task，核验 provider/model/effort、reviewer 绑定、安装 manifest 和 cleanup。
+5. `threadops-smoke`：只有发布目标明确要求真实 task/thread 证明时，使用 Codex Desktop 工具核验真实 id、readback、worktree 和 cleanup。
 
 运行离线质量门：
 
@@ -167,7 +187,7 @@ Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界
 
 `--auth-credential-class primary` 只允许生成诊断收据，永远不具备 prerelease/stable eligibility；公开发布证据必须使用 `dedicated`。
 
-当前 Codex Desktop 用户交付可使用 native-task receipt；它不声称凭据隔离或跨平台稳定发布：
+当前 Codex Desktop 真正读回 named reviewer 绑定时可使用 native-task receipt；该路径是可选增强，不是兼容发布前提，也不声称凭据隔离或跨平台稳定发布：
 
 ```bash
 python3 scripts/verify_native_task_receipt.py \
@@ -215,6 +235,7 @@ assets/
 scripts/
   audit_historical_threads.py
   install_agent_profiles.py
+  run_profile_compat.py
   validate_agent_profiles.py
 ```
 

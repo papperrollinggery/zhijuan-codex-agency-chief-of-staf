@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "self_skill_names": [
     "agency-chief-of-staff",
     "zhijuan-codex-agency-chief-of-staf"
@@ -8,27 +8,56 @@
     "codebase-researcher": {
       "sandbox": "read-only",
       "dispatch_when": ["independent code map", "reproduction path", "dependency evidence"],
-      "domain_skill_policy": "explicit-selected-only"
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "cli-profile-compat"
     },
     "technical-architect": {
       "sandbox": "read-only",
       "dispatch_when": ["cross-module interface", "migration boundary", "architecture risk"],
-      "domain_skill_policy": "explicit-selected-only"
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "cli-profile-compat"
     },
     "developer": {
       "sandbox": "workspace-write",
       "dispatch_when": ["isolated implementation lane", "non-overlapping write scope"],
-      "domain_skill_policy": "explicit-selected-only"
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "main-or-isolated-worktree"
     },
     "reviewer": {
       "sandbox": "read-only",
       "dispatch_when": ["independent cold review"],
-      "domain_skill_policy": "explicit-selected-only"
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "cli-profile-compat"
     },
     "test-debugger": {
       "sandbox": "read-only",
       "dispatch_when": ["failing test", "log diagnosis", "flaky environment classification"],
-      "domain_skill_policy": "explicit-selected-only"
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "cli-profile-compat"
+    }
+  },
+  "execution_modes": {
+    "native-custom-agent": {
+      "status": "optional-enhancement",
+      "requires_named_profile_selection_readback": true
+    },
+    "cli-profile-compat": {
+      "status": "permanent-fallback",
+      "runner": "scripts/run_profile_compat.py",
+      "supported_sandboxes": ["read-only"],
+      "native_role_claim": false,
+      "archive_required": true,
+      "bounded_timeout": true,
+      "sanitized_process_environment": true,
+      "tool_shell_path": "/usr/bin:/bin:/usr/sbin:/sbin",
+      "git_diff_receipt_profiles": ["codebase-researcher", "reviewer"],
+      "structured_tool_result_required": true,
+      "cold_context_isolation": "unverified"
+    },
+    "main-or-isolated-worktree": {
+      "status": "write-path",
+      "profiles": ["developer"],
+      "prompt_only_sandbox_claim": false
     }
   },
   "scenarios": {

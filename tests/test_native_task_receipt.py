@@ -348,6 +348,49 @@ class NativeTaskReceiptTests(unittest.TestCase):
             self.assertNotEqual(luna.returncode, 0)
             self.assertIn("Luna is not allowed", luna.stderr)
 
+    def test_rejects_duplicate_extra_and_prefixed_pass_reviewer_schema(self) -> None:
+        invalid_finals = (
+            "REVIEW_TARGET: README.md\n"
+            "REVIEW_TARGET: duplicate.md\n"
+            "REVIEW_READBACK: Delivery status: ready-for-review.\n"
+            "REVIEW_FINDINGS: NONE\n"
+            "REVIEW_RESIDUAL_RISK: fixture only\n"
+            "REVIEW_VERDICT: PASS",
+            "REVIEW_TARGET: README.md\n"
+            "REVIEW_READBACK: Delivery status: ready-for-review.\n"
+            "REVIEW_FINDINGS: NONE\n"
+            "REVIEW_RESIDUAL_RISK: fixture only\n"
+            "REVIEW_VERDICT: PASS\n"
+            "EXTRA: not allowed",
+            "REVIEW_TARGET: README.md\n"
+            "REVIEW_READBACK: Delivery status: ready-for-review.\n"
+            "REVIEW_FINDINGS: NONE\n"
+            "REVIEW_RESIDUAL_RISK: fixture only\n"
+            "REVIEW_VERDICT: PASS_WITH_WARNINGS",
+        )
+        for final in invalid_finals:
+            with self.subTest(final=final), tempfile.TemporaryDirectory() as tmp:
+                database, installed_root = self.make_fixture(Path(tmp))
+                connection = sqlite3.connect(database)
+                rollout_path = Path(
+                    connection.execute(
+                        "SELECT rollout_path FROM threads WHERE id = ?", (self.reviewer_id,)
+                    ).fetchone()[0]
+                )
+                connection.close()
+                records = [json.loads(line) for line in rollout_path.read_text().splitlines()]
+                for record in records:
+                    payload = record.get("payload", {})
+                    if payload.get("type") == "task_complete":
+                        payload["last_agent_message"] = final
+                rollout_path.write_text(
+                    "\n".join(json.dumps(record) for record in records) + "\n",
+                    encoding="utf-8",
+                )
+                result = self.run_verifier(database, installed_root)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertRegex(result.stderr, r"exactly five|field order|exactly PASS")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -52,6 +52,9 @@ for index in 0 1 2; do
       "$profile_source/assets/codex_agents/$profile.toml" \
       "$project/.codex/agents/$profile.toml"
   done
+  python3 "$profile_source/scripts/run_profile_compat.py" --help \
+    >"$TMP_ROOT/profile-compat-help-$label.txt"
+  rg -q "Run a bounded read-only profile" "$TMP_ROOT/profile-compat-help-$label.txt"
 done
 
 if test -f "$SOURCE_ROOT/AGENTS.md"; then
@@ -100,4 +103,8 @@ for receipt in map(Path, sys.argv[1:]):
         raise SystemExit("agent installer isolation contract failed")
 PY
 
-echo "Release smoke passed: canonical/legacy bundles and opt-in agent profiles match source; model behavior not claimed."
+PROFILE_COMPAT_INSTALLED_ROOT="$TMP_ROOT/skills" \
+  python3 -m unittest \
+  tests.test_profile_compat.ProfileCompatibilityTests.test_installed_bundles_execute_full_receipt_flow
+
+echo "Release smoke passed: canonical/legacy bundles, opt-in profiles, and permanent read-only compatibility runner match source; model behavior not claimed."
