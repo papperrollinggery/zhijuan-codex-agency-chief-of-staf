@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Aligned startup ordering with host Skill rules: one fixed explanation-only Skill usage notice may precede takeover, while task progress and task actions remain fail-closed.
+- Made the natural-language takeover line the cross-host startup evidence and kept the hidden receipt optional, because some hosts strip HTML comments from persisted rollouts.
+
 - Added deterministic role-to-model-class routing for the five bounded profiles, with economy/balanced/quality budgets, current-host catalog resolution, same-provider and `fork_turns=none` guards, truthful planned/accepted/confirmed states, root-owned overflow, and a provider-neutral optional advisor slot.
 - Reworked the user-facing interaction into compact takeover, progress, decision, and delivery states; backstage markers remain machine-verifiable but render invisibly, while ordinary status stays in plain human language.
 - Added OpenAI Visualizations routing for stage, decision, impact, evidence, numeric-trend, and current-image review; shipped compact responsive stage and decision templates, strict no-fake-curve/no-fake-preview fallbacks, light/dark CSS contract checks, and regression gates against backstage terms, hover flicker, animation, external resources, and network-capable markup.

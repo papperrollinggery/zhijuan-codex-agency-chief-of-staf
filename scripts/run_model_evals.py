@@ -44,7 +44,9 @@ ASSISTANT_ITEM_TYPES = {"agent_message", "assistant_message"}
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 MODEL_RE = re.compile(r"\bmodel=([A-Za-z0-9._-]+)")
 PROGRESS_RE = re.compile(r"(?:MAIN_PROGRESS|\bprogress\b|进度)", re.IGNORECASE)
-BOOT_PREFIX_RE = re.compile(r"^(?:<!--\s*)?COS_BOOT_RECEIPT")
+BOOT_PREFIX_RE = re.compile(
+    r"^(?:<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n)?任务已接管｜"
+)
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ALLOWED_MODES = {"direct", "structured", "goal", "worker"}
 ALLOWED_COLLABORATION = {
@@ -724,13 +726,21 @@ def event_surface(
 
 
 def atomic_boot_block(text: str) -> bool:
-    """Require the hidden marker to be first and the takeover line immediately after it."""
-    match = re.match(r"\s*<!--\s*COS_BOOT_RECEIPT[^>]*-->\s*\n", text)
-    if match is None:
-        return False
-    remainder = text[match.end() :]
+    """Require a visible takeover line, optionally preceded by one hidden marker."""
+    stripped = text.lstrip()
+    match = re.match(r"<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n", stripped)
+    remainder = stripped[match.end() :] if match is not None else stripped
     first_visible = next((line.strip() for line in remainder.splitlines() if line.strip()), "")
     return first_visible.startswith("任务已接管｜")
+
+
+def is_platform_skill_announcement(text: str) -> bool:
+    """Recognize one narrow, pre-boot host-required Skill usage notice."""
+    normalized = " ".join(text.strip().split()).lower()
+    return normalized == (
+        "我会使用 agency-chief-of-staff skill，因为本任务匹配它的职责；"
+        "先完整读取 skill 说明。"
+    )
 
 
 def contract_failures(
@@ -766,12 +776,12 @@ def contract_failures(
         if BOOT_PREFIX_RE.match(str(item.get("text", "")).lstrip())
     ]
     booted = (
-        "COS_BOOT_RECEIPT" in surface
+        "任务已接管｜" in surface
         if isinstance(surface_or_events, str)
         else len(boot_indexes) == 1
     )
     if case["should_trigger"] and not booted:
-        failures.append("should_trigger=true but no COS_BOOT_RECEIPT was observed")
+        failures.append("should_trigger=true but no takeover line was observed")
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"]:
@@ -795,12 +805,15 @@ def contract_failures(
         failures.append("boot marker and first visible takeover line are not atomic")
 
     if message_events and len(boot_indexes) != 1:
-        failures.append("main session must emit exactly one boot receipt")
+        failures.append("main session must emit exactly one takeover line")
     if boot_indexes:
         boot_index = boot_indexes[0]
-        if any(
-            int(item["event_index"]) < boot_index
-            for item in message_events
+        preboot_messages = [
+            item for item in message_events if int(item["event_index"]) < boot_index
+        ]
+        if preboot_messages and not (
+            len(preboot_messages) == 1
+            and is_platform_skill_announcement(str(preboot_messages[0].get("text", "")))
         ):
             failures.append("assistant message preceded COS_BOOT_RECEIPT")
         progress_indexes = [
@@ -819,13 +832,14 @@ def contract_failures(
         ):
             failures.append("reviewer spawn preceded COS_BOOT_RECEIPT")
 
+    has_compat_marker = "COS_BOOT_RECEIPT" in boot_message
     mode_markers = {
         "direct": "模式：直接",
         "structured": "模式：结构化",
         "goal": "模式：Goal",
     }
     marker = mode_markers.get(str(case["mode"]))
-    if marker and marker not in surface:
+    if has_compat_marker and marker and marker not in boot_message:
         failures.append(f"boot receipt does not declare expected {marker}")
 
     collaboration = case["collaboration"]
@@ -835,7 +849,7 @@ def contract_failures(
         "native_subagents_optional": ("协作：无", "协作：原生子代理"),
         "real_task": ("协作：真实任务",),
     }[collaboration]
-    if not any(value in surface for value in accepted):
+    if has_compat_marker and not any(value in boot_message for value in accepted):
         failures.append(
             "boot receipt does not declare expected collaboration: " + " or ".join(accepted)
         )

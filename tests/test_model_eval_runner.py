@@ -654,6 +654,77 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
 
+    def test_allows_one_narrow_platform_skill_announcement_before_boot(self) -> None:
+        announcement = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。",
+            },
+        }
+        boot = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实",
+            },
+        }
+        parsed = runner.event_surface("\n".join(map(json.dumps, (announcement, boot))), "")
+        failures = runner.contract_failures(self.base_case(), parsed)
+        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+        progress_disguised_as_announcement = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。下一步开始修改文件。",
+            },
+        }
+        rejected = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (progress_disguised_as_announcement, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", rejected)
+
+        duplicate = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (announcement, announcement, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", duplicate)
+
+        for suffix in ("然后修改文件。", "已经发现启动校验有缺口。", "计划完成后发布。"):
+            smuggled = {
+                "type": "item.completed",
+                "item": {
+                    "type": "assistant_message",
+                    "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。" + suffix,
+                },
+            }
+            failures = runner.contract_failures(
+                self.base_case(),
+                runner.event_surface("\n".join(map(json.dumps, (smuggled, boot))), ""),
+            )
+            self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+    def test_visible_takeover_line_is_sufficient_when_host_strips_comments(self) -> None:
+        boot = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "任务已接管｜正在核对事实\n\n目标：交付用户可读结果",
+            },
+        }
+        failures = runner.contract_failures(
+            self.base_case(), runner.event_surface(json.dumps(boot), "")
+        )
+        self.assertNotIn("should_trigger=true but no takeover line was observed", failures)
+        self.assertNotIn("boot marker and first visible takeover line are not atomic", failures)
+        self.assertNotIn("main session must emit exactly one takeover line", failures)
+
     def test_failed_command_is_not_tool_evidence_but_still_preboot_task_action(self) -> None:
         event = {
             "type": "item.completed",
