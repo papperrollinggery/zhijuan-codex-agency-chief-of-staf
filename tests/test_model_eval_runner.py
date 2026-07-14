@@ -469,7 +469,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         boot = {
             "type": "item.completed",
-            "item": {"type": "assistant_message", "text": "COS_BOOT_RECEIPT：已接管；模式：直接；协作：原生子代理。"},
+            "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：原生子代理。 -->\n任务已接管｜正在核对事实"},
         }
         spawn = {
             "type": "item.completed",
@@ -507,7 +507,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         boot = {
             "type": "item.completed",
-            "item": {"type": "assistant_message", "text": "COS_BOOT_RECEIPT：已接管；模式：直接；协作：无。"},
+            "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实"},
         }
         parsed = runner.event_surface(
             "\n".join(map(json.dumps, (started_task_action, boot, task_action))), ""
@@ -617,7 +617,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         bootstrap = {
             "type": "item.completed",
-            "item": {"type": "assistant_message", "text": "COS_BOOT_RECEIPT：已接管；模式：直接；协作：无。"},
+            "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实"},
         }
         allowed = runner.contract_failures(
             self.base_case(),
@@ -654,6 +654,77 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
 
+    def test_allows_one_narrow_platform_skill_announcement_before_boot(self) -> None:
+        announcement = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。",
+            },
+        }
+        boot = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实",
+            },
+        }
+        parsed = runner.event_surface("\n".join(map(json.dumps, (announcement, boot))), "")
+        failures = runner.contract_failures(self.base_case(), parsed)
+        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+        progress_disguised_as_announcement = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。下一步开始修改文件。",
+            },
+        }
+        rejected = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (progress_disguised_as_announcement, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", rejected)
+
+        duplicate = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (announcement, announcement, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", duplicate)
+
+        for suffix in ("然后修改文件。", "已经发现启动校验有缺口。", "计划完成后发布。"):
+            smuggled = {
+                "type": "item.completed",
+                "item": {
+                    "type": "assistant_message",
+                    "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。" + suffix,
+                },
+            }
+            failures = runner.contract_failures(
+                self.base_case(),
+                runner.event_surface("\n".join(map(json.dumps, (smuggled, boot))), ""),
+            )
+            self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+    def test_visible_takeover_line_is_sufficient_when_host_strips_comments(self) -> None:
+        boot = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "任务已接管｜正在核对事实\n\n目标：交付用户可读结果",
+            },
+        }
+        failures = runner.contract_failures(
+            self.base_case(), runner.event_surface(json.dumps(boot), "")
+        )
+        self.assertNotIn("should_trigger=true but no takeover line was observed", failures)
+        self.assertNotIn("boot marker and first visible takeover line are not atomic", failures)
+        self.assertNotIn("main session must emit exactly one takeover line", failures)
+
     def test_failed_command_is_not_tool_evidence_but_still_preboot_task_action(self) -> None:
         event = {
             "type": "item.completed",
@@ -667,7 +738,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         boot = {
             "type": "item.completed",
-            "item": {"type": "assistant_message", "text": "COS_BOOT_RECEIPT：已接管；模式：直接；协作：无。"},
+            "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实"},
         }
         parsed = runner.event_surface("\n".join(map(json.dumps, (event, boot))), "done")
         self.assertEqual(parsed["tool_events"], 0)
@@ -680,10 +751,75 @@ class ModelEvalRunnerTests(unittest.TestCase):
         case = self.base_case()
         failures = runner.contract_failures(
             case,
-            "COS_BOOT_RECEIPT：已接管；模式：结构化；协作：原生子代理。",
+            "<!-- COS_BOOT_RECEIPT；模式：结构化；协作：原生子代理。 -->\n任务已接管｜正在核对事实",
         )
         self.assertTrue(any("模式：直接" in failure for failure in failures))
         self.assertTrue(any("协作：无" in failure for failure in failures))
+
+    def test_boot_marker_must_be_adjacent_to_first_visible_takeover_line(self) -> None:
+        case = self.base_case()
+        invalid = (
+            "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n"
+            "正在加载内部系统\n"
+            "任务已接管｜正在核对事实"
+        )
+        failures = runner.contract_failures(case, invalid)
+        self.assertIn(
+            "boot marker and first visible takeover line are not atomic",
+            failures,
+        )
+        valid = (
+            "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n"
+            "任务已接管｜正在核对事实"
+        )
+        self.assertNotIn(
+            "boot marker and first visible takeover line are not atomic",
+            runner.contract_failures(case, valid),
+        )
+
+    def test_visualization_contract_checks_required_and_forbidden_markers(self) -> None:
+        case = self.base_case()
+        case["visualization"] = {
+            "surface": "task-stage",
+            "fallback": "markdown-step-list",
+            "must_not_claim": ["进度100%"],
+            "must_contain_any": ["阶段路径", "离散阶段"],
+            "must_not_contain": ["::codex-inline-vis", "100%"],
+        }
+        base = (
+            "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n"
+            "任务已接管｜正在核对事实\n"
+        )
+        missing = runner.contract_failures(case, base + "当前进度")
+        self.assertIn(
+            "visualization output did not match any required surface marker",
+            missing,
+        )
+        forbidden = runner.contract_failures(case, base + "阶段路径 100%")
+        self.assertIn(
+            "visualization output contains forbidden marker '100%'",
+            forbidden,
+        )
+        forbidden_claim = runner.contract_failures(case, base + "阶段路径 进度100%")
+        self.assertIn(
+            "visualization output makes forbidden claim '进度100%'",
+            forbidden_claim,
+        )
+        wrong_surface = runner.contract_failures(
+            {**case, "visualization": {**case["visualization"], "surface": "decision"}},
+            base + "只有普通文本",
+        )
+        self.assertIn(
+            "visualization output does not represent surface 'decision'",
+            wrong_surface,
+        )
+        missing_fallback = runner.contract_failures(case, base + "可视化内容")
+        self.assertIn(
+            "visualization fallback 'markdown-step-list' was not represented",
+            missing_fallback,
+        )
+        passed = runner.contract_failures(case, base + "使用离散阶段展示当前进度")
+        self.assertFalse(any("visualization output" in item for item in passed))
 
     def test_partial_success_cannot_be_full_pass(self) -> None:
         passed = [{"status": "passed"}]
@@ -769,6 +905,17 @@ class ModelEvalRunnerTests(unittest.TestCase):
         ]
         with self.assertRaisesRegex(RuntimeError, "missing required cases"):
             runner.validate_smoke_suite(weakened)
+
+    def test_role_model_smoke_cases_cannot_be_removed(self) -> None:
+        cases = json.loads(
+            (ROOT / "evals" / "behavior_cases.json").read_text(encoding="utf-8")
+        )
+        validated = [runner.validate_runtime_case(case) for case in cases]
+        for case_id in ("role-model-balanced-budget", "role-model-route-unavailable"):
+            with self.subTest(case_id=case_id):
+                weakened = [case for case in validated if case["id"] != case_id]
+                with self.assertRaisesRegex(RuntimeError, "missing required cases"):
+                    runner.validate_smoke_suite(weakened)
 
     def test_exact_auth_values_are_redacted(self) -> None:
         text, leaked = runner.redact_exact_auth_values(

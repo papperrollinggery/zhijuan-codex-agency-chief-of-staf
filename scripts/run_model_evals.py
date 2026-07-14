@@ -25,6 +25,7 @@ from typing import Any
 
 from install_skill import SKILL_NAME, copy_runtime, runtime_manifest
 from validate_package import (
+    REQUIRED_VISUAL_SURFACES,
     REVIEW_OUTCOME_RE,
     SKILL_SLUG_RE,
     valid_worker_packet as package_valid_worker_packet,
@@ -43,6 +44,9 @@ ASSISTANT_ITEM_TYPES = {"agent_message", "assistant_message"}
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 MODEL_RE = re.compile(r"\bmodel=([A-Za-z0-9._-]+)")
 PROGRESS_RE = re.compile(r"(?:MAIN_PROGRESS|\bprogress\b|进度)", re.IGNORECASE)
+BOOT_PREFIX_RE = re.compile(
+    r"^(?:<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n)?任务已接管｜"
+)
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ALLOWED_MODES = {"direct", "structured", "goal", "worker"}
 ALLOWED_COLLABORATION = {
@@ -123,6 +127,18 @@ REQUIRED_SMOKE_CONTRACT = {
         "mode": "direct",
         "collaboration": "none",
         "activation": "ordinary",
+    },
+    "role-model-balanced-budget": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents_optional",
+        "activation": "explicit",
+    },
+    "role-model-route-unavailable": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents",
+        "activation": "explicit",
     },
 }
 SAFE_ENV_KEYS = {
@@ -503,6 +519,20 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
             or any(not isinstance(item, str) or not item for item in case[key])
         ):
             raise RuntimeError(f"case {case_id} {key} must contain non-empty strings")
+    if "visualization" in case:
+        visual = case["visualization"]
+        expected_keys = {"surface", "fallback", "must_not_claim", "must_contain_any", "must_not_contain"}
+        if not isinstance(visual, dict) or set(visual) != expected_keys:
+            raise RuntimeError(f"case {case_id} visualization contract is invalid")
+        if visual["surface"] not in REQUIRED_VISUAL_SURFACES:
+            raise RuntimeError(f"case {case_id} visualization surface is unsupported")
+        if not isinstance(visual["fallback"], str) or not visual["fallback"]:
+            raise RuntimeError(f"case {case_id} visualization fallback is required")
+        for key in ("must_not_claim", "must_contain_any", "must_not_contain"):
+            if not isinstance(visual[key], list) or not visual[key] or any(
+                not isinstance(item, str) or not item for item in visual[key]
+            ):
+                raise RuntimeError(f"case {case_id} visualization {key} is invalid")
     has_file = "expected_file" in case
     has_text = "expected_text" in case
     if has_file != has_text:
@@ -695,6 +725,24 @@ def event_surface(
     }
 
 
+def atomic_boot_block(text: str) -> bool:
+    """Require a visible takeover line, optionally preceded by one hidden marker."""
+    stripped = text.lstrip()
+    match = re.match(r"<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n", stripped)
+    remainder = stripped[match.end() :] if match is not None else stripped
+    first_visible = next((line.strip() for line in remainder.splitlines() if line.strip()), "")
+    return first_visible.startswith("任务已接管｜")
+
+
+def is_platform_skill_announcement(text: str) -> bool:
+    """Recognize one narrow, pre-boot host-required Skill usage notice."""
+    normalized = " ".join(text.strip().split()).lower()
+    return normalized == (
+        "我会使用 agency-chief-of-staff skill，因为本任务匹配它的职责；"
+        "先完整读取 skill 说明。"
+    )
+
+
 def contract_failures(
     case: dict[str, Any], surface_or_events: str | dict[str, object]
 ) -> list[str]:
@@ -725,15 +773,15 @@ def contract_failures(
     boot_indexes = [
         int(item["event_index"])
         for item in message_events
-        if str(item.get("text", "")).lstrip().startswith("COS_BOOT_RECEIPT")
+        if BOOT_PREFIX_RE.match(str(item.get("text", "")).lstrip())
     ]
     booted = (
-        "COS_BOOT_RECEIPT" in surface
+        "任务已接管｜" in surface
         if isinstance(surface_or_events, str)
         else len(boot_indexes) == 1
     )
     if case["should_trigger"] and not booted:
-        failures.append("should_trigger=true but no COS_BOOT_RECEIPT was observed")
+        failures.append("should_trigger=true but no takeover line was observed")
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"]:
@@ -745,13 +793,27 @@ def contract_failures(
             failures.append("worker or ordinary case attempted collaboration")
         return failures
 
+    boot_message = ""
+    if boot_indexes:
+        boot_event = next(
+            item for item in message_events if int(item["event_index"]) == boot_indexes[0]
+        )
+        boot_message = str(boot_event.get("text", ""))
+    elif isinstance(surface_or_events, str):
+        boot_message = surface
+    if booted and not atomic_boot_block(boot_message):
+        failures.append("boot marker and first visible takeover line are not atomic")
+
     if message_events and len(boot_indexes) != 1:
-        failures.append("main session must emit exactly one boot receipt")
+        failures.append("main session must emit exactly one takeover line")
     if boot_indexes:
         boot_index = boot_indexes[0]
-        if any(
-            int(item["event_index"]) < boot_index
-            for item in message_events
+        preboot_messages = [
+            item for item in message_events if int(item["event_index"]) < boot_index
+        ]
+        if preboot_messages and not (
+            len(preboot_messages) == 1
+            and is_platform_skill_announcement(str(preboot_messages[0].get("text", "")))
         ):
             failures.append("assistant message preceded COS_BOOT_RECEIPT")
         progress_indexes = [
@@ -770,13 +832,14 @@ def contract_failures(
         ):
             failures.append("reviewer spawn preceded COS_BOOT_RECEIPT")
 
+    has_compat_marker = "COS_BOOT_RECEIPT" in boot_message
     mode_markers = {
         "direct": "模式：直接",
         "structured": "模式：结构化",
         "goal": "模式：Goal",
     }
     marker = mode_markers.get(str(case["mode"]))
-    if marker and marker not in surface:
+    if has_compat_marker and marker and marker not in boot_message:
         failures.append(f"boot receipt does not declare expected {marker}")
 
     collaboration = case["collaboration"]
@@ -786,10 +849,53 @@ def contract_failures(
         "native_subagents_optional": ("协作：无", "协作：原生子代理"),
         "real_task": ("协作：真实任务",),
     }[collaboration]
-    if not any(value in surface for value in accepted):
+    if has_compat_marker and not any(value in boot_message for value in accepted):
         failures.append(
             "boot receipt does not declare expected collaboration: " + " or ".join(accepted)
         )
+    visual = case.get("visualization")
+    if isinstance(visual, dict):
+        surface_markers = {
+            "task-stage": ("阶段", "步骤", "::codex-inline-vis"),
+            "decision": ("选择", "决定", "推荐"),
+            "impact": ("影响", "保留", "需要复核"),
+            "evidence-list": ("证据", "请上传", "尚无", "尚未提供", "当前版本"),
+            "numeric-trend": ("趋势", "曲线", "图表", "数据表"),
+            "image-review": ("图片", "预览", "页面", "幻灯片"),
+        }
+        fallback_markers = {
+            "markdown-step-list": ("阶段", "步骤"),
+            "comparison-table": ("选择", "方案", "推荐"),
+            "mermaid": ("```mermaid",),
+            "markdown-list": ("- ", "请上传", "尚无", "尚未提供"),
+            "data-table": ("|", "数据表"),
+            "numbered-findings": ("1.", "问题", "发现"),
+        }
+        surface_kind = visual.get("surface")
+        expected_surface = surface_markers.get(str(surface_kind), ())
+        if expected_surface and not any(marker in surface for marker in expected_surface):
+            failures.append(f"visualization output does not represent surface {surface_kind!r}")
+        fallback_kind = visual.get("fallback")
+        expected_fallback = fallback_markers.get(str(fallback_kind), ())
+        if "::codex-inline-vis" not in surface and expected_fallback and not any(
+            marker in surface for marker in expected_fallback
+        ):
+            failures.append(f"visualization fallback {fallback_kind!r} was not represented")
+        required_any = visual.get("must_contain_any", [])
+        if isinstance(required_any, list) and not any(
+            isinstance(marker, str) and marker in surface for marker in required_any
+        ):
+            failures.append("visualization output did not match any required surface marker")
+        forbidden = visual.get("must_not_contain", [])
+        if isinstance(forbidden, list):
+            for marker in forbidden:
+                if isinstance(marker, str) and marker in surface:
+                    failures.append(f"visualization output contains forbidden marker {marker!r}")
+        forbidden_claims = visual.get("must_not_claim", [])
+        if isinstance(forbidden_claims, list):
+            for claim in forbidden_claims:
+                if isinstance(claim, str) and claim in surface:
+                    failures.append(f"visualization output makes forbidden claim {claim!r}")
     return failures
 
 

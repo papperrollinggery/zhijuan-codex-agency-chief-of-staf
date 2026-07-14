@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任务进展</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#fff; --ink:#1f2328; --muted:#68707a; --line:#dfe2e5; --accent:#2563eb; --accent-soft:#eff5ff; font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:transparent; color:var(--ink); }
+    main { width:min(720px,100%); margin:0 auto; padding:8px; }
+    .card { padding:22px; background:var(--bg); border:1px solid var(--line); border-radius:16px; }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .status { display:inline-flex; align-items:center; gap:8px; font-size:.82rem; font-weight:650; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); }
+    .count { color:var(--muted); font-size:.8rem; }
+    h1 { margin:16px 0 6px; font-size:clamp(1.35rem,4vw,1.75rem); line-height:1.25; letter-spacing:-.02em; }
+    .goal { margin:0; color:var(--muted); font-size:.96rem; line-height:1.55; }
+    .rail { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin:20px 0; padding:0; list-style:none; }
+    .rail li { min-width:0; }
+    .bar { display:block; height:4px; margin-bottom:8px; border-radius:4px; background:var(--line); }
+    .done .bar,.current .bar { background:var(--accent); }
+    .rail b { display:block; overflow:hidden; color:var(--muted); font-size:.75rem; font-weight:560; text-overflow:ellipsis; white-space:nowrap; }
+    .current b { color:var(--ink); font-weight:700; }
+    .focus { display:grid; grid-template-columns:1fr auto; gap:18px; align-items:center; padding:16px; background:var(--accent-soft); border-radius:12px; }
+    .focus strong,.focus span { display:block; }
+    .focus strong { margin-bottom:4px; font-size:.96rem; }
+    .focus span { color:var(--muted); font-size:.88rem; line-height:1.45; }
+    .next { color:var(--accent)!important; font-size:.82rem!important; font-weight:650; white-space:nowrap; }
+    @media (max-width:520px) { main{padding:4px}.card{padding:18px;border-radius:14px}.rail{grid-template-columns:repeat(2,1fr);gap:12px 8px}.focus{grid-template-columns:1fr;gap:8px}.next{white-space:normal} }
+    @media (prefers-color-scheme:dark) { :root{--bg:#181a1d;--ink:#f1f3f5;--muted:#aab1ba;--line:#363a40;--accent:#72a7ff;--accent-soft:#202c41} }
+    @media (prefers-reduced-motion:reduce) { *{transition:none!important;animation:none!important} }
+  </style>
+</head>
+<body>
+  <main aria-labelledby="title">
+    <section class="card">
+      <div class="top"><span class="status"><span class="dot" aria-hidden="true"></span>任务正在推进</span><span class="count">第 2 / 4 步</span></div>
+      <h1 id="title">当前任务</h1>
+      <p class="goal">一句话说明用户最终会得到什么。</p>
+      <ol class="rail" aria-label="任务阶段">
+        <li class="done"><span class="bar"></span><b>查清事实</b></li>
+        <li class="current" aria-current="step"><span class="bar"></span><b>制作结果</b></li>
+        <li><span class="bar"></span><b>验证结果</b></li>
+        <li><span class="bar"></span><b>独立复核</b></li>
+      </ol>
+      <div class="focus"><div><strong>当前：正在制作</strong><span>一句话说明本阶段有意义的进展。</span></div><span class="next">下一步：验证</span></div>
+    </section>
+  </main>
+</body>
+</html>

@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
@@ -23,9 +24,15 @@ EXPECTED_RUNTIME_FILES = (
     "references/long-running-work.md",
     "references/history-audit.md",
     "references/software-development.md",
+    "references/user-experience.md",
+    "references/model-routing-and-budget.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
     "assets/agent-routing.json",
+    "assets/role-model-policy.json",
+    "assets/visualizations/surface-registry.json",
+    "assets/visualizations/task-surface.html",
+    "assets/visualizations/decision-surface.html",
     "assets/codex_agents/codebase-researcher.toml",
     "assets/codex_agents/technical-architect.toml",
     "assets/codex_agents/developer.toml",
@@ -34,6 +41,7 @@ EXPECTED_RUNTIME_FILES = (
     "scripts/audit_historical_threads.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
 
@@ -121,7 +129,52 @@ REQUIRED_MODEL_SMOKE_IDS = {
     "ordinary-small-answer",
     "ordinary-readiness-phrase",
     "ordinary-rescue-phrase",
+    "role-model-balanced-budget",
+    "role-model-route-unavailable",
 }
+REQUIRED_VISUAL_SURFACES = {
+    "task-stage",
+    "decision",
+    "impact",
+    "evidence-list",
+    "numeric-trend",
+    "image-review",
+}
+REQUIRED_VISUAL_BEHAVIOR_CASES = {
+    "visualized-dependent-stages",
+    "visualized-numeric-boundary",
+    "visualized-image-boundary",
+    "visualization-fallback",
+}
+FORBIDDEN_VISIBLE_UI_TERMS = (
+    "COS_BOOT_RECEIPT",
+    "thread_id",
+    "sha256",
+    "TOOL_BLOCKED",
+    "exit code",
+    "JSON",
+    "YAML",
+    "回值",
+)
+
+
+class VisibleTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.hidden_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"style", "script"}:
+            self.hidden_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"style", "script"} and self.hidden_depth:
+            self.hidden_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data)
 
 
 def fail(message: str) -> None:
@@ -228,6 +281,60 @@ def validate_openai_yaml(path: Path) -> None:
         fail("agents/openai.yaml must allow implicit invocation")
 
 
+def validate_visualization_assets(root: Path) -> None:
+    registry_path = root / "assets" / "visualizations" / "surface-registry.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    if registry.get("registry_version") != "1.0":
+        fail("visualization registry must use version 1.0")
+    surfaces = registry.get("surfaces")
+    if not isinstance(surfaces, list):
+        fail("visualization registry surfaces must be a list")
+    kinds = {
+        item.get("kind")
+        for item in surfaces
+        if isinstance(item, dict) and isinstance(item.get("kind"), str)
+    }
+    if kinds != REQUIRED_VISUAL_SURFACES:
+        fail("visualization registry does not match the supported surface set")
+    for item in surfaces:
+        if not isinstance(item, dict):
+            fail("visualization registry surface must be an object")
+        for key in ("kind", "use_when", "preferred_visual", "required_visible", "fallback", "forbidden"):
+            if key not in item or not item[key]:
+                fail(f"visualization surface {item.get('kind')!r} missing {key}")
+
+    templates = {
+        "task": root / "assets" / "visualizations" / "task-surface.html",
+        "decision": root / "assets" / "visualizations" / "decision-surface.html",
+    }
+    for name, template_path in templates.items():
+        html = template_path.read_text(encoding="utf-8")
+        for marker in ("<meta name=\"viewport\"", "width:min(720px,100%)", "@media (max-width:", "prefers-reduced-motion"):
+            if marker not in html:
+                fail(f"{name} visualization template missing responsive/accessibility marker: {marker}")
+        if re.search(r"<(?:script|link|img|iframe|video|audio|source)[^>]+(?:src|href)=", html, re.IGNORECASE):
+            fail(f"{name} visualization template must not load external resources")
+        if re.search(r"(?:url\s*\(|@import|fetch\s*\(|WebSocket\s*\()", html, re.IGNORECASE):
+            fail(f"{name} visualization template must not use network-capable resources")
+        if ":hover" in html:
+            fail(f"compact {name} visualization must not add hover-only styling")
+        if "@keyframes" in html or re.search(r"(?:animation|transition)\s*:(?!\s*none)", html, re.IGNORECASE):
+            fail(f"compact {name} visualization must not animate or transition")
+        parser = VisibleTextParser()
+        parser.feed(html)
+        visible = " ".join(parser.parts)
+        for term in FORBIDDEN_VISIBLE_UI_TERMS:
+            if term.lower() in visible.lower():
+                fail(f"{name} visualization template exposes backstage term: {term}")
+    task_html = templates["task"].read_text(encoding="utf-8")
+    if "aria-current=\"step\"" not in task_html:
+        fail("task visualization template must identify the current step")
+    decision_html = templates["decision"].read_text(encoding="utf-8")
+    for marker in ("aria-pressed=\"true\"", "min-height:44px", "window.openai.sendFollowUpMessage"):
+        if marker not in decision_html:
+            fail(f"decision visualization template missing interaction marker: {marker}")
+
+
 def validate_relative_artifact_path(value: object, case_id: str) -> None:
     if not isinstance(value, str) or not value:
         fail(f"behavior case {case_id} expected_file must be a non-empty string")
@@ -318,6 +425,23 @@ def validate_behavior_cases(path: Path) -> int:
                 fail(f"behavior case {case_id} {key} must be boolean")
         for key in ("must_contain", "must_not_contain", "forbidden_file_texts"):
             validate_string_list(case, key, case_id)
+        if "visualization" in case:
+            visual = case["visualization"]
+            if not isinstance(visual, dict) or set(visual) != {"surface", "fallback", "must_not_claim", "must_contain_any", "must_not_contain"}:
+                fail(f"behavior case {case_id} visualization contract is invalid")
+            if not isinstance(visual["surface"], str) or visual["surface"] not in REQUIRED_VISUAL_SURFACES:
+                fail(f"behavior case {case_id} visualization surface is unsupported")
+            if not isinstance(visual["fallback"], str) or not visual["fallback"]:
+                fail(f"behavior case {case_id} visualization fallback is required")
+            if not isinstance(visual["must_not_claim"], list) or not visual["must_not_claim"] or any(
+                not isinstance(item, str) or not item for item in visual["must_not_claim"]
+            ):
+                fail(f"behavior case {case_id} visualization must_not_claim is invalid")
+            for visual_key in ("must_contain_any", "must_not_contain"):
+                if not isinstance(visual[visual_key], list) or not visual[visual_key] or any(
+                    not isinstance(item, str) or not item for item in visual[visual_key]
+                ):
+                    fail(f"behavior case {case_id} visualization {visual_key} is invalid")
         has_file = "expected_file" in case
         has_text = "expected_text" in case
         if has_file != has_text:
@@ -388,6 +512,9 @@ def validate_behavior_cases(path: Path) -> int:
         fail("behavior cases need a real write-and-verify model smoke")
     if not any(case.get("model_smoke") and case.get("require_collab_event") for case in cases):
         fail("behavior cases need an independently observed cold-review event")
+    missing_visual = sorted(REQUIRED_VISUAL_BEHAVIOR_CASES - ids)
+    if missing_visual:
+        fail(f"behavior cases missing visualization coverage: {', '.join(missing_visual)}")
     return len(cases)
 
 
@@ -423,6 +550,7 @@ def main() -> None:
         fail(f"SKILL.md exceeds 500 lines: {line_count}")
     validate_links(root, skill_text)
     validate_openai_yaml(root / "agents" / "openai.yaml")
+    validate_visualization_assets(root)
     agent_profiles = validate_profile_set(root)
     manifest = runtime_manifest(root)
 
