@@ -46,7 +46,7 @@
 
 缺任何当前证据时写 `未验证`，不要用旧 release receipt 补位。
 
-合并主分支并交付当前 Codex Desktop 用户时，可以使用 native-task smoke 作为当前宿主的模型行为证据；宣称无人值守、跨宿主或 stable 公共发布时，仍必须使用专用低权限凭据的隔离 CLI model-smoke。
+合并主分支、交付当前 Codex Desktop 用户，或发布明确标注边界的 host-scoped RC 时，可以使用 native-task smoke 作为当前宿主的模型行为证据。RC release notes 必须说明无人值守、跨宿主与 stable 行为未验证；宣称这些能力时仍必须使用专用低权限凭据的隔离 CLI model-smoke。
 
 ## 领域交付物
 

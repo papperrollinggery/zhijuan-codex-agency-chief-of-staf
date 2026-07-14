@@ -177,7 +177,7 @@ python3 scripts/resolve_role_route.py \
 bash scripts/quality_gate.sh .
 ```
 
-运行真实模型前测前，先使用专用、低权限的 eval 凭据。被测 Skill 与 case 和 Codex 进程同属当前 OS 用户，临时 `auth.json` 理论上可被恶意被测内容读取；环境变量最小化和输出脱敏不是安全边界。对不可信 PR，必须放进一次性 OS 用户或容器，不能使用主账号凭据。
+需要生成可移植的无人值守、跨宿主或 stable 发布证据时，先使用专用、低权限的 eval 凭据。被测 Skill 与 case 和 Codex 进程同属当前 OS 用户，临时 `auth.json` 理论上可被恶意被测内容读取；环境变量最小化和输出脱敏不是安全边界。对不可信 PR，必须放进一次性 OS 用户或容器，不能使用主账号凭据。
 
 ```bash
 export CODEX_EVAL_AUTH_JSON=/path/to/dedicated-eval-auth.json
@@ -198,11 +198,11 @@ python3 scripts/run_model_evals.py \
   --acknowledge-auth-readable-to-eval-process
 ```
 
-Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界 case id/artifact 路径、既有输出目录和 symlink；全部 case 复用冻结的 runtime snapshot，收据绑定 Skill manifest、case 文件和 runner hash，并检测运行中源码漂移。host-default 的模型名若只能从诊断日志推断，不会被视为稳定的 release model identity；本 RC 的 prerelease eligibility 要求显式 `gpt-5.6-sol`、`max`、同一 session 内的身份三元组和专用凭据，stable eligibility 还要求没有未测能力。
+Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界 case id/artifact 路径、既有输出目录和 symlink；全部 case 复用冻结的 runtime snapshot，收据绑定 Skill manifest、case 文件和 runner hash，并检测运行中源码漂移。host-default 的模型名若只能从诊断日志推断，不会被视为稳定的 release model identity；可移植 prerelease evidence 要求显式 `gpt-5.6-sol`、`max`、同一 session 内的身份三元组和专用凭据，stable eligibility 还要求没有未测能力。
 
-`--auth-credential-class primary` 只允许生成诊断收据，永远不具备 prerelease/stable eligibility；公开发布证据必须使用 `dedicated`。
+`--auth-credential-class primary` 只允许生成诊断收据，永远不具备 portable prerelease/stable eligibility；不得把主账号凭据复制成所谓 dedicated 凭据。
 
-当前 Codex Desktop 真正读回 named reviewer 绑定时可使用 native-task receipt；该路径是可选增强，不是兼容发布前提，也不声称凭据隔离或跨平台稳定发布：
+当前 Codex Desktop 真正读回任务与 reviewer 证据时可使用 native-task receipt。绑定目标提交、已安装双 bundle、state DB provider/model/effort、持久化 rollout、唯一完成事件、独立 reviewer、零越界写入和 cleanup 后，它可以支持明确标为“当前 Codex Desktop 用户路径已验证”的 host-scoped RC；它不声称凭据隔离、无人值守、跨宿主或 stable 发布：
 
 ```bash
 python3 scripts/verify_native_task_receipt.py \
@@ -221,7 +221,7 @@ python3 scripts/verify_native_task_receipt.py \
   --require-clean-source
 ```
 
-宣称无人值守、跨宿主或 stable 公共发布时，仍必须使用专用低权限凭据的隔离 CLI model-smoke。
+host-scoped RC 的 release notes 必须列出未验证边界。宣称无人值守、跨宿主或 stable 公共发布时，仍必须使用专用低权限凭据的隔离 CLI model-smoke。
 
 发布前轻量安装复核：
 
