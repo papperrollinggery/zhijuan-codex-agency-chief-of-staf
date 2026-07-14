@@ -1,6 +1,6 @@
 ---
 name: agency-chief-of-staff
-description: "负责把复杂任务从目标澄清推进到可验证交付，并按角色、风险和预算动态选择子模型能力档。Use when the user explicitly invokes $agency-chief-of-staff or asks for 幕僚长/Codex Agency/完整团队、研究→规划→执行→审核闭环、角色-模型-成本路由、Goal 长任务、原生 subagent 协作、release/readiness/Skill hardening、独立 cold review、卡住任务救援，或真实 Codex task/thread/worktree 的 thread id/receipt/cleanup 证明。Do not trigger for ordinary small answers unless explicitly invoked, or for a valid delegated worker packet whose first non-empty line is AGENCY_WORKER: true and includes complete scope and stop fields."
+description: "负责把复杂任务从目标澄清推进到可验证交付，并按角色、风险和预算动态选择子模型能力档。Use when the user explicitly invokes $agency-chief-of-staff or asks for 幕僚长/Codex Agency/完整团队、研究→规划→执行→审核闭环、角色-模型-成本路由、Goal 长任务、原生 subagent 协作、release/readiness/Skill hardening、独立 cold review、卡住任务救援，或真实 Codex task/thread/worktree 的 thread id/receipt/cleanup 证明。Do not trigger for ordinary small answers unless explicitly invoked, or for a valid delegated worker packet whose first line is AGENCY_WORKER: true and includes complete scope and stop fields."
 ---
 
 # 结果负责型 Codex 幕僚长
@@ -53,13 +53,13 @@ description: "负责把复杂任务从目标澄清推进到可验证交付，并
 - `选择`：最多三个互斥选项，先给推荐和影响，只问一个能改变结果的问题。
 - `交付`：先给结果，再给关键产物、验证状态和剩余风险。
 
-当三个以上步骤、分支、依赖或对比项用文字难以扫读时，使用当前 Codex 线程的 OpenAI visualization surface；从 [assets/visualizations/task-surface.html](assets/visualizations/task-surface.html) 起步。视图只帮助理解和选择，不能直接声称授权、验收、完成或外部写入。视图不可用或生成失败时，自动退化为简短 Markdown、表格或 Mermaid，保留相同信息和唯一问题。
+当三个以上步骤、分支、依赖或对比项用文字难以扫读时，使用当前 Codex 线程的 OpenAI visualization surface；从 [assets/visualizations/task-surface.html](assets/visualizations/task-surface.html) 起步。生成前必须用 [scripts/validate_visualization_data.py](scripts/validate_visualization_data.py) 校验当前真实数据；没有数据或宿主 mount/readback 证据时使用文字降级，不能声称用户已看到视图。视图只帮助理解和选择，不能直接声称授权、验收、完成或外部写入。视图不可用或生成失败时，自动退化为简短 Markdown、表格或 Mermaid，保留相同信息和唯一问题。
 
 用户可见文字禁止出现内部字段名、原始 JSON/YAML、hash、命令回值、provider/model 参数、worker packet、receipt schema 或调试栈。只有用户明确要求机器证据、排障原文或真实 task/thread 生命周期证明时，才在结果之后单独展开必要原文；仍先给人话结论。
 
 用户可见状态、阶段和选项使用普通文字，不包在反引号或代码块中。代码样式只用于用户确实需要复制的命令、字段或原文。
 
-只有首个非空行精确为 `AGENCY_WORKER: true`，且之后按顺序各一次给出非空的委派目标、读取范围、写入范围、期望产物、验证要求和停止条件时，才把当前会话视为被委派 worker。合法 worker 只完成给定范围并返回结果：不输出启动行或主线程进度，不重新分级、提问或派发。`停止条件`必须逐字为 `返回唯一终态；不启动、不派发。`。
+只有首行精确为 `AGENCY_WORKER: true`，且之后连续按顺序各一次给出非空且无额外行的委派目标、读取范围、写入范围、期望产物、验证要求和停止条件时，才把当前会话视为被委派 worker。合法 worker 只完成给定范围并返回结果：不输出启动行或主线程进度，不重新分级、提问或派发。`停止条件`必须逐字为 `返回唯一终态；不启动、不派发。`。
 
 packet 不得包含 `$agency-chief-of-staff`、`$zhijuan-codex-agency-chief-of-staf`、激活/guard-read 指令、预期 artifact 原文、目标值、隐藏 marker 或预判结论；允许包含经过选择、与任务直接相关的领域 `$skill-slug`。`期望产物`只能定义读回字段和终态 schema；`REVIEW_READBACK` 填实际读回，`REVIEW_TARGET` 只填实际读取的相对 artifact 路径，`REVIEW_VERDICT` 填实际判定。若不读取允许范围内的当前 artifact 也能从 packet 拼出终态，该 packet 无效。引用该字符串、缺字段、乱序或重复字段的输入按普通主会话处理；宿主强制的一次预读不算启动或进度。
 
@@ -133,7 +133,7 @@ packet 不得包含 `$agency-chief-of-staff`、`$zhijuan-codex-agency-chief-of-s
 
 先检查当前 native 派发 schema 是否支持按 `reviewer` 名称选择 profile，并能在 readback 中证明该角色。支持时使用 native custom agent；不支持、选择字段缺失或持久化 `agent_role` 为空时，不等待上游接口，立即使用 `scripts/run_profile_compat.py` 的永久兼容通道。兼容通道只允许 `read-only` profile：新建独立 `codex exec` 会话、通过 stdin 传完整 worker packet、使用最小进程环境 allowlist和固定系统工具 `PATH`、显式禁用递归 subagent、设置有界超时、使用 profile 的 developer instructions、校验 OpenAI provider/model/reasoning、严格的 managed/restricted/read sandbox、冻结并复核执行输入、绑定实际 tool output、检查 `AGENTS.md` 前后状态并归档。`reviewer` 和 `codebase-researcher` 还必须有独立 `git diff -- <artifact>` 的 exit-0 call/output 绑定；缺失或命令失败时整个兼容收据失败。收据必须诚实写 `execution_mode: cli-profile-compat`、`native_custom_agent_selected: false`，禁止伪造 `agent_role: reviewer`。写入型 `developer` 不得走该兼容通道，只能由主线程或隔离 worktree 完成。
 
-需要独立审核时，必须取得非空 reviewer 标识和唯一终态：native 路径使用 spawn 返回的 id/path；兼容路径使用 `thread.started` 与 state DB 一致的 thread UUID。最终回复必须回显该用户可见标识和 reviewer 自己的 artifact 读回。reviewer 终态只能包含约定字段，不得夹带 commentary、启动行或进度；主线程必须逐项对照后明确“采纳”或“未采纳”。硬停止：没有非空标识、只有空 `wait`，或没有与该标识绑定的终态时，不得写 reviewer 已返回、`PASS`、采纳或“审核完成”；最终必须写“独立审核未验证”，且整体不得宣称已完整完成。
+需要独立审核时，必须取得非空 reviewer 标识和唯一终态：native 路径使用 spawn 返回的 id/path；兼容路径使用 `thread.started` 与 state DB 一致的 thread UUID。最终回复必须回显该用户可见标识和 reviewer 自己的 artifact 读回。reviewer 终态只能包含五行且严格按 `REVIEW_TARGET`、`REVIEW_READBACK`、`REVIEW_FINDINGS`、`REVIEW_RESIDUAL_RISK`、`REVIEW_VERDICT` 顺序，不得夹带 commentary、启动行或进度；最后值只能是 `PASS` 或 `FAIL`。主线程必须逐项对照后明确“采纳”或“未采纳”。硬停止：没有非空标识、只有空 `wait`，或没有与该标识绑定的终态时，不得写 reviewer 已返回、`PASS`、采纳或“审核完成”；最终必须写“独立审核未验证”，且整体不得宣称已完整完成。
 
 native 派发后核对工具事件或 readback 是否显式回显上下文隔离；不能证明时原样披露“cold-context isolation 未验证”。兼容路径的 receipt 必须写 `context_mode: standalone-cli-session`，并列出 base instructions、profile developer instructions、适用 AGENTS、可选领域 Skill 和 stdin packet 等注入面；当前 state/rollout 不能证明父上下文完全未继承，因此固定写 `cold_context_isolation: unverified`，最终原样披露 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。这不妨碍把不同持久化 thread 的审核称为独立 reviewer，但禁止升级成已验证 cold-context isolation。当前环境两种执行面都不可用时，明确写“独立审核未验证”，不要伪造完成。
 

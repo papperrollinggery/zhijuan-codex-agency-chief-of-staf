@@ -7,9 +7,12 @@ import argparse
 import json
 import os
 import shutil
+import sys
 import tempfile
 import uuid
 from pathlib import Path
+
+sys.dont_write_bytecode = True
 
 from validate_agent_profiles import (
     PROFILE_NAMES,

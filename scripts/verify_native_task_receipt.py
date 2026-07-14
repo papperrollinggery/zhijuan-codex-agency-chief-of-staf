@@ -7,21 +7,30 @@ import argparse
 import hashlib
 import json
 import re
-import shlex
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 from install_skill import INSTALL_NAMES, installed_manifest, runtime_manifest
+from protocol_contract import (
+    REVIEW_FIELDS,
+    WORKER_HEADER,
+    parse_reviewer_terminal,
+    parse_worker_packet,
+)
+from run_profile_compat import (
+    command_reads_artifact,
+    output_proves_exit_zero,
+    verify_read_only_sandbox,
+)
 
 
 THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
-REVIEWER_FINAL_FIELDS = (
-    "REVIEW_TARGET:",
-    "REVIEW_READBACK:",
-    "REVIEW_FINDINGS:",
-    "REVIEW_RESIDUAL_RISK:",
+REVIEWER_FINAL_FIELDS = tuple(f"{field}:" for field in REVIEW_FIELDS[:-1]) + (
     "REVIEW_VERDICT: PASS",
 )
 
@@ -40,49 +49,13 @@ def string_content(value: Any) -> str:
     return ""
 
 
-def command_reads_artifact(call_input: str, artifact: Path) -> bool:
-    candidates: list[tuple[str, Path | None]] = []
-    variables = {
-        match.group(1): Path(match.group(2)).expanduser().absolute()
-        for match in re.finditer(r'const\s+(\w+)\s*=\s*"([^"]+)"', call_input)
-    }
-    for match in re.finditer(
-        r'cmd:\s*"([^"]+)"\s*,\s*workdir:\s*(?:"([^"]+)"|(\w+))', call_input
-    ):
-        cwd = Path(match.group(2)).expanduser().absolute() if match.group(2) else variables.get(match.group(3))
-        candidates.append((match.group(1), cwd))
-    if not candidates:
-        candidates.append((call_input, None))
-
-    for command, cwd in candidates:
-        if any(token in command for token in ("#", "//", "|", ">", "<", ";", "&&", "||")):
-            continue
-        try:
-            argv = shlex.split(command)
-        except ValueError:
-            continue
-        if not argv:
-            continue
-        executable = Path(argv[0]).name
-        if executable not in {"sed", "cat", "rg", "git"}:
-            continue
-        if executable == "git" and (len(argv) < 2 or argv[1] not in {"diff", "show"}):
-            continue
-        for argument in argv[1:]:
-            candidate = Path(argument).expanduser()
-            if not candidate.is_absolute() and cwd is not None:
-                candidate = cwd / candidate
-            if candidate.absolute() == artifact:
-                return True
-    return False
-
-
 def thread_row(database: sqlite3.Connection, thread_id: str) -> dict[str, Any]:
     database.row_factory = sqlite3.Row
     row = database.execute(
         """
         SELECT id, rollout_path, source, model_provider, model, reasoning_effort,
-               cwd, archived, first_user_message, created_at_ms, updated_at_ms
+               cwd, archived, first_user_message, sandbox_policy, agent_role,
+               created_at_ms, updated_at_ms
         FROM threads WHERE id = ?
         """,
         (thread_id,),
@@ -90,6 +63,25 @@ def thread_row(database: sqlite3.Connection, thread_id: str) -> dict[str, Any]:
     if row is None:
         raise ValueError(f"thread is missing from state database: {thread_id}")
     return dict(row)
+
+
+def verify_native_reviewer_identity(row: dict[str, Any]) -> dict[str, Any]:
+    if row.get("agent_role") != "reviewer":
+        raise ValueError("native reviewer thread agent_role is not reviewer")
+    sandbox = verify_read_only_sandbox(str(row.get("sandbox_policy", "")))
+    message = str(row.get("first_user_message", ""))
+    start = message.find(WORKER_HEADER)
+    if start < 0:
+        raise ValueError("native reviewer first message has no complete worker packet")
+    try:
+        packet = parse_worker_packet(message[start:])
+    except ValueError as exc:
+        raise ValueError(f"native reviewer worker packet is invalid: {exc}") from exc
+    return {
+        "agent_role": "reviewer",
+        "sandbox_type": str(sandbox["type"]),
+        "worker_packet_fields": len(packet),
+    }
 
 
 def rollout_records(path: Path) -> list[dict[str, Any]]:
@@ -148,6 +140,8 @@ def verify_reviewer_read(
         raise ValueError("reviewer artifact is not a regular file")
     artifact_text = artifact_path.read_text(encoding="utf-8")
     artifact_text_json = json.dumps(artifact_text, ensure_ascii=False)[1:-1]
+    if any(marker not in artifact_text for marker in markers):
+        raise ValueError("reviewer read marker is not present in the artifact bytes")
     completion_indexes = [
         index
         for index, record in enumerate(records)
@@ -168,22 +162,26 @@ def verify_reviewer_read(
         and payload.get("status") == "completed"
         and isinstance(payload.get("call_id"), str)
     }
-    outputs = {
-        payload.get("call_id"): string_content(payload.get("output"))
-        for index, record in enumerate(records)
-        if record.get("type") == "response_item"
-        and index < completion_indexes[0]
-        and isinstance((payload := record.get("payload")), dict)
-        and payload.get("type") == "custom_tool_call_output"
-        and payload.get("call_id") in calls
-    }
+    outputs: dict[str, tuple[str, object]] = {}
+    for index, record in enumerate(records):
+        if record.get("type") != "response_item" or index >= completion_indexes[0]:
+            continue
+        payload = record.get("payload")
+        if not isinstance(payload, dict) or payload.get("type") != "custom_tool_call_output":
+            continue
+        call_id = payload.get("call_id")
+        if not isinstance(call_id, str) or call_id not in calls:
+            continue
+        raw_output = payload.get("output")
+        outputs[call_id] = (string_content(raw_output), raw_output)
     if not outputs:
         raise ValueError("reviewer has no completed exec call with bound output")
     bound_calls = []
-    for call_id, output in outputs.items():
+    for call_id, (output, raw_output) in outputs.items():
         call_input = calls[call_id]
         if (
             command_reads_artifact(call_input, artifact_path)
+            and output_proves_exit_zero(raw_output)
             and (artifact_text in output or artifact_text_json in output)
             and all(marker in output for marker in markers)
         ):
@@ -212,21 +210,27 @@ def completed_message(records: list[dict[str, Any]]) -> str:
     return messages[0]
 
 
-def verify_reviewer_schema(final_message: str) -> None:
-    prefixes = (*REVIEWER_FINAL_FIELDS[:-1], "REVIEW_VERDICT:")
-    lines = final_message.splitlines()
-    if len(lines) != len(prefixes):
-        raise ValueError("reviewer final must contain exactly five schema lines")
-    values: dict[str, str] = {}
-    for line, prefix in zip(lines, prefixes, strict=True):
-        if not line.startswith(prefix):
-            raise ValueError(f"reviewer final field order mismatch: {prefix}")
-        value = line[len(prefix) :].strip()
-        if not value:
-            raise ValueError(f"reviewer final field is empty: {prefix}")
-        values[prefix] = value
-    if values["REVIEW_VERDICT:"] != "PASS":
+def verify_reviewer_schema(
+    final_message: str,
+    *,
+    artifact: Path,
+    reviewer_cwd: Path,
+    markers: list[str],
+) -> None:
+    try:
+        values = parse_reviewer_terminal(final_message)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    if values["REVIEW_VERDICT"] != "PASS":
         raise ValueError("reviewer verdict is not exactly PASS")
+    try:
+        expected_target = artifact.resolve().relative_to(reviewer_cwd.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("reviewer artifact must stay inside reviewer cwd") from exc
+    if values["REVIEW_TARGET"] != expected_target:
+        raise ValueError("reviewer final target does not match reviewer artifact")
+    if any(marker not in values["REVIEW_READBACK"] for marker in markers):
+        raise ValueError("reviewer final readback does not contain every artifact marker")
 
 
 def verify_thread(
@@ -393,6 +397,7 @@ def main() -> None:
         parent_final = completed_message(parent_records)
 
         reviewer_row = thread_row(database, args.reviewer_id)
+        reviewer_identity = verify_native_reviewer_identity(reviewer_row)
         reviewer = verify_thread(
             reviewer_row,
             expected_model=args.model,
@@ -401,7 +406,13 @@ def main() -> None:
             final_markers=args.reviewer_final_marker + list(REVIEWER_FINAL_FIELDS),
         )
         reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
-        verify_reviewer_schema(completed_message(reviewer_records))
+        reviewer_artifact = Path(args.reviewer_artifact).expanduser().absolute()
+        verify_reviewer_schema(
+            completed_message(reviewer_records),
+            artifact=reviewer_artifact,
+            reviewer_cwd=Path(str(reviewer_row["cwd"])),
+            markers=args.reviewer_read_marker,
+        )
         binding = reviewer_binding(
             database,
             parent_id=args.parent_id,
@@ -418,14 +429,16 @@ def main() -> None:
     receipt = {
         "receipt_type": "NATIVE_TASK_SMOKE_RECEIPT",
         "status": "verified",
-        "source": source_state,
+        "current_source_observation": source_state,
         "installed_bundle_manifests": installed,
         "parent": parent,
         "reviewer": reviewer,
         "reviewer_binding": binding,
+        "reviewer_identity": reviewer_identity,
         "reviewer_tool_read": reviewer_read,
         "cold_context_isolation": "unverified",
-        "agents_md_routing_dependency": False,
+        "historical_writes_verified": False,
+        "agents_md_state": "unverified",
     }
     payload = json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"
     if args.out:

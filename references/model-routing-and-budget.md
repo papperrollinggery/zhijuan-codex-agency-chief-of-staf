@@ -26,8 +26,10 @@
 ## 预算模式
 
 - `economy`：最多委派 1 个角色、并行 1 个、不自动升级。优先把工作留给主线程，只保留真正需要的独立研究或审核。
-- `balanced`：最多委派 2 个角色、并行 2 个、每个角色最多升级一次。默认选择。
-- `quality`：最多委派 3 个角色、并行 3 个、允许高风险角色使用更强能力档。
+- `balanced`：最多委派 3 个角色、每一波最多并行 2 个、每个角色最多升级一次。默认选择。
+- `quality`：最多委派 4 个角色、每一波最多并行 2 个、允许高风险角色使用更强能力档。
+
+“最多委派”限制整个计划中的角色总数；“并行”只限制同一执行波次。路由脚本会输出波次，但它只是成本与顺序计划，不是调度器，也不代表宿主已经接受任何派发。
 
 成本单位是模型能力档的相对权重，只用于比较计划，不代表 token、货币、credits 或节省百分比。实际用量只能来自宿主或 provider 的计量。预算不能跳过必需 cold review、测试、安全门禁或验证；超预算工作必须明确回到主线程，不能静默删除。
 
@@ -58,7 +60,7 @@
 }
 ```
 
-该 snapshot 必须带当前 task 的来源读回，不能由 Skill 猜测。直接 model override 的 provenance 应来自当前宿主 catalog 或用户确认 exact ID，并与 root provider 相同；custom-agent provenance 应证明角色已加载、provider 已固定且已认证。但 JSON 中的 provenance 只是调用方提供的可追踪声明，解析器只能校验结构，不能机械证明其真实来源；因此 exact 候选固定标为 `planned-unverified`，`catalog_provenance_confirmed` 固定为 false。只有派发工具接受和运行时 metadata 读回才能升级状态。catalog 缺失、provider 不明、模型不可用或 schema 不支持时，回退顺序为：已加载 named custom agent → 当前 schema 的 direct route → 现有只读 CLI compatibility → 主线程或隔离 worktree。
+该 snapshot 必须带当前 task 的来源读回，不能由 Skill 猜测。直接 model override 的 provenance 应来自当前宿主 catalog 或用户确认 exact ID，并与 root provider 相同；custom-agent provenance 应证明角色已加载、provider 已固定且已认证。解析器会先校验 supplied catalog 中的每一条记录，再筛选可用候选；它仍不能机械证明调用方写入的 provenance 真实。因此 exact 候选固定标为 `planned-unverified`，`catalog_provenance_confirmed` 固定为 false。只有派发工具接受和运行时 metadata 读回才能升级状态。catalog 缺失、provider 不明、模型不可用或 schema 不支持时，回退顺序为：已加载 named custom agent → 当前 schema 的 direct route → 现有只读 CLI compatibility → 主线程或隔离 worktree。
 
 回退不得谎称目标模型已经使用。子 Agent 自述模型名不能证明运行身份。
 
@@ -77,4 +79,4 @@
 
 ## 外部顾问扩展位
 
-保留 provider-neutral、root-facing、read-only 的 `external_advisor`。默认 `none`，核心流程不依赖 Claude 账号、Fable/Faber、Claude Code SDK、BridgeDeck 或任何 MCP。未来 adapter 只能读取自包含计划包并返回建议；不得编辑、派发、接触 executor 或批准最终交付。适配器缺失时静默使用原生流程，只有用户明确把该顾问设为必需时才阻塞。
+保留 Codex host-scoped、root-facing、read-only 的 `external_advisor` 作为未来扩展位。默认 `none`；本 Skill 没有 Claude、Faber、Claude Code SDK、BridgeDeck 或 MCP 的实现、依赖或测试。未来 adapter 只能读取自包含计划包并返回建议；不得编辑、派发、接触 executor 或批准最终交付。适配器缺失时静默使用原生流程，只有用户明确把该顾问设为必需时才阻塞。

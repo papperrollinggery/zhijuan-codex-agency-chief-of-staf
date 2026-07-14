@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v0.2.0-rc.2 - 2026-07-15
+
+- Unified worker activation, compatibility execution, and package validation on one strict packet parser so hidden targets, markers, verdicts, activation language, extra lines, and self-recursion fail closed everywhere.
+- Bound reviewer receipts to one successful single-target artifact read and required `REVIEW_TARGET` plus `REVIEW_READBACK` to match the same current artifact and marker bytes; multi-command and decoy-file provenance now fails closed.
+- Made installed bundle parity detect Python bytecode and prevented shipped executable paths from generating local `__pycache__` during normal verifier, reviewer, and profile-installer use.
+- Added a real data contract and validator for impact maps, completing data-gated coverage for every visualization surface advertised by the registry.
+- Shipped the native task verifier and its runtime dependencies in both canonical and legacy bundles, with source/install parity and installed-script execution tests.
+- Hardened role routing, visualization mount/readback claims, catalog validation, reviewer terminal schema, and native receipt boundaries with adversarial regression coverage.
+
 ## v0.2.0-rc.1 - 2026-07-14
 
 - Published as a host-scoped release candidate: the current Codex Desktop path is verified, while portable unattended, cross-host, and stable-release behavior remains explicitly unverified pending isolated dedicated-credential model smoke.

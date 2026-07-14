@@ -43,7 +43,7 @@ AGENCY_WORKER: true
 委派目标：使用 $api-design 审查当前 API diff。
 读取范围：当前 API 实现、测试与 git diff。
 写入范围：无。
-期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。
+期望产物：REVIEW_TARGET、REVIEW_READBACK、REVIEW_FINDINGS、REVIEW_RESIDUAL_RISK、REVIEW_VERDICT，均填实际读回值。
 验证要求：直接读取当前 artifact 与测试证据后给出实际判定。
 停止条件：返回唯一终态；不启动、不派发。
 ```

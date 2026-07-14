@@ -11,6 +11,12 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
 from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
+from protocol_contract import (
+    REVIEW_OUTCOME_RE,
+    WORKER_FIELDS,
+    WORKER_STOP_CONDITION,
+    parse_worker_packet,
+)
 from validate_agent_profiles import PROFILE_NAMES, validate_profile_set
 
 
@@ -28,9 +34,11 @@ EXPECTED_RUNTIME_FILES = (
     "references/model-routing-and-budget.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
+    "assets/WORKER_PROTOCOL_CONTRACT.json",
     "assets/agent-routing.json",
     "assets/role-model-policy.json",
     "assets/visualizations/surface-registry.json",
+    "assets/visualizations/data-contract.json",
     "assets/visualizations/task-surface.html",
     "assets/visualizations/decision-surface.html",
     "assets/codex_agents/codebase-researcher.toml",
@@ -39,8 +47,12 @@ EXPECTED_RUNTIME_FILES = (
     "assets/codex_agents/reviewer.toml",
     "assets/codex_agents/test-debugger.toml",
     "scripts/audit_historical_threads.py",
+    "scripts/install_skill.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/verify_native_task_receipt.py",
+    "scripts/protocol_contract.py",
+    "scripts/validate_visualization_data.py",
     "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
@@ -55,52 +67,8 @@ PROHIBITED_ROUTING_MARKERS = (
 )
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 SKILL_SLUG_RE = re.compile(r"\$(?:[a-z][a-z0-9]*)(?:-[a-z0-9]+)+")
-SELF_SKILL_SLUG_RE = re.compile(
-    rf"\$(?:{re.escape(SKILL_NAME)}|{re.escape(LEGACY_SKILL_NAME)})(?![a-z0-9-])"
-)
-REVIEW_OUTCOME_RE = re.compile(
-    r"(?:\b(?:NO-?GO|GO|PASS|FAIL)\b|预期结论|预判结论|预期判定|预判判定|通过|失败)",
-    re.IGNORECASE,
-)
-PACKET_VALUE_LEAK_RE = re.compile(
-    r"(?:[\x60#=]|(?:\b(?:expected|hidden)\b)|(?:\b(?:target|marker|verdict)\s+(?:is|value)\b)|"
-    r"(?:目标值|隐藏(?:标记|marker)|(?:标记|marker)(?:是|为)|(?:结论|判定)(?:是|为)|"
-    r"(?:是|为|等于|包含)\s*(?:[\x60#]|[A-Za-z0-9_-]{4,})))",
-    re.IGNORECASE,
-)
-OUTPUT_SCHEMA_RE = re.compile(
-    r"^[A-Z][A-Z0-9_]*(?:、[A-Z][A-Z0-9_]*)*(?:，(?:均填)?实际读回值)?[。.]?$"
-)
-WORKER_PACKET_LABELS = (
-    "委派目标",
-    "读取范围",
-    "写入范围",
-    "期望产物",
-    "验证要求",
-    "停止条件",
-)
-WORKER_PACKET_FORBIDDEN_TERMS = (
-    "启动幕僚长",
-    "激活本技能",
-    "激活此技能",
-    "使用本 skill",
-    "guard-read",
-    "guard read",
-)
-SAFE_STOP_CONDITION = "返回唯一终态；不启动、不派发。"
-
-
-def safe_worker_packet_value(label: str, value: str) -> bool:
-    """Reject packet values that can smuggle an expected readback or verdict."""
-    if PACKET_VALUE_LEAK_RE.search(value):
-        return False
-    if label == "期望产物":
-        return "实际读回" in value or OUTPUT_SCHEMA_RE.fullmatch(value) is not None
-    if label == "验证要求":
-        return "读" in value and ("回" in value or "当前" in value)
-    if label == "停止条件":
-        return value == SAFE_STOP_CONDITION
-    return True
+WORKER_PACKET_LABELS = WORKER_FIELDS
+SAFE_STOP_CONDITION = WORKER_STOP_CONDITION
 ALLOWED_MODES = {"direct", "structured", "goal", "worker"}
 ALLOWED_COLLABORATION = {
     "none",
@@ -139,6 +107,22 @@ REQUIRED_VISUAL_SURFACES = {
     "evidence-list",
     "numeric-trend",
     "image-review",
+}
+DATA_GATED_VISUAL_SURFACES = {
+    "task-stage",
+    "decision",
+    "impact",
+    "evidence-list",
+    "numeric-trend",
+    "image-review",
+}
+DATA_CONTRACT_REQUIRED_FIELDS = {
+    "task-stage": ["title", "goal", "stages", "next_step"],
+    "decision": ["title", "summary", "choices", "recommended_index"],
+    "impact": ["title", "changed_item", "downstream_items", "next_review"],
+    "evidence-list": ["title", "items"],
+    "numeric-trend": ["title", "observations", "source_definition"],
+    "image-review": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings"],
 }
 REQUIRED_VISUAL_BEHAVIOR_CASES = {
     "visualized-dependent-stages",
@@ -303,6 +287,45 @@ def validate_visualization_assets(root: Path) -> None:
             if key not in item or not item[key]:
                 fail(f"visualization surface {item.get('kind')!r} missing {key}")
 
+    data_contract_path = root / "assets" / "visualizations" / "data-contract.json"
+    data_contract = json.loads(data_contract_path.read_text(encoding="utf-8"))
+    data_surfaces = data_contract.get("surfaces")
+    if data_contract.get("schema_version") != "1.0" or not isinstance(data_surfaces, dict):
+        fail("visualization data contract is invalid")
+    if set(data_surfaces) != DATA_GATED_VISUAL_SURFACES:
+        fail("visualization data contract does not match data-gated surface set")
+    for kind, required_fields in DATA_CONTRACT_REQUIRED_FIELDS.items():
+        specification = data_surfaces.get(kind)
+        if not isinstance(specification, dict) or specification.get("required") != required_fields:
+            fail(f"visualization data contract {kind} required fields drift")
+    if data_surfaces["task-stage"].get("stage_count") != [3, 12]:
+        fail("visualization data contract task-stage count drift")
+    if data_surfaces["decision"].get("choice_count") != [2, 3]:
+        fail("visualization data contract decision count drift")
+    if (
+        data_surfaces["impact"].get("item_count") != [3, 12]
+        or data_surfaces["impact"].get("item_fields")
+        != ["item", "disposition", "impact"]
+    ):
+        fail("visualization data contract impact fields drift")
+    if data_surfaces["evidence-list"].get("item_count") != [5, 12]:
+        fail("visualization data contract evidence-list count drift")
+    if data_surfaces["numeric-trend"].get("observation_fields") != ["name", "value", "unit", "dimension"]:
+        fail("visualization data contract numeric-trend fields drift")
+    if data_surfaces["image-review"].get("image_sha256_required") is not True:
+        fail("visualization data contract image-review verification drift")
+    mount_readback = data_contract.get("mount_readback")
+    if (
+        not isinstance(mount_readback, dict)
+        or mount_readback.get("required_when_host_returns_mount_state")
+        != ["surface", "mount_id", "rendered"]
+        or mount_readback.get("image_binding_required_when_image_review")
+        != ["image_path", "image_sha256"]
+        or not isinstance(mount_readback.get("fallback_when_unavailable"), str)
+        or not mount_readback["fallback_when_unavailable"]
+    ):
+        fail("visualization data contract mount/readback rule is invalid")
+
     templates = {
         "task": root / "assets" / "visualizations" / "task-surface.html",
         "decision": root / "assets" / "visualizations" / "decision-surface.html",
@@ -335,6 +358,23 @@ def validate_visualization_assets(root: Path) -> None:
             fail(f"decision visualization template missing interaction marker: {marker}")
 
 
+def validate_worker_protocol_docs(root: Path, skill_text: str) -> None:
+    if "first non-empty line is AGENCY_WORKER: true" in skill_text:
+        fail("worker protocol documentation must require the literal first line")
+    if "first line is AGENCY_WORKER: true" not in skill_text:
+        fail("worker protocol documentation lacks the first-line rule")
+    if "只有首行精确为 " not in skill_text or "AGENCY_WORKER: true" not in skill_text:
+        fail("worker protocol body lacks the first-line rule")
+    thread_reference_path = root / "references" / "real-threads.md"
+    if not thread_reference_path.is_file():
+        fail("missing file: references/real-threads.md")
+    thread_reference = thread_reference_path.read_text(encoding="utf-8")
+    if "给 worker 的 prompt 必须逐行且仅包含：" not in thread_reference:
+        fail("worker protocol reference permits extra packet fields")
+    if "期望产物：<实际读回字段与终态 schema>。" not in thread_reference:
+        fail("worker protocol reference permits artifact or receipt leakage")
+
+
 def validate_relative_artifact_path(value: object, case_id: str) -> None:
     if not isinstance(value, str) or not value:
         fail(f"behavior case {case_id} expected_file must be a non-empty string")
@@ -354,33 +394,11 @@ def validate_string_list(case: dict[str, object], key: str, case_id: str) -> Non
 
 
 def worker_packet_fields(prompt: str) -> dict[str, str] | None:
-    lines = [line.strip() for line in prompt.splitlines() if line.strip()]
-    if not lines or lines[0] != "AGENCY_WORKER: true":
+    try:
+        fields = parse_worker_packet(prompt)
+    except ValueError:
         return None
-    lowered = prompt.lower()
-    if (
-        SELF_SKILL_SLUG_RE.search(prompt)
-        or REVIEW_OUTCOME_RE.search(prompt)
-        or any(term in lowered for term in WORKER_PACKET_FORBIDDEN_TERMS)
-    ):
-        return None
-    fields: dict[str, str] = {}
-    for line in lines[1:]:
-        matched = next(
-            (
-                label
-                for label in WORKER_PACKET_LABELS
-                if line.startswith(f"{label}：") or line.startswith(f"{label}:")
-            ),
-            None,
-        )
-        if matched is None or matched in fields:
-            return None
-        value = line.split("：", 1)[1] if "：" in line else line.split(":", 1)[1]
-        if not value.strip() or not safe_worker_packet_value(matched, value.strip()):
-            return None
-        fields[matched] = value.strip()
-    return fields if tuple(fields) == WORKER_PACKET_LABELS else None
+    return fields
 
 
 def valid_worker_packet(prompt: str) -> bool:
@@ -548,6 +566,7 @@ def main() -> None:
     line_count = len(skill_text.splitlines())
     if line_count > 500:
         fail(f"SKILL.md exceeds 500 lines: {line_count}")
+    validate_worker_protocol_docs(root, skill_text)
     validate_links(root, skill_text)
     validate_openai_yaml(root / "agents" / "openai.yaml")
     validate_visualization_assets(root)
