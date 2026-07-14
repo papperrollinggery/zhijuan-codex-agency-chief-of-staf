@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 
+from resolve_role_route import load_json, validate_policy
+
 
 PROFILE_NAMES = (
     "codebase-researcher",
@@ -156,8 +158,10 @@ def validate_profile(path: Path, expected_name: str, allow_bindings: bool) -> di
 
 def validate_routing(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema_version") != 2:
-        fail("agent-routing.json schema_version must be 2")
+    if data.get("schema_version") != 3:
+        fail("agent-routing.json schema_version must be 3")
+    if data.get("role_model_policy") != "assets/role-model-policy.json":
+        fail("agent-routing.json role-model policy reference mismatch")
     if set(data.get("self_skill_names", [])) != SELF_SKILL_NAMES:
         fail("agent-routing.json self-skill denylist mismatch")
     profiles = data.get("profiles")
@@ -224,12 +228,17 @@ def validate_profile_set(root: Path) -> dict[str, object]:
         validate_profile(project, name, allow_bindings=False)
         if template.read_bytes() != project.read_bytes():
             fail(f"project profile drifted from distributable template: {name}")
-    validate_routing(root / "assets" / "agent-routing.json")
+    routing = validate_routing(root / "assets" / "agent-routing.json")
+    policy = load_json(root / str(routing["role_model_policy"]))
+    validate_policy(policy)
+    if set(policy["profiles"]) != set(PROFILE_NAMES):
+        fail("role-model policy profile set mismatch")
     return {
         "status": "valid",
         "profiles": list(PROFILE_NAMES),
         "project_template_parity": True,
-        "fixed_model": False,
+        "source_templates_pin_models": False,
+        "dynamic_role_model_policy": True,
         "self_skill_binding": False,
         "native_custom_agent_required": False,
         "compat_fallback": "cli-profile-compat",

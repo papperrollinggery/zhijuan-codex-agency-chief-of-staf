@@ -79,7 +79,7 @@ class ValidatePackageMutationTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             path.write_text(
                 text.replace(
-                    'display_name: "Zhijuan 结果负责型 Codex 幕僚长"',
+                    'display_name: "Zhijuan 可视化结果幕僚长"',
                     'display_name: "unterminated',
                 ),
                 encoding="utf-8",
@@ -87,6 +87,86 @@ class ValidatePackageMutationTests(unittest.TestCase):
             result = self.validate(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("invalid quoted value", result.stderr)
+
+    def test_rejects_backstage_terms_in_visible_visualization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "assets" / "visualizations" / "task-surface.html"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "任务正在推进",
+                    "请查看 JSON 与 sha256",
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exposes backstage term", result.stderr)
+
+    def test_rejects_visualization_surface_registry_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "assets" / "visualizations" / "surface-registry.json"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(text.replace('"kind": "numeric-trend"', '"kind": "decorative-curve"'), encoding="utf-8")
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("supported surface set", result.stderr)
+
+    def test_rejects_hover_dependent_task_visualization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "assets" / "visualizations" / "task-surface.html"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "</style>",
+                    ".card:hover{transform:scale(1.01)}</style>",
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("hover-only styling", result.stderr)
+
+    def test_rejects_network_and_animation_in_task_visualization(self) -> None:
+        for injection, expected in (
+            ('<img src="https://example.invalid/a.png">', "external resources"),
+            ('<style>.card{background-image:url(https://example.invalid/a.png)}</style>', "network-capable"),
+            ('<style>@keyframes pulse{to{opacity:.5}}</style>', "animate or transition"),
+        ):
+            with self.subTest(injection=injection), tempfile.TemporaryDirectory() as tmp:
+                root = self.make_copy(Path(tmp))
+                path = root / "assets" / "visualizations" / "task-surface.html"
+                path.write_text(path.read_text(encoding="utf-8").replace("</body>", injection + "</body>"), encoding="utf-8")
+                result = self.validate(root)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(expected, result.stderr)
+
+    def test_rejects_missing_visualization_behavior_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "evals" / "behavior_cases.json"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(text.replace('"id": "visualized-dependent-stages"', '"id": "missing-stage-case"'), encoding="utf-8")
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing visualization coverage", result.stderr)
+
+    def test_rejects_role_model_case_removed_from_model_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "evals" / "behavior_cases.json"
+            text = path.read_text(encoding="utf-8")
+            marker = '"id": "role-model-balanced-budget"'
+            start = text.index(marker)
+            smoke = text.index('"model_smoke": true', start)
+            path.write_text(
+                text[:smoke] + '"model_smoke": false' + text[smoke + len('"model_smoke": true'):],
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing required model smoke", result.stderr)
 
     def test_rejects_unsafe_model_case_paths_and_sandbox(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

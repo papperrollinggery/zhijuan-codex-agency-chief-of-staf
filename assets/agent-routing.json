@@ -1,5 +1,6 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
+  "role_model_policy": "assets/role-model-policy.json",
   "self_skill_names": [
     "agency-chief-of-staff",
     "zhijuan-codex-agency-chief-of-staf"

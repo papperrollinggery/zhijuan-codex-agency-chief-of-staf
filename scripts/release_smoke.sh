@@ -54,7 +54,7 @@ for index in 0 1 2; do
   done
   python3 "$profile_source/scripts/run_profile_compat.py" --help \
     >"$TMP_ROOT/profile-compat-help-$label.txt"
-  rg -q "Run a bounded read-only profile" "$TMP_ROOT/profile-compat-help-$label.txt"
+  grep -Fq "Run a bounded read-only profile" "$TMP_ROOT/profile-compat-help-$label.txt"
 done
 
 if test -f "$SOURCE_ROOT/AGENTS.md"; then

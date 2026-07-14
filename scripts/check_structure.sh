@@ -12,6 +12,7 @@ python3 -m py_compile \
   scripts/validate_package.py \
   scripts/validate_behavior_cases.py \
   scripts/run_model_evals.py \
-  scripts/audit_historical_threads.py
+  scripts/audit_historical_threads.py \
+  scripts/resolve_role_route.py
 
 echo "Structure check passed."

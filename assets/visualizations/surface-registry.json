@@ -1,0 +1,54 @@
+{
+  "registry_version": "1.0",
+  "principle": "Choose the smallest user-facing surface that clarifies one task state or decision; never render every surface at once.",
+  "surfaces": [
+    {
+      "kind": "task-stage",
+      "use_when": "three or more dependent steps must remain visible",
+      "preferred_visual": "phase-rail",
+      "required_visible": ["current stage", "completed work", "next step", "one blocker when present"],
+      "fallback": "markdown-step-list",
+      "forbidden": ["invented percentage", "qualitative curve"]
+    },
+    {
+      "kind": "decision",
+      "use_when": "two or three mutually exclusive choices materially change the result",
+      "preferred_visual": "comparison-cards",
+      "required_visible": ["recommendation", "tradeoff", "downstream effect", "one primary action"],
+      "fallback": "comparison-table",
+      "forbidden": ["more than three choices", "direct authoritative write"]
+    },
+    {
+      "kind": "impact",
+      "use_when": "one change affects three or more downstream items",
+      "preferred_visual": "labeled-impact-map",
+      "required_visible": ["changed item", "preserved items", "items to revisit", "next review"],
+      "fallback": "mermaid",
+      "forbidden": ["unlabeled edges", "decorative network"]
+    },
+    {
+      "kind": "evidence-list",
+      "use_when": "five to twelve simple items need exact inspection",
+      "preferred_visual": "grouped-list-or-table",
+      "required_visible": ["item", "human status", "meaning", "next action when needed"],
+      "fallback": "markdown-list",
+      "forbidden": ["raw internal fields", "equal-weight dashboard"]
+    },
+    {
+      "kind": "numeric-trend",
+      "use_when": "reviewed numeric observations have names, units, dimensions and source definitions",
+      "preferred_visual": "line-bar-or-scatter",
+      "required_visible": ["axes", "units", "important values", "missing values", "source definition", "text summary"],
+      "fallback": "data-table",
+      "forbidden": ["invented score", "invented time series", "qualitative progress curve"]
+    },
+    {
+      "kind": "image-review",
+      "use_when": "a verified current image, PDF page or slide is the review target",
+      "preferred_visual": "large-preview-with-region-findings",
+      "required_visible": ["preview", "alt text", "review target", "region findings", "revision effect"],
+      "fallback": "numbered-findings",
+      "forbidden": ["stale preview", "unverified coordinate overlay", "placeholder presented as current"]
+    }
+  ]
+}

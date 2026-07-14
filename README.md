@@ -4,6 +4,12 @@
 
 它不靠堆角色或 receipt 证明自己工作，也不向用户全局、仓库主工作区或项目根 `AGENTS.md` 注入路由。主线程对结果负责；原生 subagents、Goal、真实 task/thread/worktree 都按任务需要使用。
 
+## 用户看到的交互
+
+聊天是产品前台，技术证据留在后台。Skill 默认用四种状态与用户沟通：任务接管、阶段进展、单一选择、最终交付。内部模式、角色、线程、哈希、JSON/YAML、命令回值和调试字段不会作为主要界面出现。
+
+当文字不足以快速解释三个以上步骤、分支、依赖或对比项时，Skill 选择最小的 OpenAI visualization：阶段路径、方案对比、影响关系、验证清单、当前图片/页面审阅，或基于真实数值的趋势图。曲线必须有数值、单位、维度和来源；任务状态不会伪装成百分比或平滑曲线。Visualizations 不可用时自动退化为 Markdown、表格或 Mermaid。
+
 ## 适用场景
 
 - 明确调用 `$agency-chief-of-staff`。
@@ -136,7 +142,16 @@ python3 scripts/run_profile_compat.py \
 
 ## 当前模型能力的使用方式
 
-本次架构按当前 Codex/前沿模型指导设计：更强的意图理解、原生 Goal、原生 subagent 并行、动态模型选择和更高效的短提示。Skill 不固定模型 slug；宿主默认选择当前合适模型，必要时才为轻量扫描和高难审核分别选择效率或深度配置。具体“已验证模型”只以当次 model-smoke 或 native-task receipt 为准；model-agnostic design 不等于已在官方最新模型上验证。
+本次架构按当前 Codex/前沿模型指导设计：更强的意图理解、原生 Goal、原生 subagent 并行、动态模型选择和更高效的短提示。Skill 为五个专业角色配置 `efficient`、`balanced`、`judgment` 能力档和三种预算模式，并在运行时从当前宿主 catalog 解析 exact model；仓库不固化会过期的模型 slug。
+
+```bash
+python3 scripts/resolve_role_route.py \
+  --roles codebase-researcher,reviewer \
+  --risk medium \
+  --budget balanced
+```
+
+默认输出只显示用户能理解的安排。只有派发 schema 接受精确控制并读回运行身份，才会把具体模型标记为确认；否则沿用宿主或现有兼容通道。相对成本单位用于比较方案，不等于 token、货币、credits 或节省百分比。外部 plan-advisor 仅保留可插拔位置，核心不依赖 Claude/Fable、Claude Code SDK、BridgeDeck 或 MCP。
 
 相关官方说明：
 

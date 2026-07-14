@@ -1,7 +1,7 @@
 interface:
-  display_name: "Zhijuan 结果负责型 Codex 幕僚长"
-  short_description: "从目标研究到执行、验证、独立审核与最终交付的结果闭环"
-  default_prompt: "使用 $agency-chief-of-staff 把这个复杂任务从目标澄清推进到可验证交付。"
+  display_name: "Zhijuan 可视化结果幕僚长"
+  short_description: "用直观任务界面和成本感知专业角色推进复杂任务到可验证交付"
+  default_prompt: "使用 $agency-chief-of-staff 按目标、风险和预算安排最少角色，把这个复杂任务做成直观、可验证的交付。"
 
 policy:
   allow_implicit_invocation: true

@@ -24,9 +24,15 @@ RUNTIME_FILES = (
     "references/long-running-work.md",
     "references/history-audit.md",
     "references/software-development.md",
+    "references/user-experience.md",
+    "references/model-routing-and-budget.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
     "assets/agent-routing.json",
+    "assets/role-model-policy.json",
+    "assets/visualizations/surface-registry.json",
+    "assets/visualizations/task-surface.html",
+    "assets/visualizations/decision-surface.html",
     "assets/codex_agents/codebase-researcher.toml",
     "assets/codex_agents/technical-architect.toml",
     "assets/codex_agents/developer.toml",
@@ -35,6 +41,7 @@ RUNTIME_FILES = (
     "scripts/audit_historical_threads.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
 
@@ -82,10 +89,10 @@ def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> 
         text = "\n".join(lines) + "\n"
     elif rel == "agents/openai.yaml":
         text = text.replace(
-            'display_name: "Zhijuan 结果负责型 Codex 幕僚长"',
+            'display_name: "Zhijuan 可视化结果幕僚长"',
             'display_name: "Zhijuan Codex 幕僚长（旧入口兼容）"',
         ).replace(
-            'short_description: "从目标研究到执行、验证、独立审核与最终交付的结果闭环"',
+            'short_description: "用直观任务界面和成本感知专业角色推进复杂任务到可验证交付"',
             'short_description: "旧显式调用兼容入口；新任务请使用 agency-chief-of-staff"',
         ).replace(
             f'default_prompt: "使用 ${CANONICAL_SKILL_NAME}',

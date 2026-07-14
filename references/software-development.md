@@ -35,7 +35,7 @@ Worker packet 可以包含经过选择的领域 `$skill-slug`，但不得包含 
 2. 只有专业知识或工具流程会实质影响结果时才绑定；普通语言/框架任务不为“完整感”绑定 Skill。
 3. 在 packet 的委派目标或验证要求中写明准确领域 slug、用途和失败回退；worker 必须按 Skill 指令读取并使用，无法读取时报告 `SKILL_UNAVAILABLE`。
 4. 若需要确定性 Agent 配置，在显式 opt-in 安装时使用 `--skill ROLE=/absolute/path/to/SKILL.md` 生成 `[[skills.config]]`。
-5. Agent 配置不固定模型；除非用户明确指定，由宿主选择当前合适的非 Luna 模型和 reasoning。
+5. 源 Agent 模板不硬编码模型。需要模型/成本控制时读取 [model-routing-and-budget.md](model-routing-and-budget.md)，先选角色能力档和预算，再从当前宿主 catalog、用户确认的 exact ID 或已加载 custom agent 解析具体模型。
 
 不得因为允许领域 Skill 而放开递归主控。合法 worker 收到完整 packet 后只执行范围，不启动主控、不继续派发。
 
@@ -61,10 +61,12 @@ python3 scripts/install_agent_profiles.py \
 ## 派发与回收
 
 1. 使用主 `SKILL.md` 的完整 worker packet；在委派目标中点名 profile 和必要领域 Skill。
-2. native schema 能按名称选择并读回 profile 时，记录 spawn 返回的非空 id/path；真实 task/thread 还要 readback 状态、cwd/worktree 和产物。
-3. native schema 没有 profile 选择字段、拒绝该字段或 state 中没有角色绑定时，read-only profile 立即走下述 CLI 兼容通道；不要等待未来接口，也不要把普通 subagent 的提示词当 profile 证据。
-4. 主线程验证 diff、测试和范围后记录采纳、部分采纳或拒绝。
-5. 完成、失败或替换的 task/thread 及时归档；native subagent 终态返回后不重复唤醒。
+2. 先用 `scripts/resolve_role_route.py` 或同等决策选择最少角色、预算和模型能力档；精确 model/reasoning override 必须来自当前 catalog 并使用 `fork_turns="none"`。
+3. native schema 能按名称选择并读回 profile 时，记录 spawn 返回的非空 id/path；真实 task/thread 还要 readback 状态、cwd/worktree 和产物。
+4. native schema 没有 profile 选择字段、拒绝该字段或 state 中没有角色绑定时，read-only profile 立即走下述 CLI 兼容通道；不要等待未来接口，也不要把普通 subagent 的提示词当 profile 证据。该兼容 runner 仍要求显式非 Luna 模型；不能把 native 路由候选直接带入。
+5. 分别记录 route planned、accepted 和 confirmed；配置文件、工具接受或 worker 自述都不能单独证明实际模型身份。
+6. 主线程验证 diff、测试和范围后记录采纳、部分采纳或拒绝。
+7. 完成、失败或替换的 task/thread 及时归档；native subagent 终态返回后不重复唤醒。
 
 ## 永久 CLI 兼容通道
 

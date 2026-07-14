@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added deterministic role-to-model-class routing for the five bounded profiles, with economy/balanced/quality budgets, current-host catalog resolution, same-provider and `fork_turns=none` guards, truthful planned/accepted/confirmed states, root-owned overflow, and a provider-neutral optional advisor slot.
+- Reworked the user-facing interaction into compact takeover, progress, decision, and delivery states; backstage markers remain machine-verifiable but render invisibly, while ordinary status stays in plain human language.
+- Added OpenAI Visualizations routing for stage, decision, impact, evidence, numeric-trend, and current-image review; shipped compact responsive stage and decision templates, strict no-fake-curve/no-fake-preview fallbacks, light/dark CSS contract checks, and regression gates against backstage terms, hover flicker, animation, external resources, and network-capable markup.
 - Added a permanent `cli-profile-compat` path for read-only professional roles when the host cannot select named custom agents, with an independent standalone CLI session, explicit context-injection disclosure, strict managed/restricted/read sandbox verification, immutable-input and tool-output binding, recursion-disabled execution, bounded timeout, AGENTS invariance, and automatic archive verification; cold-context isolation remains explicitly unverified.
 - Added a fixed system-only tool `PATH` plus mandatory exit-0 `git diff` call/output receipts for reviewer and codebase-researcher compatibility runs; exit status is read only from the bound wrapper's structured top-level field, so missing `git` or misleading stdout cannot be reported as verified review evidence.
 - Kept native named custom agents as an optional enhancement instead of a release dependency; write-capable developer work remains in the main outcome-owner session or an isolated worktree.
