@@ -8,7 +8,7 @@
 
 聊天是产品前台，技术证据留在后台。Skill 默认用四种状态与用户沟通：任务接管、阶段进展、单一选择、最终交付。内部模式、角色、线程、哈希、JSON/YAML、命令回值和调试字段不会作为主要界面出现。
 
-当文字不足以快速解释三个以上步骤、分支、依赖或对比项时，Skill 选择最小的 OpenAI visualization：阶段路径、方案对比、影响关系、验证清单、当前图片/页面审阅，或基于真实数值的趋势图。曲线必须有数值、单位、维度和来源；任务状态不会伪装成百分比或平滑曲线。Visualizations 不可用时自动退化为 Markdown、表格或 Mermaid。
+当文字不足以快速解释三个以上步骤、分支、依赖或对比项时，Skill 选择最小的 OpenAI visualization：阶段路径、方案对比、影响关系、验证清单、当前图片/页面审阅，或基于真实数值的趋势图。每个视图先经过数据门；曲线必须有有限数值、单位、维度和来源，图片必须具有受支持签名，并与宿主 mount/readback 的路径和 hash 一致，任务状态不会伪装成百分比或平滑曲线。只有宿主返回的 mount/readback 证明渲染后才说用户已看到视图；否则自动退化为 Markdown、表格或 Mermaid。
 
 ## 适用场景
 
@@ -151,7 +151,7 @@ python3 scripts/resolve_role_route.py \
   --budget balanced
 ```
 
-默认输出只显示用户能理解的安排。只有派发 schema 接受精确控制并读回运行身份，才会把具体模型标记为确认；否则沿用宿主或现有兼容通道。相对成本单位用于比较方案，不等于 token、货币、credits 或节省百分比。外部 plan-advisor 仅保留可插拔位置，核心不依赖 Claude/Fable、Claude Code SDK、BridgeDeck 或 MCP。
+默认输出只显示用户能理解的安排。只有派发 schema 接受精确控制并读回运行身份，才会把具体模型标记为确认；否则沿用宿主或现有兼容通道。相对成本单位用于比较方案，不等于 token、货币、credits 或节省百分比。外部 plan-advisor 仅保留未来可选扩展位；当前核心没有 Claude、Faber、Claude Code SDK、BridgeDeck 或 MCP 的实现或依赖。
 
 相关官方说明：
 
@@ -202,7 +202,7 @@ Runner 只允许 `read-only` / `workspace-write`，拒绝危险 sandbox、越界
 
 `--auth-credential-class primary` 只允许生成诊断收据，永远不具备 portable prerelease/stable eligibility；不得把主账号凭据复制成所谓 dedicated 凭据。
 
-当前 Codex Desktop 真正读回任务与 reviewer 证据时可使用 native-task receipt。绑定目标提交、已安装双 bundle、state DB provider/model/effort、持久化 rollout、唯一完成事件、独立 reviewer、零越界写入和 cleanup 后，它可以支持明确标为“当前 Codex Desktop 用户路径已验证”的 host-scoped RC；它不声称凭据隔离、无人值守、跨宿主或 stable 发布：
+当前 Codex Desktop 真正读回任务与 reviewer 证据时可使用 native-task receipt。它绑定收据生成时的 source HEAD 与干净状态、已安装双 bundle、state DB provider/model/effort、持久化 rollout、唯一完成事件、独立 reviewer 与 cleanup，因此可以支持明确标为“当前 Codex Desktop 用户路径已验证”的 host-scoped RC。它不证明历史零越界写入、历史 `AGENTS.md` 状态、凭据隔离、无人值守、跨宿主或 stable 发布：
 
 ```bash
 python3 scripts/verify_native_task_receipt.py \

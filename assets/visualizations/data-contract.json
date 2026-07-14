@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Validate real user-facing visualization input before generating or mounting a compact Codex surface.",
+  "mount_readback": {
+    "required_when_host_returns_mount_state": ["surface", "mount_id", "rendered"],
+    "image_binding_required_when_image_review": ["image_path", "image_sha256"],
+    "fallback_when_unavailable": "Use the registry fallback and do not claim that a visualization was mounted."
+  },
+  "surfaces": {
+    "task-stage": {
+      "template": "task-surface.html",
+      "required": ["title", "goal", "stages", "next_step"],
+      "stage_count": [3, 12]
+    },
+    "decision": {
+      "template": "decision-surface.html",
+      "required": ["title", "summary", "choices", "recommended_index"],
+      "choice_count": [2, 3]
+    },
+    "impact": {
+      "required": ["title", "changed_item", "downstream_items", "next_review"],
+      "item_count": [3, 12],
+      "item_fields": ["item", "disposition", "impact"]
+    },
+    "evidence-list": {
+      "required": ["title", "items"],
+      "item_count": [5, 12]
+    },
+    "numeric-trend": {
+      "required": ["title", "observations", "source_definition"],
+      "observation_fields": ["name", "value", "unit", "dimension"]
+    },
+    "image-review": {
+      "required": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings"],
+      "image_sha256_required": true
+    }
+  }
+}

@@ -28,9 +28,11 @@ RUNTIME_FILES = (
     "references/model-routing-and-budget.md",
     "assets/WORK_RECEIPT_TEMPLATE.yaml",
     "assets/DELIVERY_EVIDENCE_TEMPLATE.yaml",
+    "assets/WORKER_PROTOCOL_CONTRACT.json",
     "assets/agent-routing.json",
     "assets/role-model-policy.json",
     "assets/visualizations/surface-registry.json",
+    "assets/visualizations/data-contract.json",
     "assets/visualizations/task-surface.html",
     "assets/visualizations/decision-surface.html",
     "assets/codex_agents/codebase-researcher.toml",
@@ -39,8 +41,12 @@ RUNTIME_FILES = (
     "assets/codex_agents/reviewer.toml",
     "assets/codex_agents/test-debugger.toml",
     "scripts/audit_historical_threads.py",
+    "scripts/install_skill.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/verify_native_task_receipt.py",
+    "scripts/protocol_contract.py",
+    "scripts/validate_visualization_data.py",
     "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
@@ -63,6 +69,19 @@ def runtime_source_path(root: Path, rel: str) -> Path:
     if not path.resolve().is_relative_to(root.resolve()):
         raise ValueError(f"runtime source escapes package root: {rel}")
     return path
+
+
+def validate_canonical_source(root: Path) -> None:
+    """Reject execution from the rendered legacy bundle before it can rewrite both installs."""
+    skill = runtime_source_path(root, "SKILL.md").read_text(encoding="utf-8")
+    openai = runtime_source_path(root, "agents/openai.yaml").read_text(encoding="utf-8")
+    if "\nname: agency-chief-of-staff\n" not in f"\n{skill}" or (
+        "allow_implicit_invocation: true" not in openai
+    ):
+        raise ValueError(
+            "installer source is not the canonical agency-chief-of-staff bundle; "
+            "run scripts/install_skill.py from the canonical bundle"
+        )
 
 
 def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> bytes:
@@ -115,7 +134,7 @@ def installed_manifest(root: Path) -> dict[str, str]:
     for path in sorted(root.rglob("*")):
         if path.is_symlink():
             raise ValueError(f"installed bundle contains a symlink: {path.relative_to(root)}")
-        if path.is_file() and "__pycache__" not in path.parts:
+        if path.is_file():
             manifest[str(path.relative_to(root))] = digest(path)
     return manifest
 
@@ -222,6 +241,18 @@ def main() -> None:
 
     source = Path(__file__).resolve().parents[1]
     raw_target_root = args.target_root.expanduser()
+    try:
+        validate_canonical_source(source)
+    except (OSError, UnicodeError, ValueError) as exc:
+        result = {
+            "source": str(source),
+            "target_root": str(raw_target_root),
+            "status": "conflict",
+            "message": str(exc),
+            "agents_md_touched": False,
+        }
+        emit(result, args.json)
+        raise SystemExit(1)
     if raw_target_root.is_symlink():
         result = {
             "source": str(source),

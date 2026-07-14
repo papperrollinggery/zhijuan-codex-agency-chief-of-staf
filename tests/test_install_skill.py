@@ -72,6 +72,59 @@ class InstallSkillTests(unittest.TestCase):
             self.assertFalse(list(target_root.glob(".*.staging-*")))
             self.assertFalse(list(target_root.glob(".*.backup-*")))
 
+    def test_installed_canonical_installer_is_safe_and_legacy_installer_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target_root = Path(tmp) / "skills"
+            installed = self.run_installer("--target-root", str(target_root), "--json")
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+
+            canonical_installer = (
+                target_root / install_skill.CANONICAL_SKILL_NAME / "scripts/install_skill.py"
+            )
+            canonical = subprocess.run(
+                ["python3", str(canonical_installer), "--target-root", str(target_root), "--json"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(canonical.returncode, 0, canonical.stderr)
+            self.assertEqual(json.loads(canonical.stdout)["status"], "already-installed")
+
+            manifests_before = {
+                name: install_skill.installed_manifest(target_root / name)
+                for name in install_skill.INSTALL_NAMES
+            }
+            legacy_installer = (
+                target_root / install_skill.LEGACY_SKILL_NAME / "scripts/install_skill.py"
+            )
+            legacy = subprocess.run(
+                ["python3", str(legacy_installer), "--target-root", str(target_root), "--force", "--json"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(legacy.returncode, 1)
+            self.assertIn("not the canonical", json.loads(legacy.stdout)["message"])
+            self.assertEqual(
+                manifests_before,
+                {
+                    name: install_skill.installed_manifest(target_root / name)
+                    for name in install_skill.INSTALL_NAMES
+                },
+            )
+
+    def test_python_bytecode_is_detected_as_install_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "skill"
+            install_skill.copy_runtime(ROOT, target)
+            cache = target / "scripts" / "__pycache__"
+            cache.mkdir()
+            (cache / "protocol_contract.cpython-312.pyc").write_bytes(b"bytecode")
+            self.assertNotEqual(
+                install_skill.installed_manifest(target),
+                install_skill.runtime_manifest(ROOT),
+            )
+
     def test_removed_agents_routing_flag_cannot_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

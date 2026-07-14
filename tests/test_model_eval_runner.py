@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import run_model_evals as runner  # noqa: E402
+import run_profile_compat  # noqa: E402
 
 
 class ModelEvalRunnerTests(unittest.TestCase):
@@ -286,7 +287,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "委派目标：独立复核当前 README.md 是否完成本次最小修改。\n"
             "读取范围：README.md；git diff -- README.md；git diff --check。\n"
             "写入范围：无。\n"
-            "期望产物：REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。\n"
+            "期望产物：REVIEW_TARGET、REVIEW_READBACK、REVIEW_FINDINGS、REVIEW_RESIDUAL_RISK、REVIEW_VERDICT，均填实际读回值。\n"
             "验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。\n"
             "停止条件：返回唯一终态；不启动、不派发。"
         )
@@ -333,41 +334,104 @@ class ModelEvalRunnerTests(unittest.TestCase):
 
     def test_reviewer_terminal_requires_exact_schema_target_and_pass_readback(self) -> None:
         valid = (
-            "REVIEW_READBACK: `Repository name: agency-model-eval-fixture-v2.`\n"
-            "REVIEW_TARGET: `README.md`\n"
-            "REVIEW_VERDICT: `PASS`"
+            "REVIEW_TARGET: README.md\n"
+            "REVIEW_READBACK: Repository name: agency-model-eval-fixture-v2.\n"
+            "REVIEW_FINDINGS: NONE\n"
+            "REVIEW_RESIDUAL_RISK: fixture only\n"
+            "REVIEW_VERDICT: PASS"
         )
         self.assertEqual(
             runner.verified_reviewer_terminal(
                 valid,
                 "README.md",
                 "Repository name: agency-model-eval-fixture-v2.",
+                "Repository name: agency-model-eval-fixture-v2.",
             ),
             {
-                "REVIEW_READBACK": "Repository name: agency-model-eval-fixture-v2.",
                 "REVIEW_TARGET": "README.md",
+                "REVIEW_READBACK": "Repository name: agency-model-eval-fixture-v2.",
+                "REVIEW_FINDINGS": "NONE",
+                "REVIEW_RESIDUAL_RISK": "fixture only",
                 "REVIEW_VERDICT": "PASS",
             },
         )
-        self.assertIsNone(
-            runner.verified_reviewer_terminal(
-                "准备审核。\n" + valid,
-                "README.md",
-                "Repository name: agency-model-eval-fixture-v2.",
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / "README.md"
+            artifact.write_text(
+                "Repository name: agency-model-eval-fixture-v2.\n", encoding="utf-8"
             )
+            reviewer_kwargs = {
+                "artifact": artifact,
+                "project_root": project,
+                "markers": ["Repository name: agency-model-eval-fixture-v2."],
+            }
+            self.assertEqual(
+                run_profile_compat.verify_reviewer_schema(valid, **reviewer_kwargs)[
+                    "review_verdict"
+                ],
+                "PASS",
+            )
+            with self.assertRaisesRegex(ValueError, "target does not match"):
+                run_profile_compat.verify_reviewer_schema(
+                    valid.replace("README.md", "notes.md", 1), **reviewer_kwargs
+                )
+            self.assertEqual(
+                run_profile_compat.verify_reviewer_schema(
+                    valid.replace("PASS", "FAIL", 1), **reviewer_kwargs
+                )["review_verdict"],
+                "FAIL",
+            )
+        for semantically_unaccepted in (
+            valid.replace("README.md", "notes.md", 1),
+            valid.replace("PASS", "FAIL", 1),
+        ):
+            self.assertIsNone(
+                runner.verified_reviewer_terminal(
+                    semantically_unaccepted,
+                    "README.md",
+                    "Repository name: agency-model-eval-fixture-v2.",
+                    "Repository name: agency-model-eval-fixture-v2.",
+                )
+            )
+        for malformed in (
+            "准备审核。\n" + valid,
+            valid + "\nEXTRA: evidence",
+            valid.replace(
+                "REVIEW_TARGET: README.md\nREVIEW_READBACK",
+                "REVIEW_READBACK",
+                1,
+            ),
+            valid.replace(
+                "REVIEW_READBACK: Repository name: agency-model-eval-fixture-v2.",
+                "REVIEW_TARGET: duplicate.md",
+                1,
+            ),
+        ):
+            self.assertIsNone(
+                runner.verified_reviewer_terminal(
+                    malformed,
+                    "README.md",
+                    "Repository name: agency-model-eval-fixture-v2.",
+                    "Repository name: agency-model-eval-fixture-v2.",
+                )
+            )
+            with self.assertRaises(ValueError):
+                run_profile_compat.verify_reviewer_schema(
+                    malformed, **reviewer_kwargs
+                )
+
+        missing_marker = valid.replace(
+            "Repository name: agency-model-eval-fixture-v2.",
+            "Repository name: agency-model-eval-fixture-v2. without hidden proof",
+            1,
         )
         self.assertIsNone(
             runner.verified_reviewer_terminal(
-                valid.replace("README.md", "notes.md", 1),
+                missing_marker,
                 "README.md",
                 "Repository name: agency-model-eval-fixture-v2.",
-            )
-        )
-        self.assertIsNone(
-            runner.verified_reviewer_terminal(
-                valid.replace("PASS", "FAIL", 1),
-                "README.md",
-                "Repository name: agency-model-eval-fixture-v2.",
+                "# Agency model-eval fixture",
             )
         )
 
@@ -391,7 +455,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "委派目标：审查 README。\n"
             "读取范围：README.md。\n"
             "写入范围：无。\n"
-            "期望产物：实际读回字段。\n"
+            "期望产物：WORKER_RESULT。\n"
             "验证要求：直接读取当前 README。\n"
             "停止条件：返回唯一终态；不启动、不派发。"
         )
@@ -415,11 +479,11 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 valid.replace("委派目标", "读取范围", 1).replace("读取范围：README.md", "委派目标：审查 README", 1)
             )
         )
-        self.assertFalse(runner.is_valid_worker_packet(valid.replace("实际读回字段。", "GO", 1)))
+        self.assertFalse(runner.is_valid_worker_packet(valid.replace("WORKER_RESULT。", "GO", 1)))
         self.assertFalse(runner.is_valid_worker_packet(valid.replace("直接读取当前 README。", "激活本技能", 1)))
         self.assertFalse(
             runner.is_valid_worker_packet(
-                valid.replace("实际读回字段。", "REVIEW_TARGET=agency-model-eval-fixture-v2", 1)
+                valid.replace("WORKER_RESULT。", "REVIEW_TARGET=agency-model-eval-fixture-v2", 1)
             )
         )
         self.assertFalse(
@@ -441,6 +505,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 )
             )
         )
+        self.assertFalse(runner.is_valid_worker_packet(valid.replace("\n读取范围", "\n\n读取范围", 1)))
         self.assertFalse(
             runner.is_valid_worker_packet(
                 valid.replace(

@@ -113,6 +113,51 @@ class ValidatePackageMutationTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("supported surface set", result.stderr)
 
+    def test_rejects_visualization_data_contract_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "assets" / "visualizations" / "data-contract.json"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace('"image-review"', '"image-preview"', 1),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("data contract does not match", result.stderr)
+
+    def test_rejects_worker_protocol_documentation_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "SKILL.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "first line is AGENCY_WORKER: true",
+                    "first non-empty line is AGENCY_WORKER: true",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("literal first line", result.stderr)
+
+    def test_rejects_worker_reference_that_allows_extra_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "references" / "real-threads.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "给 worker 的 prompt 必须逐行且仅包含：",
+                    "给 worker 的 prompt 至少包含：",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("extra packet fields", result.stderr)
+
     def test_rejects_hover_dependent_task_visualization(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.make_copy(Path(tmp))

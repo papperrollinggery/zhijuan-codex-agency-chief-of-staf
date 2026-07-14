@@ -17,26 +17,21 @@ import sys
 from pathlib import Path
 from typing import Any
 
+sys.dont_write_bytecode = True
+
 from validate_agent_profiles import PROFILE_NAMES, validate_profile
+from protocol_contract import (
+    REVIEW_FIELDS as CONTRACT_REVIEW_FIELDS,
+    WORKER_FIELDS as CONTRACT_WORKER_FIELDS,
+    parse_reviewer_terminal,
+    parse_worker_packet,
+)
 
 
 THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
-PACKET_LABELS = (
-    "委派目标",
-    "读取范围",
-    "写入范围",
-    "期望产物",
-    "验证要求",
-    "停止条件",
-)
-REVIEW_FIELDS = (
-    "REVIEW_TARGET:",
-    "REVIEW_READBACK:",
-    "REVIEW_FINDINGS:",
-    "REVIEW_RESIDUAL_RISK:",
-    "REVIEW_VERDICT:",
-)
+PACKET_LABELS = CONTRACT_WORKER_FIELDS
+REVIEW_FIELDS = tuple(f"{field}:" for field in CONTRACT_REVIEW_FIELDS)
 READ_ONLY_PROFILES = {
     "codebase-researcher",
     "technical-architect",
@@ -60,10 +55,6 @@ PROCESS_ENV_ALLOWLIST = {
 }
 TOOL_SHELL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 GIT_DIFF_PROFILES = {"codebase-researcher", "reviewer"}
-SELF_SKILL_NAMES = (
-    "$agency-chief-of-staff",
-    "$zhijuan-codex-agency-chief-of-staf",
-)
 
 
 def fail(message: str) -> None:
@@ -114,25 +105,10 @@ def read_packet(path: Path) -> str:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("worker packet must be UTF-8") from exc
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    if not lines or lines[0] != "AGENCY_WORKER: true":
-        fail("worker packet must start with AGENCY_WORKER: true")
-    if len(lines) != len(PACKET_LABELS) + 1:
-        fail("worker packet must contain exactly six ordered fields")
-    lowered = text.lower()
-    if any(name in lowered for name in SELF_SKILL_NAMES):
-        fail("worker packet must not recursively invoke the Chief-of-Staff skill")
-    if re.search(r"(?:^|\s)(?:PASS|FAIL|GO|NO-GO)(?:\s|$)", text, re.IGNORECASE):
-        fail("worker packet must not disclose a predicted verdict")
-    for line, label in zip(lines[1:], PACKET_LABELS, strict=True):
-        prefix = f"{label}：" if line.startswith(f"{label}：") else f"{label}:"
-        if not line.startswith(prefix):
-            fail(f"worker packet field order mismatch: {label}")
-        value = line[len(prefix) :].strip()
-        if not value:
-            fail(f"worker packet field is empty: {label}")
-        if label == "停止条件" and value != "返回唯一终态；不启动、不派发。":
-            fail("worker packet stop condition is not exact")
+    try:
+        parse_worker_packet(text)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
     return text.rstrip("\r\n")
 
 
@@ -212,7 +188,9 @@ def build_command(
             "order: REVIEW_TARGET, REVIEW_READBACK, REVIEW_FINDINGS, "
             "REVIEW_RESIDUAL_RISK, REVIEW_VERDICT. Use no Markdown fences, headings, "
             "commentary, or extra lines. The REVIEW_VERDICT value must be exactly PASS "
-            "or FAIL with no punctuation, explanation, suffix, or translation."
+            "or FAIL with no punctuation, explanation, suffix, or translation. Set "
+            "REVIEW_TARGET to the project-relative required artifact and include every "
+            "required current artifact fact in REVIEW_READBACK."
         )
     if git_workdir is not None and git_diff_target is not None:
         exact_command = f"git diff -- {shlex.quote(git_diff_target)}"
@@ -386,42 +364,45 @@ def command_candidates(call_input: str) -> list[tuple[str, Path | None]]:
         cwd = Path(raw_cwd).expanduser().absolute() if isinstance(raw_cwd, str) else None
         return [(parsed["cmd"], cwd)]
 
-    json_candidates: list[tuple[str, Path | None]] = []
-    for match in re.finditer(r"tools\.exec_command\((\{.*?\})\)", call_input, re.DOTALL):
-        try:
-            arguments = json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(arguments, dict) or not isinstance(arguments.get("cmd"), str):
-            continue
+    wrapper = re.fullmatch(
+        r"\s*(?://\s*@exec:[^\r\n]*\r?\n)?"
+        r"const\s+(?P<result>[A-Za-z_]\w*)\s*=\s*await\s+"
+        r"tools\.exec_command\((?P<arguments>\{.*\})\);\s*"
+        r"text\(JSON\.stringify\((?P=result)\)\)\s*;?\s*",
+        call_input,
+        re.DOTALL,
+    )
+    if wrapper is None:
+        if re.search(r"\b(?:tools|exec_command)\b", call_input):
+            return []
+        return [(call_input, None)]
+
+    raw_arguments = wrapper.group("arguments")
+    try:
+        arguments = json.loads(raw_arguments)
+    except json.JSONDecodeError:
+        arguments = None
+    if isinstance(arguments, dict) and isinstance(arguments.get("cmd"), str):
         raw_cwd = arguments.get("workdir")
         cwd = Path(raw_cwd).expanduser().absolute() if isinstance(raw_cwd, str) else None
-        json_candidates.append((arguments["cmd"], cwd))
-    if json_candidates:
-        return json_candidates
+        return [(arguments["cmd"], cwd)]
 
-    candidates: list[tuple[str, Path | None]] = []
-    variables = {
-        match.group(1): Path(match.group(2)).expanduser().absolute()
-        for match in re.finditer(r'const\s+(\w+)\s*=\s*"([^"]+)"', call_input)
-    }
     string_literal = r'"(?:\\.|[^"\\])*"'
-    field_pattern = re.compile(
-        rf"cmd:\s*({string_literal})\s*,\s*workdir:\s*(?:({string_literal})|(\w+))"
+    object_pattern = re.compile(
+        rf"\{{\s*cmd:\s*(?P<cmd>{string_literal})\s*,\s*"
+        rf"workdir:\s*(?P<workdir>{string_literal})"
+        rf"(?:\s*,\s*(?:yield_time_ms|max_output_tokens):\s*\d+)*\s*\}}",
+        re.DOTALL,
     )
-    for match in field_pattern.finditer(call_input):
-        try:
-            command = json.loads(match.group(1))
-            raw_cwd = json.loads(match.group(2)) if match.group(2) else None
-        except json.JSONDecodeError:
-            continue
-        cwd = (
-            Path(raw_cwd).expanduser().absolute()
-            if isinstance(raw_cwd, str)
-            else variables.get(match.group(3))
-        )
-        candidates.append((command, cwd))
-    return candidates or [(call_input, None)]
+    match = object_pattern.fullmatch(raw_arguments)
+    if match is None:
+        return []
+    try:
+        command = json.loads(match.group("cmd"))
+        raw_cwd = json.loads(match.group("workdir"))
+    except json.JSONDecodeError:
+        return []
+    return [(command, Path(raw_cwd).expanduser().absolute())]
 
 
 def has_unquoted_shell_control(command: str) -> bool:
@@ -451,27 +432,53 @@ def has_unquoted_shell_control(command: str) -> bool:
 
 
 def command_reads_artifact(call_input: str, artifact: Path) -> bool:
-    for command, cwd in command_candidates(call_input):
-        if has_unquoted_shell_control(command):
-            continue
-        try:
-            argv = shlex.split(command)
-        except ValueError:
-            continue
-        if not argv:
-            continue
-        executable = Path(argv[0]).name
-        if executable not in {"cat", "git", "head", "rg", "sed", "tail"}:
-            continue
-        if executable == "git" and (len(argv) < 2 or argv[1] not in {"diff", "show"}):
-            continue
-        for argument in argv[1:]:
-            candidate = Path(argument).expanduser()
-            if not candidate.is_absolute() and cwd is not None:
-                candidate = cwd / candidate
-            if candidate.absolute() == artifact:
-                return True
-    return False
+    candidates = command_candidates(call_input)
+    if len(candidates) != 1:
+        return False
+    command, cwd = candidates[0]
+    if has_unquoted_shell_control(command):
+        return False
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return False
+    allowed_executables = {
+        "cat": "cat",
+        "/bin/cat": "cat",
+        "head": "head",
+        "/usr/bin/head": "head",
+        "sed": "sed",
+        "/usr/bin/sed": "sed",
+        "tail": "tail",
+        "/usr/bin/tail": "tail",
+    }
+    reader = allowed_executables.get(argv[0]) if argv else None
+    if reader is None:
+        return False
+
+    if reader == "cat":
+        path_arguments = argv[2:] if len(argv) == 3 and argv[1] == "--" else argv[1:]
+    elif reader == "sed":
+        if len(argv) != 4 or argv[1] != "-n" or re.fullmatch(r"\d+(?:,\d+)?p", argv[2]) is None:
+            return False
+        path_arguments = argv[3:]
+    else:
+        if len(argv) != 4 or argv[1] != "-n" or not argv[2].isdigit():
+            return False
+        path_arguments = argv[3:]
+    if len(path_arguments) != 1:
+        return False
+
+    artifact = artifact.resolve()
+    candidate = Path(path_arguments[0]).expanduser()
+    if not candidate.is_absolute():
+        if cwd is None:
+            return False
+        candidate = cwd / candidate
+    try:
+        return candidate.resolve(strict=True) == artifact
+    except (FileNotFoundError, OSError):
+        return False
 
 
 def exec_pairs_before_completion(
@@ -518,7 +525,10 @@ def exec_pairs_before_completion(
 def command_reads_git_diff(
     call_input: str, project_root: Path, artifact: Path
 ) -> bool:
-    for command, workdir in command_candidates(call_input):
+    candidates = command_candidates(call_input)
+    if len(candidates) != 1:
+        return False
+    for command, workdir in candidates:
         if workdir is None or has_unquoted_shell_control(command):
             continue
         try:
@@ -527,7 +537,7 @@ def command_reads_git_diff(
             continue
         if (
             len(argv) != 4
-            or Path(argv[0]).name != "git"
+            or argv[0] != "git"
             or argv[1:3] != ["diff", "--"]
             or workdir.resolve() != project_root
         ):
@@ -602,28 +612,42 @@ def verify_direct_read(
 ) -> dict[str, object]:
     require_regular_file(artifact, "required read artifact")
     pairs = exec_pairs_before_completion(records)
+    artifact_bytes = artifact.read_bytes()
+    artifact_hash = sha256_bytes(artifact_bytes)
+    try:
+        artifact_text = artifact_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        artifact_text = None
+        artifact_text_json = None
+    else:
+        artifact_text_json = json.dumps(artifact_text, ensure_ascii=False)[1:-1]
+    if artifact_text is None and markers:
+        fail("required read markers need a UTF-8 artifact")
+    if artifact_text is not None and any(marker not in artifact_text for marker in markers):
+        fail("required read marker is not present in the artifact bytes")
     matched = [
         call_id
         for call_id, (call_input, output, _raw_output) in pairs.items()
         if command_reads_artifact(call_input, artifact)
         and all(marker in output for marker in markers)
+        and output_proves_exit_zero(_raw_output)
+        and (
+            artifact_hash in output
+            or (artifact_text is not None and artifact_text in output)
+            or (artifact_text_json is not None and artifact_text_json in output)
+        )
     ]
     if not matched:
-        fail("no direct exec/output pair proves the required artifact read")
-    artifact_text = artifact.read_text(encoding="utf-8")
-    artifact_text_json = json.dumps(artifact_text, ensure_ascii=False)[1:-1]
+        fail("no single direct exec/output pair proves the required artifact bytes or hash")
     return {
         "artifact": str(artifact),
-        "artifact_sha256": sha256(artifact),
+        "artifact_sha256": artifact_hash,
         "read_markers_sha256": [sha256_bytes(marker.encode("utf-8")) for marker in markers],
         "bound_read_calls": len(matched),
         "bound_output_sha256": [
             sha256_bytes(pairs[call_id][1].encode("utf-8")) for call_id in matched
         ],
-        "full_artifact_bytes_observed": any(
-            artifact_text in pairs[call_id][1] or artifact_text_json in pairs[call_id][1]
-            for call_id in matched
-        ),
+        "artifact_bytes_or_hash_observed": True,
     }
 
 
@@ -640,21 +664,23 @@ def completed_message(records: list[dict[str, Any]]) -> str:
     return messages[0]
 
 
-def verify_reviewer_schema(final_message: str) -> dict[str, str]:
-    lines = final_message.splitlines()
-    if len(lines) != len(REVIEW_FIELDS):
-        fail("reviewer final must contain exactly five non-empty lines")
-    result: dict[str, str] = {}
-    for line, field in zip(lines, REVIEW_FIELDS, strict=True):
-        if not line.startswith(field):
-            fail(f"reviewer final field order mismatch: {field}")
-        value = line[len(field) :].strip()
-        if not value:
-            fail(f"reviewer final field is empty: {field}")
-        result[field.removesuffix(":").lower()] = value
-    if result["review_verdict"] not in {"PASS", "FAIL"}:
-        fail("reviewer verdict must be exactly PASS or FAIL")
-    return result
+def verify_reviewer_schema(
+    final_message: str,
+    *,
+    artifact: Path,
+    project_root: Path,
+    markers: list[str],
+) -> dict[str, str]:
+    parsed = parse_reviewer_terminal(final_message)
+    try:
+        expected_target = artifact.resolve().relative_to(project_root.resolve()).as_posix()
+    except ValueError as exc:
+        raise ValueError("reviewer artifact must stay inside the project root") from exc
+    if parsed["REVIEW_TARGET"] != expected_target:
+        fail("reviewer final target does not match the required artifact")
+    if any(marker not in parsed["REVIEW_READBACK"] for marker in markers):
+        fail("reviewer readback does not contain every required artifact marker")
+    return {key.lower(): value for key, value in parsed.items()}
 
 
 def thread_row(database_path: Path, thread_id: str) -> dict[str, Any]:
@@ -961,7 +987,16 @@ def main() -> None:
         if args.profile in GIT_DIFF_PROFILES
         else None
     )
-    review_schema = verify_reviewer_schema(final_message) if args.profile == "reviewer" else None
+    review_schema = (
+        verify_reviewer_schema(
+            final_message,
+            artifact=artifact,
+            project_root=project_root,
+            markers=args.required_read_marker,
+        )
+        if args.profile == "reviewer"
+        else None
+    )
 
     receipt = {
         "status": "verified",

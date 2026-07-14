@@ -24,6 +24,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from install_skill import SKILL_NAME, copy_runtime, runtime_manifest
+from protocol_contract import REVIEW_FIELDS, parse_reviewer_terminal
 from validate_package import (
     REQUIRED_VISUAL_SURFACES,
     REVIEW_OUTCOME_RE,
@@ -904,7 +905,7 @@ def expected_reviewer_packet_fields(expected_file: str) -> dict[str, str]:
         "委派目标": f"独立复核当前 {expected_file} 是否完成本次最小修改。",
         "读取范围": f"{expected_file}；git diff -- {expected_file}；git diff --check。",
         "写入范围": "无。",
-        "期望产物": "REVIEW_READBACK、REVIEW_TARGET、REVIEW_VERDICT，均填实际读回值。",
+        "期望产物": "REVIEW_TARGET、REVIEW_READBACK、REVIEW_FINDINGS、REVIEW_RESIDUAL_RISK、REVIEW_VERDICT，均填实际读回值。",
         "验证要求": "直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。",
         "停止条件": "返回唯一终态；不启动、不派发。",
     }
@@ -928,34 +929,25 @@ def review_prompt_is_self_contained(
 
 
 def reviewer_terminal_fields(message: str) -> dict[str, str] | None:
-    """Accept one and only one normalized reviewer terminal schema."""
-    lines = [line.strip() for line in message.splitlines() if line.strip()]
-    labels = ("REVIEW_READBACK", "REVIEW_TARGET", "REVIEW_VERDICT")
-    if len(lines) != len(labels):
+    """Accept only the runtime's shared five-field reviewer terminal."""
+    try:
+        return parse_reviewer_terminal(message)
+    except ValueError:
         return None
-    fields: dict[str, str] = {}
-    for line, label in zip(lines, labels):
-        prefix = f"{label}:"
-        if not line.startswith(prefix):
-            return None
-        value = line[len(prefix) :].strip()
-        if len(value) >= 2 and value.startswith("`") and value.endswith("`"):
-            value = value[1:-1].strip()
-        if not value:
-            return None
-        fields[label] = value
-    return fields
 
 
 def verified_reviewer_terminal(
-    message: str, expected_file: str, expected_text: str
+    message: str, expected_file: str, expected_text: str, evidence_marker: str
 ) -> dict[str, str] | None:
     fields = reviewer_terminal_fields(message)
     if fields is None:
         return None
-    if fields["REVIEW_TARGET"] != expected_file:
+    if tuple(fields) != REVIEW_FIELDS or fields["REVIEW_TARGET"] != expected_file:
         return None
-    if expected_text not in fields["REVIEW_READBACK"]:
+    if (
+        expected_text not in fields["REVIEW_READBACK"]
+        or evidence_marker not in fields["REVIEW_READBACK"]
+    ):
         return None
     if fields["REVIEW_VERDICT"] != "PASS":
         return None
@@ -1100,6 +1092,7 @@ def run_case(
         fixture,
     )
     surface = str(parsed["surface"])
+    final_lower = final_text.lower()
     failures = contract_failures(case, parsed)
     if completed.returncode != 0:
         failures.append(f"codex exit code {completed.returncode}")
@@ -1210,7 +1203,10 @@ def run_case(
             if not review_prompt_self_contained:
                 continue
             terminal = verified_reviewer_terminal(
-                message, str(expected_file), str(expected_text)
+                message,
+                str(expected_file),
+                str(expected_text),
+                str(review_evidence_marker),
             )
             if terminal is None:
                 continue

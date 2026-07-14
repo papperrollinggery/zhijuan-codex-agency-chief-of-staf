@@ -29,17 +29,16 @@ TOOL_BLOCKED：缺少真实 Codex task/thread 或 isolated worktree 能力；未
 
 使用工具返回的真实 id。不要填写 `pending`、`unknown`、`same-thread`、主线程 id 或猜测值。
 
-给 worker 的 prompt 至少包含：
+给 worker 的 prompt 必须逐行且仅包含：
 
 ```text
 AGENCY_WORKER: true
 委派目标：<objective>。
 读取范围：<read scope>。
 写入范围：<write scope>。
-期望产物：<expected artifact/receipt>。
+期望产物：<实际读回字段与终态 schema>。
 验证要求：<checks and evidence>。
-停止条件：完成范围后返回；不要重分级或继续派发。
-真实 task/thread id：<id>。
+停止条件：返回唯一终态；不启动、不派发。
 ```
 
 工具只返回 pending worktree id 时，状态只能是 `dispatch_pending`。等真实 task/thread id 可读回后再记为 `dispatched`。
@@ -58,4 +57,4 @@ AGENCY_WORKER: true
 
 完成、失败或替换后的用户拥有 task/thread，按用户要求和工具能力归档；不可归档时记录 `cleanup_blocked`。不要删除含未采纳改动的 worktree。
 
-只有机器审计需要时才使用 [assets/WORK_RECEIPT_TEMPLATE.yaml](../assets/WORK_RECEIPT_TEMPLATE.yaml)。日常用户更新优先用中文短句。
+只有机器审计需要时才使用 [assets/WORK_RECEIPT_TEMPLATE.yaml](../assets/WORK_RECEIPT_TEMPLATE.yaml)。收据只能证明当前 source、安装包和持久化记录；没有专项前后快照时，历史写入与 AGENTS 状态必须标记为未验证。日常用户更新优先用中文短句。

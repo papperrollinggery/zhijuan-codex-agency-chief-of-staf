@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "assets" / "role-model-policy.json"
 RISK_LEVELS = ("low", "medium", "high", "critical")
 ROUTE_MODES = ("inherit", "direct", "custom-agent")
+MODEL_CLASSES = frozenset({"efficient", "balanced", "judgment"})
+REASONING_LEVELS = frozenset({"minimal", "low", "medium", "high", "xhigh", "max"})
 
 
 def fail(message: str) -> None:
@@ -131,6 +133,8 @@ def validate_policy(policy: dict[str, object]) -> None:
         for key in ("max_delegated_roles", "max_parallel_roles", "max_relative_cost_units", "max_auto_upgrades_per_role"):
             if not isinstance(budget.get(key), int) or budget[key] < 0:
                 fail(f"budget value must be a non-negative integer: {name}:{key}")
+        if budget["max_parallel_roles"] > budget["max_delegated_roles"]:
+            fail(f"parallel role limit cannot exceed delegated role limit: {name}")
     for role, profile in profiles.items():
         if not isinstance(profile, dict):
             fail(f"profile policy must be an object: {role}")
@@ -164,7 +168,7 @@ def validate_policy(policy: dict[str, object]) -> None:
         or advisor.get("may_delegate") is not False
         or advisor.get("may_approve_final_delivery") is not False
         or advisor.get("optional_adapters")
-        != ["openai-custom-agent", "fable-mcp", "other-authenticated-provider"]
+        != ["openai-custom-agent", "future-host-scoped-adapter"]
     ):
         fail("external advisor must remain optional, root-facing, and read-only")
 
@@ -199,6 +203,54 @@ def validate_catalog_provenance(
     return provenance
 
 
+def validate_catalog_models(catalog: dict[str, object]) -> list[dict[str, object]]:
+    """Validate every supplied catalog record before eligibility filtering."""
+    models = catalog.get("models")
+    if not isinstance(models, list):
+        fail("catalog models must be a list")
+    validated: list[dict[str, object]] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(models):
+        if not isinstance(item, dict):
+            fail(f"catalog model entry {index} must be an object")
+        model_id = item.get("id")
+        provider = item.get("provider")
+        model_class = item.get("model_class")
+        efforts = item.get("supported_reasoning")
+        available = item.get("available")
+        if not isinstance(model_id, str) or not model_id:
+            fail(f"catalog model id is invalid at index {index}")
+        if model_id in seen_ids:
+            fail(f"catalog model id is duplicated: {model_id}")
+        seen_ids.add(model_id)
+        if not isinstance(provider, str) or not provider:
+            fail(f"catalog model provider is invalid: {model_id}")
+        if model_class not in MODEL_CLASSES:
+            fail(f"catalog model class is invalid: {model_id}")
+        if not isinstance(efforts, list) or not efforts or any(
+            value not in REASONING_LEVELS for value in efforts
+        ):
+            fail(f"catalog supported_reasoning is invalid: {model_id}")
+        if len(efforts) != len(set(efforts)):
+            fail(f"catalog supported_reasoning contains duplicates: {model_id}")
+        if type(available) is not bool:
+            fail(f"catalog availability is invalid: {model_id}")
+        for field in ("authenticated", "loaded", "provider_pinned"):
+            if field in item and type(item[field]) is not bool:
+                fail(f"catalog {field} is invalid: {model_id}")
+        if "agent_type" in item and (
+            not isinstance(item["agent_type"], str) or not item["agent_type"]
+        ):
+            fail(f"catalog agent_type is invalid: {model_id}")
+        relative_cost = item.get("relative_cost_units")
+        if relative_cost is not None and (
+            type(relative_cost) is not int or relative_cost < 0
+        ):
+            fail(f"catalog relative cost is invalid: {model_id}")
+        validated.append(item)
+    return validated
+
+
 def choose_catalog_model(
     catalog: dict[str, object],
     model_class: str,
@@ -206,22 +258,15 @@ def choose_catalog_model(
     route_mode: str,
     root_provider: str | None,
 ) -> dict[str, object] | None:
-    models = catalog.get("models")
-    if not isinstance(models, list):
-        fail("catalog models must be a list")
+    models = validate_catalog_models(catalog)
     candidates: list[dict[str, object]] = []
     for item in models:
-        if not isinstance(item, dict):
-            fail("catalog model entries must be objects")
         if item.get("model_class") != model_class or item.get("available") is not True:
             continue
         model_id = item.get("id")
         provider = item.get("provider")
-        efforts = item.get("supported_reasoning")
-        if not isinstance(model_id, str) or not model_id or not isinstance(provider, str) or not provider:
-            fail("catalog model id and provider must be non-empty strings")
-        if not isinstance(efforts, list) or any(not isinstance(value, str) for value in efforts):
-            fail(f"catalog supported_reasoning is invalid: {model_id}")
+        efforts = item["supported_reasoning"]
+        assert isinstance(model_id, str) and isinstance(provider, str) and isinstance(efforts, list)
         if reasoning not in efforts:
             continue
         if route_mode == "direct" and (not root_provider or provider != root_provider):
@@ -281,6 +326,7 @@ def resolve_plan(
     catalog_provenance: dict[str, object] | None = None
     if route_mode != "inherit" and catalog is not None:
         catalog_provenance = validate_catalog_provenance(catalog, route_mode, root_provider)
+        validate_catalog_models(catalog)
 
     for role in ranked:
         profile = profiles[role]
@@ -290,7 +336,11 @@ def resolve_plan(
         assert isinstance(class_policy, dict)
         units = int(class_policy["relative_cost_units"])
         reasoning = str(class_policy["elevated_reasoning"] if risk == "critical" else class_policy["default_reasoning"])
-        if len(delegated) >= min(max_roles, max_parallel) or total_units + units > max_units:
+        if (
+            max_parallel == 0
+            or len(delegated) >= max_roles
+            or total_units + units > max_units
+        ):
             root_owned.append({"role": role, "reason": "budget capacity reserved for higher-priority delegated work"})
             continue
 
@@ -304,6 +354,7 @@ def resolve_plan(
             "model": None,
             "provider": None,
             "agent_type": None,
+            "dispatch_wave": len(delegated) // max_parallel + 1,
         }
         if route_mode != "inherit":
             if catalog is None:

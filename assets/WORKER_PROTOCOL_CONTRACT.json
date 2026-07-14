@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "worker": {
+    "header": "AGENCY_WORKER: true",
+    "fields": [
+      "委派目标",
+      "读取范围",
+      "写入范围",
+      "期望产物",
+      "验证要求",
+      "停止条件"
+    ],
+    "stop_condition": "返回唯一终态；不启动、不派发。",
+    "output_schemas": [
+      ["WORKER_RESULT"],
+      ["RESEARCH_READBACK", "RESEARCH_STATUS"],
+      ["DIAGNOSIS_READBACK", "DIAGNOSIS_STATUS"],
+      [
+        "REVIEW_TARGET",
+        "REVIEW_READBACK",
+        "REVIEW_FINDINGS",
+        "REVIEW_RESIDUAL_RISK",
+        "REVIEW_VERDICT"
+      ]
+    ]
+  },
+  "reviewer": {
+    "fields": [
+      "REVIEW_TARGET",
+      "REVIEW_READBACK",
+      "REVIEW_FINDINGS",
+      "REVIEW_RESIDUAL_RISK",
+      "REVIEW_VERDICT"
+    ],
+    "verdicts": ["PASS", "FAIL"]
+  }
+}

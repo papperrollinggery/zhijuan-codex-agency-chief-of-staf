@@ -74,7 +74,12 @@ class RoleModelRoutingTests(unittest.TestCase):
         self.assertEqual(classes["codebase-researcher"], "balanced")
         self.assertEqual(classes["developer"], "judgment")
         self.assertEqual(plan["limits"]["auto_upgrades_per_role"], 1)
-        self.assertLessEqual(len(plan["delegated"]), plan["limits"]["parallel_roles"])
+        self.assertEqual(len(plan["delegated"]), 3)
+        self.assertEqual([item["dispatch_wave"] for item in plan["delegated"]], [1, 1, 2])
+        self.assertLessEqual(
+            sum(item["dispatch_wave"] == 1 for item in plan["delegated"]),
+            plan["limits"]["parallel_roles"],
+        )
 
     def test_direct_route_selects_same_provider_and_requires_fork_none(self) -> None:
         catalog = {
@@ -240,8 +245,103 @@ class RoleModelRoutingTests(unittest.TestCase):
             None,
             None,
         )
-        self.assertEqual(len(plan["delegated"]), 1)
-        self.assertEqual(len(plan["root_owned"]), 2)
+        self.assertEqual(len(plan["delegated"]), 3)
+        self.assertEqual(len(plan["root_owned"]), 0)
+        self.assertEqual([item["dispatch_wave"] for item in plan["delegated"]], [1, 2, 3])
+
+    def test_catalog_schema_rejects_malformed_unselected_record(self) -> None:
+        catalog = {
+            "provenance": {
+                "source": "active-host-catalog",
+                "source_id": "test-host-catalog",
+                "observed_for_current_task": True,
+                "root_provider": "openai",
+            },
+            "models": [
+                {
+                    "id": "usable-efficient",
+                    "provider": "openai",
+                    "model_class": "efficient",
+                    "supported_reasoning": ["medium"],
+                    "available": True,
+                },
+                {
+                    "id": "malformed-unselected",
+                    "provider": "openai",
+                    "model_class": "judgment",
+                    "supported_reasoning": ["high"],
+                    "available": "false",
+                },
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "availability is invalid"):
+            resolve_plan(
+                self.policy,
+                ["codebase-researcher"],
+                "medium",
+                "balanced",
+                "direct",
+                catalog,
+                "openai",
+            )
+
+    def test_catalog_schema_rejects_unknown_enums_duplicates_and_bad_route_fields(self) -> None:
+        base = {
+            "provenance": {
+                "source": "active-host-catalog",
+                "source_id": "test-host-catalog",
+                "observed_for_current_task": True,
+                "root_provider": "openai",
+            },
+            "models": [
+                {
+                    "id": "model-a",
+                    "provider": "openai",
+                    "model_class": "efficient",
+                    "supported_reasoning": ["medium"],
+                    "available": True,
+                }
+            ],
+        }
+        mutations = (
+            ("model class", lambda item: item.update(model_class="mystery")),
+            ("supported_reasoning", lambda item: item.update(supported_reasoning=["turbo"])),
+            ("contains duplicates", lambda item: item.update(supported_reasoning=["medium", "medium"])),
+            ("authenticated", lambda item: item.update(authenticated="yes")),
+        )
+        for expected, mutate in mutations:
+            with self.subTest(expected=expected):
+                catalog = json.loads(json.dumps(base))
+                mutate(catalog["models"][0])
+                with self.assertRaisesRegex(ValueError, expected):
+                    resolve_plan(
+                        self.policy,
+                        ["codebase-researcher"],
+                        "medium",
+                        "balanced",
+                        "direct",
+                        catalog,
+                        "openai",
+                    )
+
+        duplicated = json.loads(json.dumps(base))
+        duplicated["models"].append(json.loads(json.dumps(duplicated["models"][0])))
+        with self.assertRaisesRegex(ValueError, "duplicated"):
+            resolve_plan(
+                self.policy,
+                ["codebase-researcher"],
+                "medium",
+                "balanced",
+                "direct",
+                duplicated,
+                "openai",
+            )
+
+    def test_policy_rejects_parallel_limit_above_total_delegation(self) -> None:
+        policy = json.loads(json.dumps(self.policy))
+        policy["budget_modes"]["balanced"]["max_parallel_roles"] = 4
+        with self.assertRaisesRegex(ValueError, "parallel role limit"):
+            validate_policy(policy)
 
     def test_cli_human_output_hides_backstage_route_fields(self) -> None:
         result = subprocess.run(

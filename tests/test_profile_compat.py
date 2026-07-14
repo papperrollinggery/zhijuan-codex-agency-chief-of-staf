@@ -140,6 +140,14 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 final = {final!r}
                 read_command = "sed -n '1,80p' " + shlex.quote(str(artifact))
                 git_command = "git diff -- " + shlex.quote(str(artifact.relative_to(cwd)))
+                read_output = [
+                    {{"type": "input_text", "text": "Script completed\\nOutput:\\n"}},
+                    {{"type": "input_text", "text": json.dumps({{
+                        "exit_code": 0,
+                        "output": artifact.read_text(encoding="utf-8"),
+                        "wall_time_seconds": 0.01,
+                    }})}},
+                ]
                 git_output = [
                     {{"type": "input_text", "text": "Script completed\\nOutput:\\n"}},
                     {{"type": "input_text", "text": json.dumps({{
@@ -153,7 +161,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
                     {{"type": "session_meta", "payload": {{"id": THREAD_ID, "model_provider": "openai"}}}},
                     {{"type": "turn_context", "payload": {{"model": model, "effort": effort}}}},
                     {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "read-1", "input": read_command}}}},
-                    {{"type": "response_item", "payload": {{"type": "custom_tool_call_output", "call_id": "read-1", "output": artifact.read_text(encoding="utf-8")}}}},
+                    {{"type": "response_item", "payload": {{"type": "custom_tool_call_output", "call_id": "read-1", "output": read_output}}}},
                     {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "git-1", "input": json.dumps({{"cmd": git_command, "workdir": str(cwd)}})}}}},
                     {{"type": "response_item", "payload": {{"type": "custom_tool_call_output", "call_id": "git-1", "output": git_output}}}},
                     {{"type": "event_msg", "payload": {{"type": "task_complete", "turn_id": "turn-1", "last_agent_message": final}}}},
@@ -262,7 +270,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
             self.assertTrue(receipt["thread"]["archived"])
             self.assertEqual(receipt["review_schema"]["review_verdict"], "PASS")
             self.assertEqual(len(receipt["artifact_read"]["bound_output_sha256"]), 1)
-            self.assertTrue(receipt["artifact_read"]["full_artifact_bytes_observed"])
+            self.assertTrue(receipt["artifact_read"]["artifact_bytes_or_hash_observed"])
             self.assertTrue(receipt["git_diff_read"]["exit_code_zero"])
             self.assertEqual(
                 receipt["tool_shell_path"], "/usr/bin:/bin:/usr/sbin:/sbin"
@@ -318,6 +326,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
                         receipt["runner_sha256"],
                         run_profile_compat.sha256(installed_script),
                     )
+                    self.assertFalse(list((installed_root / skill_name).rglob("*.pyc")))
 
     def test_detects_protected_agents_mutation_after_archiving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -427,23 +436,40 @@ class ProfileCompatibilityTests(unittest.TestCase):
             self.assertIn("non-Luna", luna.stderr)
 
     def test_reviewer_schema_rejects_duplicates_extra_lines_and_suffixes(self) -> None:
-        valid = (
-            "REVIEW_TARGET: artifact.txt\n"
-            "REVIEW_READBACK: current value\n"
-            "REVIEW_FINDINGS: NONE\n"
-            "REVIEW_RESIDUAL_RISK: limited fixture\n"
-            "REVIEW_VERDICT: PASS"
-        )
-        self.assertEqual(
-            run_profile_compat.verify_reviewer_schema(valid)["review_verdict"], "PASS"
-        )
-        for invalid in (
-            valid + "\nEXTRA: value",
-            valid.replace("REVIEW_TARGET: artifact.txt", "REVIEW_TARGET: one\nREVIEW_TARGET: two"),
-            valid.replace("REVIEW_VERDICT: PASS", "REVIEW_VERDICT: PASS_WITH_WARNINGS"),
-        ):
-            with self.assertRaises(ValueError):
-                run_profile_compat.verify_reviewer_schema(invalid)
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / "artifact.txt"
+            artifact.write_text("current value\n", encoding="utf-8")
+            valid = (
+                "REVIEW_TARGET: artifact.txt\n"
+                "REVIEW_READBACK: current value\n"
+                "REVIEW_FINDINGS: NONE\n"
+                "REVIEW_RESIDUAL_RISK: limited fixture\n"
+                "REVIEW_VERDICT: PASS"
+            )
+            kwargs = {
+                "artifact": artifact,
+                "project_root": project,
+                "markers": ["current value"],
+            }
+            self.assertEqual(
+                run_profile_compat.verify_reviewer_schema(valid, **kwargs)[
+                    "review_verdict"
+                ],
+                "PASS",
+            )
+            for invalid in (
+                valid + "\nEXTRA: value",
+                valid.replace(
+                    "REVIEW_TARGET: artifact.txt",
+                    "REVIEW_TARGET: one\nREVIEW_TARGET: two",
+                ),
+                valid.replace(
+                    "REVIEW_VERDICT: PASS", "REVIEW_VERDICT: PASS_WITH_WARNINGS"
+                ),
+            ):
+                with self.assertRaises(ValueError):
+                    run_profile_compat.verify_reviewer_schema(invalid, **kwargs)
 
     def test_sandbox_policy_requires_structural_read_only_access(self) -> None:
         managed_read_only = json.dumps(
@@ -487,7 +513,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
             )
             escaped_js_input = (
                 'const r = await tools.exec_command({\n'
-                '  cmd: "rg -n \\"^|.\\" artifact.txt",\n'
+                '  cmd: "cat artifact.txt",\n'
                 f'  workdir: {json.dumps(str(artifact.parent))}\n'
                 '}); text(JSON.stringify(r));'
             )
@@ -495,12 +521,261 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 run_profile_compat.command_reads_artifact(escaped_js_input, artifact)
             )
             piped = escaped_js_input.replace(
-                'rg -n \\"^|.\\" artifact.txt',
+                'cat artifact.txt',
                 'cat artifact.txt | wc -l',
             )
             self.assertFalse(
                 run_profile_compat.command_reads_artifact(piped, artifact)
             )
+
+    def test_direct_read_rejects_marker_from_another_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            artifact = base / "artifact.txt"
+            decoy = base / "decoy.txt"
+            marker = "DECOY_MARKER_9KQ2"
+            artifact.write_text("target bytes only\n", encoding="utf-8")
+            decoy.write_text(marker + "\n", encoding="utf-8")
+            records = [
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "custom_tool_call",
+                        "name": "exec",
+                        "call_id": "read-1",
+                        "input": json.dumps({
+                            "cmd": f"sed -n '1,20p' {artifact} {decoy}",
+                            "workdir": str(base),
+                        }),
+                    },
+                },
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "custom_tool_call_output",
+                        "call_id": "read-1",
+                        "output": [
+                            {
+                                "type": "input_text",
+                                "text": json.dumps(
+                                    {
+                                        "exit_code": 0,
+                                        "output": artifact.read_text(encoding="utf-8")
+                                        + decoy.read_text(encoding="utf-8"),
+                                        "wall_time_seconds": 0.01,
+                                    }
+                                ),
+                            }
+                        ],
+                    },
+                },
+                {"type": "event_msg", "payload": {"type": "task_complete"}},
+            ]
+            with self.assertRaisesRegex(ValueError, "marker is not present"):
+                run_profile_compat.verify_direct_read(records, artifact, [marker])
+
+    def test_direct_read_rejects_multi_command_wrapper_and_decoy_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            artifact = base / "artifact.txt"
+            decoy = base / "decoy.txt"
+            artifact.write_text("artifact bytes\n", encoding="utf-8")
+            decoy.write_text("decoy bytes\n", encoding="utf-8")
+            multi_call = (
+                "const results = await Promise.all(["
+                f"tools.exec_command({{\"cmd\":\"cat {artifact}\",\"workdir\":\"{base}\"}}),"
+                f"tools.exec_command({{\"cmd\":\"cat {decoy}\",\"workdir\":\"{base}\"}})"
+                "]); text(results);"
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(multi_call, artifact)
+            )
+            reversed_hidden = (
+                "const decoy = await tools.exec_command({"
+                f'"workdir":"{base}","cmd":"cat {decoy}"}});'
+                "const target = await tools.exec_command({"
+                f'"cmd":"cat {artifact}","workdir":"{base}"}});'
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(reversed_hidden, artifact)
+            )
+            bracket_hidden = (
+                "const target = await tools.exec_command({"
+                f'"cmd":"cat {artifact}","workdir":"{base}"}});'
+                "const decoy = await tools[\"exec_command\"]({"
+                f'"workdir":"{base}","cmd":"cat {decoy}"}});'
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(bracket_hidden, artifact)
+            )
+            aliased_hidden = (
+                "const run = tools.exec_command;"
+                f'run({{"cmd":"cat {artifact}","workdir":"{base}"}});'
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(aliased_hidden, artifact)
+            )
+            computed_hidden = (
+                "const target = await tools.exec_command({"
+                f'"cmd":"cat {artifact}","workdir":"{base}"}});'
+                "const t = tools; const method = [\"exec\", \"command\"].join(\"_\");"
+                f't[method]({{"cmd":"cat {decoy}","workdir":"{base}"}});'
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(computed_hidden, artifact)
+            )
+            dynamic_bracket = (
+                "const target = await tools.exec_command({"
+                f'"cmd":"cat {artifact}","workdir":"{base}"}}); '
+                "const method = \"exec_\" + \"command\";"
+                f'tools[method]({{"workdir":"{base}","cmd":"cat {decoy}"}}); '
+                "text(JSON.stringify(target))"
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(dynamic_bracket, artifact)
+            )
+            dynamic_alias = (
+                "const target = await tools.exec_command({"
+                f'"cmd":"cat {artifact}","workdir":"{base}"}}); '
+                "const t = globalThis[\"to\" + \"ols\"];"
+                "const method = \"exec_\" + \"command\";"
+                f't[method]({{"workdir":"{base}","cmd":"cat {decoy}"}}); '
+                "text(JSON.stringify(target))"
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(dynamic_alias, artifact)
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(
+                    json.dumps({"cmd": f"/tmp/cat {artifact}", "workdir": str(base)}),
+                    artifact.resolve(),
+                )
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(
+                    json.dumps(
+                        {
+                            "cmd": f"sed -n '1,20p' {artifact} {decoy}",
+                            "workdir": str(base),
+                        }
+                    ),
+                    artifact,
+                )
+            )
+
+    def test_git_diff_receipt_rejects_arbitrary_git_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / "artifact.txt"
+            artifact.write_text("current\n", encoding="utf-8")
+            self.assertTrue(
+                run_profile_compat.command_reads_git_diff(
+                    json.dumps(
+                        {"cmd": "git diff -- artifact.txt", "workdir": str(project)}
+                    ),
+                    project.resolve(),
+                    artifact.resolve(),
+                )
+            )
+            for executable in ("./git", "/tmp/git"):
+                self.assertFalse(
+                    run_profile_compat.command_reads_git_diff(
+                        json.dumps(
+                            {
+                                "cmd": f"{executable} diff -- artifact.txt",
+                                "workdir": str(project),
+                            }
+                        ),
+                        project.resolve(),
+                        artifact.resolve(),
+                    )
+                )
+    def test_reviewer_schema_binds_target_and_readback_to_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / "artifact.txt"
+            artifact.write_text(self.marker + "\n", encoding="utf-8")
+            valid = (
+                "REVIEW_TARGET: artifact.txt\n"
+                f"REVIEW_READBACK: {self.marker}\n"
+                "REVIEW_FINDINGS: NONE\n"
+                "REVIEW_RESIDUAL_RISK: fixture only\n"
+                "REVIEW_VERDICT: PASS"
+            )
+            parsed = run_profile_compat.verify_reviewer_schema(
+                valid,
+                artifact=artifact,
+                project_root=project,
+                markers=[self.marker],
+            )
+            self.assertEqual(parsed["review_target"], "artifact.txt")
+            with self.assertRaisesRegex(ValueError, "target does not match"):
+                run_profile_compat.verify_reviewer_schema(
+                    valid.replace("artifact.txt", "unrelated.txt", 1),
+                    artifact=artifact,
+                    project_root=project,
+                    markers=[self.marker],
+                )
+            with self.assertRaisesRegex(ValueError, "readback"):
+                run_profile_compat.verify_reviewer_schema(
+                    valid.replace(self.marker, "invented fact", 1),
+                    artifact=artifact,
+                    project_root=project,
+                    markers=[self.marker],
+                )
+
+    def test_direct_read_requires_structured_exit_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            artifact = base / "artifact.txt"
+            marker = "TARGET_MARKER_Z8P1"
+            artifact.write_text(marker + "\n", encoding="utf-8")
+            records = [
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "custom_tool_call",
+                        "name": "exec",
+                        "call_id": "read-1",
+                        "input": json.dumps({
+                            "cmd": f"sed -n '1,20p' {artifact}",
+                            "workdir": str(base),
+                        }),
+                    },
+                },
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "custom_tool_call_output",
+                        "call_id": "read-1",
+                        "output": [
+                            {
+                                "type": "input_text",
+                                "text": json.dumps(
+                                    {
+                                        "exit_code": 1,
+                                        "output": artifact.read_text(encoding="utf-8"),
+                                        "wall_time_seconds": 0.01,
+                                    }
+                                ),
+                            }
+                        ],
+                    },
+                },
+                {"type": "event_msg", "payload": {"type": "task_complete"}},
+            ]
+            with self.assertRaisesRegex(ValueError, "no single direct exec/output pair"):
+                run_profile_compat.verify_direct_read(records, artifact, [marker])
+
+    def test_packet_rejects_trailing_blank_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = self.make_fixture(Path(tmp))
+            fixture["packet"].write_text(
+                fixture["packet"].read_text(encoding="utf-8") + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "exactly 7"):
+                run_profile_compat.read_packet(fixture["packet"])
 
     def test_packet_rejects_predicted_outcome_and_self_recursion(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -510,13 +785,69 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 "委派目标：使用 $agency-chief-of-staff 审核。\n"
                 "读取范围：当前文件。\n"
                 "写入范围：禁止。\n"
-                "期望产物：实际读回。\n"
+                "期望产物：REVIEW_RESULT。\n"
                 "验证要求：当前读回。\n"
                 "停止条件：返回唯一终态；不启动、不派发。\n",
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "recursively invoke"):
                 run_profile_compat.read_packet(path)
+
+            path.write_text(
+                "AGENCY_WORKER: true\n"
+                "委派目标：独立审核当前工件。\n"
+                "读取范围：当前文件。\n"
+                "写入范围：禁止。\n"
+                "期望产物：REVIEW_TARGET=README.md，均填实际读回值。\n"
+                "验证要求：当前读回。\n"
+                "停止条件：返回唯一终态；不启动、不派发。",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "expected value"):
+                run_profile_compat.read_packet(path)
+
+    def test_packet_accepts_benign_failure_and_readme_wording(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "packet.txt"
+            path.write_text(
+                "AGENCY_WORKER: true\n"
+                "委派目标：诊断当前失败测试，并为 README 添加安装说明。\n"
+                "读取范围：README.md 与当前测试日志。\n"
+                "写入范围：禁止写入。\n"
+                "期望产物：DIAGNOSIS_READBACK、DIAGNOSIS_STATUS，均填实际读回值。\n"
+                "验证要求：直接读取当前文件并返回实际读回。\n"
+                "停止条件：返回唯一终态；不启动、不派发。",
+                encoding="utf-8",
+            )
+            parsed = run_profile_compat.parse_worker_packet(
+                run_profile_compat.read_packet(path)
+            )
+            self.assertIn("失败测试", parsed["委派目标"])
+
+    def test_packet_rejects_values_encoded_as_output_field_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "packet.txt"
+            valid = (
+                "AGENCY_WORKER: true\n"
+                "委派目标：独立审核当前工件。\n"
+                "读取范围：当前文件。\n"
+                "写入范围：禁止写入。\n"
+                "期望产物：WORKER_RESULT。\n"
+                "验证要求：直接读取当前文件并返回实际读回。\n"
+                "停止条件：返回唯一终态；不启动、不派发。"
+            )
+            for leaked_schema in (
+                "README_MD、PASS，均填实际读回值。",
+                "SECRET_MARKER_ABC123，均填实际读回值。",
+                "REVIEW_TARGET、PASS，均填实际读回值。",
+            ):
+                with self.subTest(leaked_schema=leaked_schema):
+                    path.write_text(
+                        valid.replace("WORKER_RESULT。", leaked_schema),
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(ValueError, "not allowlisted"):
+                        run_profile_compat.read_packet(path)
 
     def test_state_database_allows_only_in_home_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
