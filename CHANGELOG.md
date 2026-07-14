@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## v0.2.0-rc.1 - 2026-07-14
+
+- Published as a host-scoped release candidate: the current Codex Desktop path is verified, while portable unattended, cross-host, and stable-release behavior remains explicitly unverified pending isolated dedicated-credential model smoke.
 - Aligned startup ordering with host Skill rules: one fixed explanation-only Skill usage notice may precede takeover, while task progress and task actions remain fail-closed.
 - Made the natural-language takeover line the cross-host startup evidence and kept the hidden receipt optional, because some hosts strip HTML comments from persisted rollouts.
 
