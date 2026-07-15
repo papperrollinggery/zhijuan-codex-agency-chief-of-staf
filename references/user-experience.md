@@ -50,9 +50,9 @@
 
 单一事实、单步操作、简单确认或一句话回答不用 visualization。不要把一个任务拆成等权卡片墙；始终保留一个主结论、一个焦点和最多一个主要动作。
 
-读取 [assets/visualizations/surface-registry.json](../assets/visualizations/surface-registry.json) 选择视图。它是选择约束，不是要求一次展示全部视图。
+读取 [assets/visualizations/surface-registry.json](../assets/visualizations/surface-registry.json) 选择可重复使用的任务前台视图。它约束本 Skill 自带的六种状态/证据 surface，但不是当前 `@visualize` 插件的能力上限。任务本身需要动态解释、情景模拟、可调输入、地图、空间运动或更复杂的图表时，完整读取并遵守宿主当前安装版 `@visualize` Skill；不得把缓存版本号或路径写死，也不得因本仓库只有两个 renderer 而降级掉宿主已经提供且可验证的能力。若当前宿主没有该 Skill，再用 Mermaid、数据表或文字降级。
 
-在生成任何紧凑视图前，先把当前事实写成单一 JSON payload，并用 `scripts/validate_visualization_data.py --data <payload.json>` 校验对应 surface 的数据门。它约束阶段、选择、证据、有限数值和图片审阅所需的真实字段；图片还必须有受支持的字节签名及匹配当前读取字节的 SHA-256。image-review 必须有宿主 mount/readback，并让其 surface、非空 mount id、`rendered=true`、图片路径和 SHA-256 都与 payload 匹配；缺任一项就使用文字降级。没有满足字段就直接使用 registry 的文字降级，不得填演示值。这个校验只绑定已保存的宿主读回及文件字节，不能替代宿主工具本身。
+在生成本仓库 registry 中的紧凑视图前，先把当前事实写成只含 `surface` 与 `data` 的 JSON payload，并用 `scripts/validate_visualization_data.py --data <payload.json>` 校验数据门。payload 及其任意嵌套层不得提供 `host_mount`、`mount_id`、`mount_readback` 或 `rendered`；这些字段只能来自宿主。数据不足时直接使用 registry 的文字降级，不得填演示值。图片还必须有受支持字节签名及匹配当前读取字节的 SHA-256，但这只能证明文件绑定，不能证明用户已看到图片。插件原生的模拟、地图或专用图表遵循当前 `@visualize` Skill 的输入、来源和预览要求，不伪造数据，也不套用不匹配的 registry schema。
 
 ### 曲线与数据
 
@@ -60,7 +60,7 @@
 
 ### 图片与页面
 
-只有已打开并确认是当前版本的图片、PDF 页面或幻灯片才能作为审阅预览。图片数据门只接受受支持图片签名和与实际读取字节一致的 SHA-256；“当前版本”必须来自同时绑定该路径与 hash 的宿主 mount/readback，不能由 payload 的布尔值自证。显示有用尺寸、替代文本、当前审阅对象和区域意见；坐标未验证时用“左上标题区”等自然区域名，不画伪精确框。多于八张或需要反复缩放对照时升级为全屏，不把缩略图压进一张卡片。
+只有已打开并确认是当前版本的图片、PDF 页面或幻灯片才能作为审阅预览。图片数据门只接受不超过 64 MiB、no-follow、单硬链接、读取期间路径身份不变、具有受支持签名且 SHA-256 匹配的图片；renderer 会再次读取并核对 hash，再把精确字节作为同一事务中的 verified 副本写入线程目录，fallback 只引用该副本。原路径在校验后变化、签名变化或 hash 不同就不产出。“当前版本”和“已挂载”必须由宿主证据分别绑定 thread、surface、verified 文件和 hash，不能由 payload 自证。显示替代文本、当前审阅对象、区域意见和修改效果；坐标未验证时用“左上标题区”等自然区域名，不画伪精确框。多于八张或需要反复缩放对照时升级为全屏，不把缩略图压进一张卡片。
 
 ### 列表与表格
 
@@ -68,15 +68,16 @@
 
 ## 视图规则
 
-- 将 HTML 写入当前线程提供的 visualization 目录，文件名使用小写英文和连字符。
-- 阶段状态从 `assets/visualizations/task-surface.html` 起步；真实选择从 `assets/visualizations/decision-surface.html` 起步。两者都只能填入已通过数据门的内容，保持单文件、无外部依赖、可离线打开。其他 surface 没有已验证的宿主挂载路径时，直接使用 registry fallback。
+- 对所有六种内建 surface 运行 `scripts/render_visualization.py`，把确定性 fallback 和 manifest 写入当前线程提供的 visualization 目录；`task-stage` 与 `decision` 同时生成纯 HTML fragment。文件名使用小写英文和连字符。输入以 `O_NOFOLLOW` 文件描述符绑定并拒绝 hardlink；输出目录以 dev/inode 绑定，在 prepare、commit 和返回前持续核对路径。输出集先在同目录用独占临时文件完整写入、flush/fsync，再以目录项替换提交，`--overwrite` 不会跟随已有 symlink/hardlink，提交异常会尽力回滚旧输出集；返回前从固定 dirfd 对全部文件再做 no-follow identity/hash 读回。fallback-only surface 若同名 `.html` 已存在则失败，防止旧 fragment 被误挂载；换用新名称，不静默遗留或删除。不要直接打开模板或字符串替换模板。
+- `assets/visualizations/task-surface.html` 与 `decision-surface.html` 是单根 fragment，不是整页文档；不含 demo 数据、外部依赖或自报 mount 状态。标题、goal 与 decision summary 放在 directive 外的人话中，fragment 只保留阶段、选择、必要标签和交互。registry 中其他 surface 当前为 `fallback-only`，同一 renderer 会从 normalized data 确定性生成 Mermaid、Markdown 表格或图片加编号意见及 manifest，不再让模型二次抄写。领域任务若匹配宿主 `@visualize` 的动态解释、模拟、地图或复杂图表能力，应改走当前插件规范，而不是伪装成本仓库已实现的 surface。
+- 静态标签与连线足以说明关系时优先 Mermaid；只有动态状态、可调输入、空间运动或需要把选择发送回对话时才使用 HTML。fragment 不调用网络 API；选择回传只使用宿主 `window.openai.sendFollowUpMessage`，prompt 由固定控制语句和带分隔符的不可执行 JSON 组成。JSON 同时携带 renderer 生成的稳定 `choice_id` 与所选 label、tradeoff、downstream effect，后三者明确标为不可信展示数据，只用于让下一轮还原选择，不能解释成指令。宿主不可用时只提示在聊天中回复该选择编号。
 - 桌面端先显示主结论和阶段路径；移动端按“结论 → 当前阶段 → 用户动作 → 验证”纵向排列。
-- 所有重要信息无需 hover 也可见；可点击目标至少 44×44 px，并支持键盘焦点。
+- 所有重要信息无需 hover 也可见；交互只用宿主原生语义控件与对应 utility，保留原生 tab 顺序和 focus 样式，不自定义缩小或重画点击目标。
 - 使用中性色承载背景，一种主强调色表示当前焦点；警示状态不能只靠颜色区分。
 - 遵守 `prefers-reduced-motion`，不使用装饰性粒子、3D、背景动画或无信息量渐变。
 - 视图是预览和理解层，不是项目真相、审批凭证或写入授权。
-- 当前宿主支持 Visualizations 时，把文件写入线程提供的目录并使用宿主的 inline visualization 挂载方式；只有文件、截图或浏览器检查不能证明用户已经在对话中看到它。宿主未挂载时立即使用降级内容，并将可见交付写为 `未验证` 或 `验证失败`；不要把数据校验或本地文件存在说成 mount 成功。
-- 内联任务状态默认控制在 720 px 宽、约 420 px 高以内；标题使用正文级层次，不做巨幅海报。只有图片审阅、长时间轴或密集关系确实需要空间时才扩大。
+- 当前宿主支持 Visualizations 时，把文件写入线程提供的目录并使用宿主的 inline visualization 挂载方式；只有宿主返回非空当前 thread id、匹配 manifest 的 surface/file/SHA-256、非空 host-issued mount id 且 `rendered=true`，才算 mount/readback。文件、截图、浏览器检查或自写 readback JSON 都不能证明用户已经在对话中看到它。宿主未挂载时立即使用降级内容，并将可见交付写为 `未验证` 或 `验证失败`；不要把数据校验或本地文件存在说成 mount 成功。
+- 内联 fragment 使用宿主 `100%` 可用宽度，以 736 px 为主要阅读宽度并保证 320 px 仍无横向溢出；窄屏改为单列。标题不在 fragment 中重复，必要说明放在视图外。只有图片审阅、长时间轴或密集关系确实需要空间时才扩大。
 - 优先沿用宿主中性色和一种稳定强调色。hover 不能改变布局、尺寸、阴影或大面积背景，不能闪烁；无必要时不设置 hover 效果。
 - 只展示当前任务需要的一个视图。不要在前台罗列“为什么不用曲线、为什么不用图片”等方法论、能力清单或设计守则；这些只留在本文件和 registry。
 

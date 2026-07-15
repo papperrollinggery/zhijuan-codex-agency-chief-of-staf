@@ -38,15 +38,21 @@ RUNTIME_FILES = (
     "assets/codex_agents/codebase-researcher.toml",
     "assets/codex_agents/technical-architect.toml",
     "assets/codex_agents/developer.toml",
+    "assets/codex_agents/writer.toml",
     "assets/codex_agents/reviewer.toml",
     "assets/codex_agents/test-debugger.toml",
+    "assets/codex_agents/supervisor.toml",
     "scripts/audit_historical_threads.py",
     "scripts/install_skill.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/configure_native_routing.py",
+    "scripts/inspect_codex_models.py",
     "scripts/verify_native_task_receipt.py",
+    "scripts/verify_role_route_receipt.py",
     "scripts/protocol_contract.py",
     "scripts/validate_visualization_data.py",
+    "scripts/render_visualization.py",
     "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
@@ -108,10 +114,10 @@ def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> 
         text = "\n".join(lines) + "\n"
     elif rel == "agents/openai.yaml":
         text = text.replace(
-            'display_name: "Zhijuan 可视化结果幕僚长"',
+            'display_name: "Agency Chief of Staff · Codex 幕僚长"',
             'display_name: "Zhijuan Codex 幕僚长（旧入口兼容）"',
         ).replace(
-            'short_description: "用直观任务界面和成本感知专业角色推进复杂任务到可验证交付"',
+            'short_description: "Codex Skill：按角色、模型与证据闭环推进复杂任务"',
             'short_description: "旧显式调用兼容入口；新任务请使用 agency-chief-of-staff"',
         ).replace(
             f'default_prompt: "使用 ${CANONICAL_SKILL_NAME}',

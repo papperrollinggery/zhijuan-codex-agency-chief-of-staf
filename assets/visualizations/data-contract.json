@@ -1,21 +1,76 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "purpose": "Validate real user-facing visualization input before generating or mounting a compact Codex surface.",
-  "mount_readback": {
-    "required_when_host_returns_mount_state": ["surface", "mount_id", "rendered"],
+  "text_policy": {
+    "length_unit": "Unicode code points in both raw input and normalized text",
+    "display_whitespace": "Trim and collapse whitespace, including HT, LF, and CR, to one ASCII space.",
+    "control_characters": "NUL and C1 controls are rejected; C0 controls are rejected except HT, LF, and CR in display fields, which are collapsed before rendering.",
+    "maximum_characters": {
+      "title": 120,
+      "goal": 600,
+      "next_step": 280,
+      "blocker": 280,
+      "label": 80,
+      "state": 16,
+      "summary": 480,
+      "tradeoff": 280,
+      "downstream_effect": 280,
+      "changed_item": 200,
+      "next_review": 280,
+      "item": 160,
+      "disposition": 16,
+      "impact": 360,
+      "status": 64,
+      "meaning": 360,
+      "next_action": 280,
+      "source_definition": 600,
+      "missing_values": 480,
+      "missing_reason": 280,
+      "name": 120,
+      "unit": 32,
+      "dimension": 64,
+      "image_path": 4096,
+      "image_sha256": 64,
+      "alt_text": 600,
+      "review_target": 280,
+      "revision_effect": 480,
+      "region": 120,
+      "finding": 600
+    }
+  },
+  "host_mount_evidence": {
+    "source": "host-only",
+    "payload_fields_forbidden": ["host_mount", "mount_id", "mount_readback", "rendered"],
+    "required_if_available": ["thread_id", "surface", "fragment_file", "fragment_sha256", "mount_id", "rendered"],
+    "field_constraints": {
+      "thread_id": "non-empty current host thread identifier",
+      "surface": "must equal the manifest surface",
+      "fragment_file": "must equal the manifest fragment file",
+      "fragment_sha256": "64 lowercase hex characters equal to the manifest fragment sha256",
+      "mount_id": "non-empty host-issued identifier",
+      "rendered": true
+    },
     "image_binding_required_when_image_review": ["image_path", "image_sha256"],
+    "renderer_image_copy_fields": ["file", "sha256", "bytes"],
     "fallback_when_unavailable": "Use the registry fallback and do not claim that a visualization was mounted."
   },
   "surfaces": {
     "task-stage": {
       "template": "task-surface.html",
       "required": ["title", "goal", "stages", "next_step"],
+      "optional": ["blocker"],
       "stage_count": [3, 12]
     },
     "decision": {
       "template": "decision-surface.html",
       "required": ["title", "summary", "choices", "recommended_index"],
-      "choice_count": [2, 3]
+      "choice_fields": ["label", "tradeoff", "downstream_effect"],
+      "choice_count": [2, 3],
+      "follow_up": {
+        "selection_identity": "renderer-generated stable choice id",
+        "prompt_data": "delimited non-executable JSON containing choice_id and selected display values",
+        "display_text_is_executable": false
+      }
     },
     "impact": {
       "required": ["title", "changed_item", "downstream_items", "next_review"],
@@ -24,15 +79,20 @@
     },
     "evidence-list": {
       "required": ["title", "items"],
+      "item_fields": ["item", "status", "meaning"],
+      "optional_item_fields": ["next_action"],
       "item_count": [5, 12]
     },
     "numeric-trend": {
-      "required": ["title", "observations", "source_definition"],
-      "observation_fields": ["name", "value", "unit", "dimension"]
+      "required": ["title", "summary", "observations", "missing_values", "source_definition"],
+      "observation_fields": ["name", "value", "unit", "dimension"],
+      "missing_observation_field": "missing_reason",
+      "finite_observation_required": true
     },
     "image-review": {
-      "required": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings"],
-      "image_sha256_required": true
+      "required": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings", "revision_effect"],
+      "image_sha256_required": true,
+      "image_max_bytes": 67108864
     }
   }
 }

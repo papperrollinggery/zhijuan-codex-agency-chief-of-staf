@@ -1,0 +1,86 @@
+name: Bug report
+description: Report a reproducible defect in the Skill, installer, validation, or documentation
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. Do not paste credentials, auth files, cookies, private paths, state databases, or unredacted rollout logs.
+
+        Report security vulnerabilities through the private channel in the repository Security policy, not through this form.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Skill instructions or activation
+        - Installation or package validation
+        - Agent profiles or routing
+        - Model evaluation or receipt validation
+        - Documentation or examples
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Use a release tag or commit SHA when available. Do not include account or credential details.
+      placeholder: v0.2.0-rc.3 or a commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Codex surface and version
+      description: Optional. Include only the product surface and version you directly observed.
+      placeholder: Codex Desktop or Codex CLI, with version if known
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Give the smallest safe sequence that reproduces the problem.
+      placeholder: |
+        1. Start from...
+        2. Run...
+        3. Observe...
+    validations:
+      required: true
+
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed result
+      description: Include exact non-sensitive output when it materially helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: Describe the documented or intended behavior and link its source when possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Validation evidence and limits
+      description: List checks you ran, their results, and anything you did not verify. Redact sensitive data.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues for the same defect.
+          required: true
+        - label: I removed credentials, private paths, personal data, and unredacted private logs.
+          required: true
+        - label: I have not described an offline test as proof of model or native task/thread behavior.
+          required: true

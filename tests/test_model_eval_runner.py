@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -26,6 +30,34 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "model_smoke": True,
         }
 
+    def test_evaluated_codex_kills_descendants_on_success_and_timeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            fake = base / "fake-codex"
+            fake.write_text(
+                "#!/usr/bin/env python3\n"
+                "import pathlib, subprocess, sys, time\n"
+                "child = (\"import pathlib,sys,time; time.sleep(0.35); \"\n"
+                "         \"pathlib.Path(sys.argv[1]).write_text('survived')\")\n"
+                "subprocess.Popen([sys.executable, '-c', child, sys.argv[2]], "
+                "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "if sys.argv[1] == 'timeout': time.sleep(10)\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o700)
+            for mode, should_timeout in (("success", False), ("timeout", True)):
+                with self.subTest(mode=mode):
+                    sentinel = base / f"{mode}-descendant-survived"
+                    completed, timed_out = runner.run_evaluated_codex(
+                        [str(fake), mode, str(sentinel)],
+                        timeout=0.1 if should_timeout else 2,
+                        env=os.environ.copy(),
+                    )
+                    self.assertEqual(timed_out, should_timeout)
+                    self.assertIsNotNone(completed.returncode)
+                    time.sleep(0.5)
+                    self.assertFalse(sentinel.exists())
+
     def test_isolated_env_drops_parent_secrets(self) -> None:
         env = runner.build_isolated_env(
             Path("/tmp/eval-home"),
@@ -38,7 +70,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "SENTINEL_TOKEN": "secret-sentinel",
             },
         )
-        self.assertEqual(env["PATH"], "/usr/bin:/bin")
+        self.assertEqual(env["PATH"], runner.EVAL_TOOL_PATH)
         self.assertEqual(env["HOME"], "/tmp/eval-home")
         self.assertEqual(env["CODEX_HOME"], "/tmp/eval-codex")
         self.assertNotIn("OPENAI_API_KEY", env)
@@ -82,6 +114,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 {
                     "type": "session_meta",
                     "payload": {
+                        "id": "019f57b8-6477-76d0-ae82-0e7b39a3ae6b",
                         "cwd": str(fixture.resolve()),
                         "model_provider": "openai",
                     },
@@ -89,10 +122,15 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 {
                     "type": "turn_context",
                     "payload": {
+                        "turn_id": "turn-1",
                         "cwd": str(fixture.resolve()),
                         "model": "gpt-5.6-sol",
                         "effort": "max",
                     },
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {"type": "task_complete", "turn_id": "turn-1"},
                 },
             ]
             rollout.write_text(
@@ -105,20 +143,62 @@ class ModelEvalRunnerTests(unittest.TestCase):
                     "models": ["gpt-5.6-sol"],
                     "providers": ["openai"],
                     "reasoning_efforts": ["max"],
+                    "thread_ids": ["019f57b8-6477-76d0-ae82-0e7b39a3ae6b"],
                     "session_count": 1,
                     "turn_count": 1,
+                    "task_complete_count": 1,
+                    "parse_errors": 0,
                     "session_observations": [
                         {
                             "providers": ["openai"],
                             "models": ["gpt-5.6-sol"],
                             "reasoning_efforts": ["max"],
+                            "thread_ids": [
+                                "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
+                            ],
                             "session_count": 1,
                             "turn_count": 1,
+                            "task_complete_count": 1,
+                            "context_turn_ids": ["turn-1"],
+                            "completion_turn_ids": ["turn-1"],
+                            "parse_errors": 0,
                         }
                     ],
                 },
             )
 
+    def test_root_identity_allows_separately_observed_child_session(self) -> None:
+        root_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
+        root = {
+            "providers": ["openai"],
+            "models": ["gpt-5.6-sol"],
+            "reasoning_efforts": ["max"],
+            "thread_ids": [root_id],
+            "session_count": 1,
+            "turn_count": 1,
+            "task_complete_count": 1,
+            "context_turn_ids": ["turn-root"],
+            "completion_turn_ids": ["turn-root"],
+            "parse_errors": 0,
+        }
+        child = {
+            **root,
+            "thread_ids": ["019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"],
+            "context_turn_ids": ["turn-child"],
+            "completion_turn_ids": ["turn-child"],
+        }
+        identity = {"session_observations": [root, child]}
+        self.assertTrue(
+            runner.execution_identity_matches(identity, "gpt-5.6-sol", "max", root_id)
+        )
+        self.assertFalse(
+            runner.execution_identity_matches(
+                identity,
+                "gpt-5.6-sol",
+                "max",
+                "019f57bc-0000-7000-8000-000000000000",
+            )
+        )
     def test_source_git_state_binds_head_and_worktree_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "repo"
@@ -142,6 +222,375 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.assertEqual(dirty["head"], clean["head"])
             self.assertEqual(dirty["worktree_dirty"], True)
             self.assertNotEqual(dirty["worktree_status_sha256"], clean["worktree_status_sha256"])
+
+    def test_source_git_state_does_not_execute_local_fsmonitor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Eval Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "config",
+                    "user.email",
+                    "eval@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = root / "artifact.txt"
+            artifact.write_text("before\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "artifact.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "base"], check=True
+            )
+            sentinel = root / "fsmonitor-ran"
+            helper = root / "fsmonitor.sh"
+            helper.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\nprintf '0\\n'\n", encoding="utf-8"
+            )
+            helper.chmod(0o700)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "core.fsmonitor", str(helper)],
+                check=True,
+            )
+            artifact.write_text("after\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain=v1"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue(sentinel.exists())
+            sentinel.unlink()
+            observed = runner.source_git_state(root)
+            self.assertFalse(sentinel.exists())
+            self.assertTrue(observed["available"])
+            self.assertTrue(observed["worktree_dirty"])
+            self.assertTrue(observed["fsmonitor_disabled"])
+            self.assertTrue(observed["lazy_fetch_disabled"])
+
+    def test_hardened_git_ignores_replace_refs_for_head_and_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            (root / "scripts").mkdir(parents=True)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Replace Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "config",
+                    "user.email",
+                    "replace@example.invalid",
+                ],
+                check=True,
+            )
+            source = root / "scripts" / "a.py"
+            source.write_text("print('trusted')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", "scripts/a.py"], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "trusted"], check=True
+            )
+            trusted = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            source.write_text("print('replacement')\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "commit", "-qam", "replacement"], check=True)
+            replacement = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "-C", str(root), "replace", trusted, replacement], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "reset", "--hard", "-q", trusted], check=True
+            )
+            self.assertEqual(source.read_text(encoding="utf-8"), "print('replacement')\n")
+            ordinary = subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain=v1"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(ordinary.stdout, "")
+            observed = runner.hardened_git_observation(root)
+            self.assertEqual(observed["head"], trusted)
+            self.assertTrue(bytes(observed["status_bytes"]).strip())
+            self.assertTrue(observed["replace_objects_disabled"])
+            self.assertEqual(
+                runner.require_hardened_git(
+                    root,
+                    ["cat-file", "blob", "HEAD:scripts/a.py"],
+                    "trusted HEAD read",
+                ),
+                b"print('trusted')\n",
+            )
+
+    def test_source_git_state_fails_closed_on_executable_clean_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Eval Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "config",
+                    "user.email",
+                    "eval@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = root / "artifact.txt"
+            artifact.write_text("before\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "artifact.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "base"], check=True
+            )
+            info_attributes = root / ".git" / "info" / "attributes"
+            info_attributes.write_text("artifact.txt filter=hostile\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "executable clean filter"):
+                runner.source_git_state(root)
+
+    def test_source_git_state_rejects_non_git_and_unsupported_safe_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(RuntimeError, "Git worktree"):
+                runner.source_git_state(Path(tmp))
+        unsupported = subprocess.CompletedProcess(
+            args=["git", "--no-lazy-fetch"],
+            returncode=129,
+            stdout=b"",
+            stderr=b"unknown option: --no-lazy-fetch\n",
+        )
+        with mock.patch.object(runner, "run_hardened_git", return_value=unsupported):
+            with self.assertRaisesRegex(RuntimeError, "unknown option"):
+                runner.source_git_state(Path("/tmp/reviewed-checkout"))
+
+    def test_fixture_git_ignores_host_templates_hooks_and_fsmonitor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            fixture = base / "fixture"
+            fixture.mkdir()
+            (fixture / "README.md").write_text("before\n", encoding="utf-8")
+            payload = fixture / ".agents" / "payload.txt"
+            payload.parent.mkdir()
+            payload.write_text("fixture\n", encoding="utf-8")
+
+            sentinel = base / "host-hook-ran"
+            hostile_template = base / "hostile-template"
+            template_hooks = hostile_template / "hooks"
+            template_hooks.mkdir(parents=True)
+            template_hook = template_hooks / "pre-commit"
+            template_hook.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\n", encoding="utf-8"
+            )
+            template_hook.chmod(0o700)
+            hostile_hooks = base / "hostile-hooks"
+            hostile_hooks.mkdir()
+            global_hook = hostile_hooks / "pre-commit"
+            global_hook.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\n", encoding="utf-8"
+            )
+            global_hook.chmod(0o700)
+            global_config = base / "hostile.gitconfig"
+            global_config.write_text(
+                "[init]\n"
+                f"\ttemplateDir = {hostile_template}\n"
+                "[core]\n"
+                f"\thooksPath = {hostile_hooks}\n",
+                encoding="utf-8",
+            )
+            with mock.patch.dict(
+                os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}, clear=False
+            ):
+                runner.initialize_fixture_repository(fixture)
+            self.assertFalse(sentinel.exists())
+            self.assertFalse((fixture / ".git" / "hooks" / "pre-commit").exists())
+            self.assertEqual(runner.changed_paths(fixture), set())
+
+            fsmonitor_sentinel = base / "fsmonitor-ran"
+            fsmonitor = base / "fsmonitor.sh"
+            fsmonitor.write_text(
+                f"#!/bin/sh\ntouch {fsmonitor_sentinel}\nprintf '0\\n'\n",
+                encoding="utf-8",
+            )
+            fsmonitor.chmod(0o700)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(fixture),
+                    "config",
+                    "core.fsmonitor",
+                    str(fsmonitor),
+                ],
+                check=True,
+            )
+            (fixture / "README.md").write_text("after\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(fixture), "status", "--porcelain=v1"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue(fsmonitor_sentinel.exists())
+            fsmonitor_sentinel.unlink()
+            self.assertEqual(runner.changed_paths(fixture), {"README.md"})
+            self.assertFalse(fsmonitor_sentinel.exists())
+
+    def test_fixture_manifest_detects_committed_scope_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "fixture"
+            fixture.mkdir()
+            (fixture / "README.md").write_text("before\n", encoding="utf-8")
+            payload = fixture / ".agents" / "payload.txt"
+            payload.parent.mkdir()
+            payload.write_text("fixture\n", encoding="utf-8")
+            runner.initialize_fixture_repository(fixture)
+            baseline_manifest = runner.fixture_file_manifest(fixture)
+            baseline_head = runner.hardened_git_observation(fixture)["head"]
+
+            (fixture / "committed-extra.txt").write_text("escape\n", encoding="utf-8")
+            runner.require_hardened_git(
+                fixture,
+                ["-c", "core.hooksPath=/dev/null", "add", "--", "committed-extra.txt"],
+                "test add",
+            )
+            runner.require_hardened_git(
+                fixture,
+                ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "scope escape"],
+                "test commit",
+            )
+            (fixture / "README.md").write_text("after\n", encoding="utf-8")
+            self.assertEqual(runner.changed_paths(fixture), {"README.md"})
+            final_manifest = runner.fixture_file_manifest(fixture)
+            final_head = runner.hardened_git_observation(fixture)["head"]
+            failures, changed = runner.fixture_scope_failures(
+                baseline_manifest,
+                final_manifest,
+                baseline_head,
+                final_head,
+                "README.md",
+            )
+            self.assertEqual(changed, ["README.md", "committed-extra.txt"])
+            self.assertTrue(any("manifest scope mismatch" in item for item in failures))
+            self.assertTrue(any("HEAD changed" in item for item in failures))
+
+    def test_fixture_manifest_ignores_assume_unchanged_concealment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "fixture"
+            fixture.mkdir()
+            (fixture / "README.md").write_text("before\n", encoding="utf-8")
+            payload = fixture / ".agents" / "payload.txt"
+            payload.parent.mkdir()
+            payload.write_text("fixture\n", encoding="utf-8")
+            runner.initialize_fixture_repository(fixture)
+            baseline_manifest = runner.fixture_file_manifest(fixture)
+            baseline_head = runner.hardened_git_observation(fixture)["head"]
+
+            runner.require_hardened_git(
+                fixture,
+                ["update-index", "--assume-unchanged", "--", ".agents/payload.txt"],
+                "test assume-unchanged",
+            )
+            payload.write_text("concealed\n", encoding="utf-8")
+            (fixture / "README.md").write_text("after\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "index flags can conceal"):
+                runner.hardened_git_observation(fixture)
+            failures, changed = runner.fixture_scope_failures(
+                baseline_manifest,
+                runner.fixture_file_manifest(fixture),
+                baseline_head,
+                baseline_head,
+                "README.md",
+            )
+            self.assertEqual(changed, [".agents/payload.txt", "README.md"])
+            self.assertTrue(any("manifest scope mismatch" in item for item in failures))
+
+    def test_fixture_manifest_ignores_skip_worktree_concealment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "fixture"
+            fixture.mkdir()
+            (fixture / "README.md").write_text("before\n", encoding="utf-8")
+            payload = fixture / ".agents" / "payload.txt"
+            payload.parent.mkdir()
+            payload.write_text("fixture\n", encoding="utf-8")
+            runner.initialize_fixture_repository(fixture)
+            baseline_manifest = runner.fixture_file_manifest(fixture)
+            baseline_head = runner.hardened_git_observation(fixture)["head"]
+            runner.require_hardened_git(
+                fixture,
+                ["update-index", "--skip-worktree", "--", ".agents/payload.txt"],
+                "test skip-worktree",
+            )
+            payload.write_text("concealed\n", encoding="utf-8")
+            (fixture / "README.md").write_text("after\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "index flags can conceal"):
+                runner.hardened_git_observation(fixture)
+            failures, changed = runner.fixture_scope_failures(
+                baseline_manifest,
+                runner.fixture_file_manifest(fixture),
+                baseline_head,
+                baseline_head,
+                "README.md",
+            )
+            self.assertEqual(changed, [".agents/payload.txt", "README.md"])
+            self.assertTrue(any("manifest scope mismatch" in item for item in failures))
+
+    def test_fixture_scope_allows_only_new_parents_of_nested_expected_file(self) -> None:
+        baseline = {"README.md": "file:644:before"}
+        final = {
+            "README.md": "file:644:before",
+            "reports": "directory:755",
+            "reports/current": "directory:755",
+            "reports/current/result.md": "file:644:after",
+        }
+        failures, changed = runner.fixture_scope_failures(
+            baseline,
+            final,
+            "head",
+            "head",
+            "reports/current/result.md",
+        )
+        self.assertEqual(failures, [])
+        self.assertEqual(
+            changed,
+            ["reports", "reports/current", "reports/current/result.md"],
+        )
+        final["reports/unexpected.txt"] = "file:644:extra"
+        failures, _changed = runner.fixture_scope_failures(
+            baseline,
+            final,
+            "head",
+            "head",
+            "reports/current/result.md",
+        )
+        self.assertTrue(any("manifest scope mismatch" in item for item in failures))
 
     def test_session_identity_cannot_be_assembled_across_journals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,6 +698,9 @@ class ModelEvalRunnerTests(unittest.TestCase):
             runner.validate_runtime_case(case)
 
     def test_review_requires_completed_wait_message(self) -> None:
+        root_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
+        reviewer_id = "019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"
+        started = {"type": "thread.started", "thread_id": root_id}
         spawn = {
             "type": "item.completed",
             "item": {
@@ -256,12 +708,14 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "type": "collab_tool_call",
                 "tool": "spawn_agent",
                 "status": "completed",
-                "sender_thread_id": "main",
-                "receiver_thread_ids": ["reviewer"],
+                "sender_thread_id": root_id,
+                "receiver_thread_ids": [reviewer_id],
                 "prompt": "AGENCY_WORKER: true Goal: inspect README.md Read scope: git diff",
             },
         }
-        without_wait = runner.event_surface(json.dumps(spawn), "done")
+        without_wait = runner.event_surface(
+            "\n".join((json.dumps(started), json.dumps(spawn))), "done"
+        )
         self.assertEqual(without_wait["reviews_completed"], {})
 
         wait = {
@@ -271,15 +725,29 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "type": "collab_tool_call",
                 "tool": "wait",
                 "status": "completed",
-                "receiver_thread_ids": ["reviewer"],
+                "sender_thread_id": root_id,
+                "receiver_thread_ids": [reviewer_id],
                 "agents_states": {
-                    "reviewer": {"status": "completed", "message": "README.md diff is correct"}
+                    reviewer_id: {"status": "completed", "message": "README.md diff is correct"}
                 },
             },
         }
-        events = "\n".join((json.dumps(spawn), json.dumps(wait)))
+        events = "\n".join(
+            (json.dumps(started), json.dumps(spawn), json.dumps(wait))
+        )
         completed = runner.event_surface(events, "done")["reviews_completed"]
-        self.assertIn("reviewer", completed)
+        self.assertIn(reviewer_id, completed)
+
+        nested_spawn = json.loads(json.dumps(spawn))
+        nested_spawn["item"]["sender_thread_id"] = reviewer_id
+        nested = runner.event_surface(
+            "\n".join(
+                (json.dumps(started), json.dumps(nested_spawn), json.dumps(wait))
+            ),
+            "done",
+        )
+        self.assertEqual(nested["reviews_completed"], {})
+        self.assertTrue(nested["collaboration_identity_errors"])
 
     def test_artifact_review_prompt_carries_goal_diff_and_criteria_without_leaks(self) -> None:
         prompt = (
@@ -528,6 +996,9 @@ class ModelEvalRunnerTests(unittest.TestCase):
     def test_boot_precedes_progress_and_reviewer_spawn(self) -> None:
         case = self.base_case()
         case.update({"collaboration": "native_subagents"})
+        root_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
+        reviewer_id = "019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"
+        started = {"type": "thread.started", "thread_id": root_id}
         progress = {
             "type": "item.completed",
             "item": {"type": "assistant_message", "text": "MAIN_PROGRESS: PLAN"},
@@ -542,10 +1013,13 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "type": "collab_tool_call",
                 "tool": "spawn_agent",
                 "status": "completed",
-                "receiver_thread_ids": ["reviewer"],
+                "sender_thread_id": root_id,
+                "receiver_thread_ids": [reviewer_id],
             },
         }
-        parsed = runner.event_surface("\n".join(map(json.dumps, (progress, spawn, boot))), "")
+        parsed = runner.event_surface(
+            "\n".join(map(json.dumps, (started, progress, spawn, boot))), ""
+        )
         failures = runner.contract_failures(case, parsed)
         self.assertIn("main progress preceded COS_BOOT_RECEIPT", failures)
         self.assertIn("reviewer spawn preceded COS_BOOT_RECEIPT", failures)
@@ -812,6 +1286,52 @@ class ModelEvalRunnerTests(unittest.TestCase):
             runner.contract_failures(self.base_case(), parsed),
         )
 
+    def test_event_stream_and_tool_success_fields_fail_closed(self) -> None:
+        thread_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
+        lifecycle = [
+            {"type": "thread.started", "thread_id": thread_id},
+            {"type": "turn.started"},
+            {
+                "type": "item.completed",
+                "item": {
+                    "id": "cmd-ok",
+                    "type": "command_execution",
+                    "status": "completed",
+                    "exit_code": 0,
+                },
+            },
+            {"type": "turn.completed"},
+        ]
+        parsed = runner.event_surface(
+            "\n".join(json.dumps(item) for item in lifecycle), ""
+        )
+        self.assertEqual(parsed["thread_started_ids"], [thread_id])
+        self.assertEqual(parsed["turn_started_count"], 1)
+        self.assertEqual(parsed["turn_completed_count"], 1)
+        self.assertEqual(parsed["jsonl_parse_errors"], 0)
+        self.assertEqual(parsed["tool_events"], 1)
+
+        missing_fields = [
+            {
+                "type": "item.completed",
+                "item": {"id": "cmd", "type": "command_execution"},
+            },
+            {
+                "type": "item.completed",
+                "item": {"id": "edit", "type": "file_change"},
+            },
+            {
+                "type": "item.completed",
+                "item": {"id": "mcp", "type": "mcp_tool_call"},
+            },
+        ]
+        rejected = runner.event_surface(
+            "\n".join(json.dumps(item) for item in missing_fields) + "\nnot-json",
+            "",
+        )
+        self.assertEqual(rejected["tool_events"], 0)
+        self.assertEqual(rejected["jsonl_parse_errors"], 1)
+
     def test_contract_uses_trigger_mode_and_collaboration_fields(self) -> None:
         case = self.base_case()
         failures = runner.contract_failures(
@@ -899,6 +1419,8 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "gpt-5.6-sol",
             "max",
             True,
+            True,
+            True,
             "primary",
             ["cold_review_context_isolation"],
         )
@@ -909,6 +1431,8 @@ class ModelEvalRunnerTests(unittest.TestCase):
             True,
             "gpt-5.6-sol",
             "max",
+            True,
+            True,
             True,
             "dedicated",
             ["cold_review_context_isolation"],
@@ -921,6 +1445,8 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "gpt-5.6-sol",
             None,
             True,
+            True,
+            True,
             "dedicated",
             [],
         )
@@ -931,30 +1457,118 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "gpt-5.6-sol",
             "max",
             False,
+            True,
+            True,
             "dedicated",
             [],
         )
         self.assertFalse(unverified_identity)
-        wrong_model, _ = runner.release_eligibility(
+        missing_catalog, _ = runner.release_eligibility(
             "passed",
             True,
             "gpt-5.6-terra",
             "max",
             True,
+            False,
+            True,
             "dedicated",
             [],
         )
-        wrong_effort, _ = runner.release_eligibility(
+        supported_effort, _ = runner.release_eligibility(
             "passed",
             True,
             "gpt-5.6-sol",
             "low",
             True,
+            True,
+            True,
             "dedicated",
             [],
         )
-        self.assertFalse(wrong_model)
-        self.assertFalse(wrong_effort)
+        self.assertFalse(missing_catalog)
+        self.assertTrue(supported_effort)
+        missing_git_state, _ = runner.release_eligibility(
+            "passed",
+            True,
+            "gpt-5.6-sol",
+            "max",
+            True,
+            True,
+            False,
+            "dedicated",
+            [],
+        )
+        self.assertFalse(missing_git_state)
+
+    def test_release_catalog_requires_current_openai_judgment_binding(self) -> None:
+        catalog = {
+            "schema_version": 2,
+            "provenance": {
+                "source": "active-host-catalog",
+                "source_id": "codex-app-server:model/list:" + "a" * 64,
+                "observed_for_requested_thread": True,
+                "requested_thread_id": "11111111-1111-1111-1111-111111111111",
+                "root_provider": "openai",
+                "canonical_state_store_bound": True,
+                "model_provider_evidence": "root-state-inferred",
+            },
+            "models": [
+                {
+                    "id": "current-judgment-model",
+                    "provider": "openai",
+                    "provider_evidence": "root-state-inferred",
+                    "model_class": "judgment",
+                    "supported_reasoning": ["high", "ultra"],
+                    "available": True,
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "catalog.json"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            receipt = runner.verify_release_catalog(
+                path, "current-judgment-model", "ultra"
+            )
+            self.assertFalse(receipt["verified"])
+            self.assertTrue(receipt["schema_validated"])
+            self.assertEqual(receipt["model_class"], "judgment")
+            with mock.patch.object(runner, "verify_live_catalog") as live:
+                live_receipt = runner.verify_release_catalog(
+                    path,
+                    "current-judgment-model",
+                    "ultra",
+                    codex_bin="/bin/true",
+                    state_db=Path(tmp) / "state_5.sqlite",
+                    thread_id="11111111-1111-1111-1111-111111111111",
+                    cwd=Path(tmp),
+                )
+            self.assertTrue(live_receipt["verified"])
+            self.assertTrue(live_receipt["live_readback_verified"])
+            live.assert_called_once()
+            catalog["models"][0]["model_class"] = "efficient"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "judgment model"):
+                runner.verify_release_catalog(
+                    path, "current-judgment-model", "ultra"
+                )
+
+            catalog["models"][0]["model_class"] = "judgment"
+            catalog["provenance"]["requested_thread_id"] = "not-a-thread"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "requested-thread"):
+                runner.verify_release_catalog(
+                    path, "current-judgment-model", "ultra"
+                )
+
+            catalog["provenance"]["requested_thread_id"] = (
+                "11111111-1111-1111-1111-111111111111"
+            )
+            catalog["models"][0]["provider_evidence"] = "catalog-advertised"
+            path.write_text(json.dumps(catalog), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "judgment model"):
+                runner.verify_release_catalog(
+                    path, "current-judgment-model", "ultra"
+                )
 
     def test_required_smoke_suite_cannot_be_weakened(self) -> None:
         cases = json.loads(
@@ -1006,6 +1620,35 @@ class ModelEvalRunnerTests(unittest.TestCase):
     def test_cli_rejects_empty_smoke_set_without_calling_model(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
+            runner_repo = base / "runner"
+            shutil.copytree(
+                ROOT / "scripts",
+                runner_repo / "scripts",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+            )
+            shutil.copytree(ROOT / "assets", runner_repo / "assets")
+            subprocess.run(["git", "init", "-q", str(runner_repo)], check=True)
+            subprocess.run(
+                ["git", "-C", str(runner_repo), "add", "scripts", "assets"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(runner_repo),
+                    "-c",
+                    "user.name=Model Eval Test",
+                    "-c",
+                    "user.email=model-eval@example.invalid",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "commit",
+                    "-qm",
+                    "runner baseline",
+                ],
+                check=True,
+            )
             root = base / "package"
             (root / "evals").mkdir(parents=True)
             (root / "evals" / "behavior_cases.json").write_text("[]\n", encoding="utf-8")
@@ -1017,7 +1660,9 @@ class ModelEvalRunnerTests(unittest.TestCase):
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "scripts" / "run_model_evals.py"),
+                    "-I",
+                    "-S",
+                    str(runner_repo / "scripts" / "run_model_evals.py"),
                     "--root",
                     str(root),
                     "--out",

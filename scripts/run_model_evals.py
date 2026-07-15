@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -I -S
 """Run real Codex smoke cases in an isolated project/config fixture.
 
 This is not a credential-security boundary. The evaluated process runs as the
@@ -9,6 +9,17 @@ inside a disposable OS user or container.
 
 from __future__ import annotations
 
+import sys
+
+if __name__ == "__main__" and (
+    not sys.flags.isolated or not sys.flags.no_site
+):
+    print(
+        "run_model_evals.py must be launched with: python3 -I -S",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
 import argparse
 import hashlib
 import json
@@ -17,14 +28,169 @@ import re
 import shlex
 import stat
 import subprocess
-import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from install_skill import SKILL_NAME, copy_runtime, runtime_manifest
+sys.dont_write_bytecode = True
+
+
+def _bootstrap_local_module_preflight() -> None:
+    """Bind the complete local-import tree before adding scripts/ to sys.path."""
+    script_dir = Path(__file__).resolve().parent
+    root = script_dir.parent
+    git = Path("/usr/bin/git")
+    if not git.is_file() or not os.access(git, os.X_OK):
+        raise RuntimeError("isolated model-smoke bootstrap requires /usr/bin/git")
+    environment = {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "LANG": "C",
+        "LC_ALL": "C",
+        "GIT_ATTR_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_NO_LAZY_FETCH": "1",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_PAGER": "cat",
+    }
+
+    def git_read(arguments: list[str]) -> bytes:
+        result = subprocess.run(
+            [str(git), "--no-lazy-fetch", "-C", str(root), *arguments],
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                "isolated model-smoke bootstrap Git read failed: "
+                + (detail or str(result.returncode))
+            )
+        return result.stdout
+
+    object_format = git_read(["rev-parse", "--show-object-format"]).decode(
+        "ascii", errors="strict"
+    ).strip()
+    if object_format not in {"sha1", "sha256"}:
+        raise RuntimeError("unsupported Git object format for isolated bootstrap")
+    expected: dict[str, str] = {}
+    expected_directories: set[str] = set()
+    for record in git_read(
+        ["ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", "scripts"]
+    ).split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, raw_path = record.split(b"\t", 1)
+            _mode, object_type, object_id = metadata.split(b" ", 2)
+        except ValueError as exc:
+            raise RuntimeError("invalid Git tree record during isolated bootstrap") from exc
+        path = os.fsdecode(raw_path)
+        if object_type != b"blob":
+            raise RuntimeError(f"local import-tree entry is not a Git blob: {path}")
+        expected[path] = object_id.decode("ascii", errors="strict")
+        parent = PurePosixPath(path).parent
+        while parent != PurePosixPath("scripts"):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+
+    observed: dict[str, str] = {}
+    observed_directories: set[str] = set()
+
+    def visit(directory: Path) -> None:
+        with os.scandir(directory) as iterator:
+            entries = sorted(iterator, key=lambda item: os.fsencode(item.name))
+        for entry in entries:
+            candidate = directory / entry.name
+            relative = candidate.relative_to(root).as_posix()
+            info = entry.stat(follow_symlinks=False)
+            if stat.S_ISDIR(info.st_mode):
+                observed_directories.add(relative)
+                visit(candidate)
+                after = entry.stat(follow_symlinks=False)
+                if (
+                    not stat.S_ISDIR(after.st_mode)
+                    or (after.st_dev, after.st_ino) != (info.st_dev, info.st_ino)
+                ):
+                    raise RuntimeError(
+                        f"local import-tree directory changed during preflight: {relative}"
+                    )
+                continue
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise RuntimeError(
+                    f"local import-tree entry must be a single regular file: {relative}"
+                )
+            flags = os.O_RDONLY
+            if hasattr(os, "O_CLOEXEC"):
+                flags |= os.O_CLOEXEC
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            try:
+                descriptor = os.open(candidate, flags)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"local import-tree file cannot be opened safely: {relative}"
+                ) from exc
+            try:
+                opened = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened.st_mode)
+                    or opened.st_nlink != 1
+                    or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino)
+                ):
+                    raise RuntimeError(
+                        f"local import-tree file changed before read: {relative}"
+                    )
+                with os.fdopen(descriptor, "rb", closefd=False) as handle:
+                    data = handle.read()
+            finally:
+                os.close(descriptor)
+            digest = hashlib.new(object_format)
+            digest.update(f"blob {len(data)}\0".encode("ascii"))
+            digest.update(data)
+            observed[relative] = digest.hexdigest()
+
+    visit(script_dir)
+    if observed != expected or observed_directories != expected_directories:
+        extra = sorted(set(observed) - set(expected))
+        missing = sorted(set(expected) - set(observed))
+        drifted = sorted(
+            path for path in set(observed) & set(expected) if observed[path] != expected[path]
+        )
+        extra_directories = sorted(observed_directories - expected_directories)
+        missing_directories = sorted(expected_directories - observed_directories)
+        raise RuntimeError(
+            "isolated model-smoke local import tree differs from clean HEAD "
+            f"(extra={extra}, missing={missing}, drifted={drifted}, "
+            f"extra_directories={extra_directories}, "
+            f"missing_directories={missing_directories})"
+        )
+
+
+if __name__ == "__main__":
+    try:
+        _bootstrap_local_module_preflight()
+    except (OSError, RuntimeError, UnicodeError) as exc:
+        print(f"model-smoke bootstrap refused execution: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+
+_SCRIPT_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+from install_skill import RUNTIME_FILES, SKILL_NAME, copy_runtime, runtime_manifest
 from protocol_contract import REVIEW_FIELDS, parse_reviewer_terminal
+from resolve_role_route import verify_live_catalog
+from run_profile_compat import (
+    hardened_git_observation,
+    kill_remaining_process_group,
+    run_hardened_git,
+    stop_process_group,
+)
 from validate_package import (
     REQUIRED_VISUAL_SURFACES,
     REVIEW_OUTCOME_RE,
@@ -44,6 +210,8 @@ TOOL_ITEM_TYPES = {
 ASSISTANT_ITEM_TYPES = {"agent_message", "assistant_message"}
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 MODEL_RE = re.compile(r"\bmodel=([A-Za-z0-9._-]+)")
+THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
+EVAL_TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 PROGRESS_RE = re.compile(r"(?:MAIN_PROGRESS|\bprogress\b|进度)", re.IGNORECASE)
 BOOT_PREFIX_RE = re.compile(
     r"^(?:<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n)?任务已接管｜"
@@ -58,8 +226,6 @@ ALLOWED_COLLABORATION = {
 }
 ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker"}
 ALLOWED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
-RC_PRERELEASE_MODEL = "gpt-5.6-sol"
-RC_PRERELEASE_REASONING_EFFORT = "max"
 EVALUATOR_DEPENDENCIES = (
     "scripts/install_skill.py",
     "scripts/validate_package.py",
@@ -229,26 +395,106 @@ def sha256_regular_nofollow(path: Path) -> str:
 
 def source_git_state(root: Path) -> dict[str, object]:
     """Fingerprint the evaluated worktree without embedding its diff in a receipt."""
-    revision = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    status = subprocess.run(
-        ["git", "-C", str(root), "status", "--porcelain=v1", "--untracked-files=all"],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if revision.returncode != 0 or status.returncode != 0:
-        return {"available": False}
+    probe = run_hardened_git(root, ["rev-parse", "--is-inside-work-tree"])
+    if probe.returncode != 0:
+        detail = probe.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"release source must be a readable Git worktree: {detail or probe.returncode}"
+        )
+    if probe.stdout.strip() != b"true":
+        raise RuntimeError("release source did not identify as a Git worktree")
+    observation = hardened_git_observation(root)
+    status = bytes(observation["status_bytes"])
     return {
         "available": True,
-        "head": revision.stdout.strip(),
-        "worktree_dirty": bool(status.stdout.strip()),
-        "worktree_status_sha256": sha256_bytes(status.stdout.encode()),
+        "head": observation["head"],
+        "worktree_dirty": bool(status.strip()),
+        "worktree_status_sha256": sha256_bytes(status),
+        "filter_paths_checked": observation["filter_paths_checked"],
+        "index_flags_checked": observation["index_flags_checked"],
+        "index_flags_verified": observation["index_flags_verified"],
+        "fsmonitor_disabled": observation["fsmonitor_disabled"],
+        "lazy_fetch_disabled": observation["lazy_fetch_disabled"],
+        "replace_objects_disabled": observation["replace_objects_disabled"],
+        "submodules_ignored": observation["submodules_ignored"],
     }
+
+
+def require_hardened_git(
+    root: Path, arguments: list[str], operation: str
+) -> bytes:
+    result = run_hardened_git(root, arguments)
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(
+            f"hardened Git {operation} failed: {detail or result.returncode}"
+        )
+    return result.stdout
+
+
+def source_head_manifest(root: Path, relative_paths: set[str]) -> dict[str, str]:
+    """Require evaluated source bytes to equal the real, non-replaced HEAD blobs."""
+    manifest: dict[str, str] = {}
+    for relative in sorted(relative_paths):
+        path = PurePosixPath(relative)
+        if (
+            path.is_absolute()
+            or "\\" in relative
+            or any(part in {"", ".", ".."} for part in path.parts)
+        ):
+            raise RuntimeError(f"unsafe source HEAD path: {relative!r}")
+        actual = read_regular_nofollow(root.joinpath(*path.parts))
+        expected = require_hardened_git(
+            root,
+            ["cat-file", "blob", f"HEAD:{relative}"],
+            f"HEAD blob read for {relative}",
+        )
+        if actual != expected:
+            raise RuntimeError(
+                f"release source bytes differ from the real HEAD blob: {relative}"
+            )
+        manifest[relative] = sha256_bytes(actual)
+    return manifest
+
+
+def initialize_fixture_repository(fixture: Path) -> None:
+    """Create the eval baseline without inheriting templates, hooks, or Git config."""
+    template = fixture.parent / f"empty-git-template-{fixture.name}"
+    template.mkdir(mode=0o700)
+    try:
+        require_hardened_git(
+            fixture,
+            ["init", "-q", f"--template={template}", "."],
+            "fixture init",
+        )
+        require_hardened_git(
+            fixture,
+            ["config", "user.name", "Model Eval"],
+            "fixture user.name config",
+        )
+        require_hardened_git(
+            fixture,
+            ["config", "user.email", "model-eval@example.invalid"],
+            "fixture user.email config",
+        )
+        require_hardened_git(
+            fixture,
+            ["-c", "core.hooksPath=/dev/null", "add", "--", "README.md", ".agents"],
+            "fixture add",
+        )
+        require_hardened_git(
+            fixture,
+            [
+                "-c",
+                "core.hooksPath=/dev/null",
+                "commit",
+                "-qm",
+                "model eval baseline",
+            ],
+            "fixture commit",
+        )
+    finally:
+        template.rmdir()
 
 
 def receipt_status(full_run: bool, results: list[dict[str, object]]) -> str:
@@ -257,21 +503,155 @@ def receipt_status(full_run: bool, results: list[dict[str, object]]) -> str:
     return "passed" if full_run else "passed_partial"
 
 
+def verify_release_catalog(
+    path: Path,
+    requested_model: str | None,
+    requested_reasoning_effort: str | None,
+    *,
+    codex_bin: str | None = None,
+    codex_home: Path | None = None,
+    state_db: Path | None = None,
+    thread_id: str | None = None,
+    cwd: Path | None = None,
+) -> dict[str, object]:
+    if requested_model is None or requested_reasoning_effort is None:
+        raise RuntimeError("--catalog requires explicit --model and --reasoning-effort")
+    raw = read_regular_nofollow(path.expanduser())
+    try:
+        catalog = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"release catalog is not valid UTF-8 JSON: {exc}") from exc
+    if (
+        not isinstance(catalog, dict)
+        or set(catalog) != {"schema_version", "provenance", "models"}
+        or catalog.get("schema_version") != 2
+    ):
+        raise RuntimeError(
+            "release catalog must use schema 2 with provenance and models"
+        )
+    provenance = catalog.get("provenance")
+    if not isinstance(provenance, dict) or set(provenance) != {
+        "source",
+        "source_id",
+        "observed_for_requested_thread",
+        "requested_thread_id",
+        "root_provider",
+        "canonical_state_store_bound",
+        "model_provider_evidence",
+    }:
+        raise RuntimeError("release catalog provenance is missing")
+    root_provider = provenance.get("root_provider")
+    requested_thread_id = provenance.get("requested_thread_id")
+    source_id = provenance.get("source_id")
+    if (
+        provenance.get("source") != "active-host-catalog"
+        or provenance.get("observed_for_requested_thread") is not True
+        or not isinstance(requested_thread_id, str)
+        or THREAD_ID_RE.fullmatch(requested_thread_id) is None
+        or provenance.get("canonical_state_store_bound") is not True
+        or not isinstance(source_id, str)
+        or re.fullmatch(r"codex-app-server:model/list:[0-9a-f]{64}", source_id)
+        is None
+        or root_provider != "openai"
+        or provenance.get("model_provider_evidence")
+        not in {"catalog-advertised", "root-state-inferred"}
+    ):
+        raise RuntimeError(
+            "release catalog must be a canonical active-host requested-thread OpenAI readback"
+        )
+    models = catalog.get("models")
+    if not isinstance(models, list):
+        raise RuntimeError("release catalog models must be an array")
+    matches = [
+        item
+        for item in models
+        if isinstance(item, dict) and item.get("id") == requested_model
+    ]
+    if len(matches) != 1:
+        raise RuntimeError("requested release model must appear exactly once in the catalog")
+    model = matches[0]
+    efforts = model.get("supported_reasoning")
+    if (
+        model.get("provider") != root_provider
+        or model.get("model_class") != "judgment"
+        or model.get("available") is not True
+        or not isinstance(efforts, list)
+        or requested_reasoning_effort not in efforts
+        or requested_model.lower().startswith("claude-")
+        or model.get("provider_evidence")
+        not in {"catalog-advertised", "root-state-inferred"}
+        or model.get("provider_evidence")
+        != provenance.get("model_provider_evidence")
+    ):
+        raise RuntimeError(
+            "release model must be an available current-catalog OpenAI judgment model "
+            "supporting the requested effort"
+        )
+    live_arguments = (codex_bin, state_db, thread_id, cwd)
+    if any(value is not None for value in live_arguments) and not all(
+        value is not None for value in live_arguments
+    ):
+        raise RuntimeError(
+            "live release catalog verification requires codex_bin, state_db, thread_id, and cwd"
+        )
+    live_verified = all(value is not None for value in live_arguments)
+    if live_verified:
+        if thread_id != requested_thread_id:
+            raise RuntimeError(
+                "release catalog thread does not match the explicit live thread"
+            )
+        assert codex_bin is not None
+        assert state_db is not None
+        assert thread_id is not None
+        assert cwd is not None
+        verify_live_catalog(
+            catalog,
+            codex_bin=codex_bin,
+            codex_home=codex_home,
+            cwd=cwd,
+            state_db=state_db,
+            thread_id=thread_id,
+            root_provider=str(root_provider),
+            timeout_seconds=20,
+        )
+    return {
+        "verified": live_verified,
+        "schema_validated": True,
+        "live_readback_verified": live_verified,
+        "sha256": sha256_bytes(raw),
+        "source_id": source_id,
+        "provider": root_provider,
+        "model": requested_model,
+        "model_class": "judgment",
+        "reasoning_effort": requested_reasoning_effort,
+        "requested_thread_id": requested_thread_id,
+        "model_provider_evidence": model["provider_evidence"],
+        "same_provider_independently_advertised": (
+            model["provider_evidence"] == "catalog-advertised"
+        ),
+    }
+
+
 def release_eligibility(
     status: str,
     full_run: bool,
     requested_model: str | None,
     requested_reasoning_effort: str | None,
     model_identity_verified: bool,
+    release_catalog_verified: bool,
+    source_git_state_verified: bool,
     credential_class: str,
     untested_capabilities: list[str],
 ) -> tuple[bool, bool]:
     prerelease = (
         status == "passed"
         and full_run
-        and requested_model == RC_PRERELEASE_MODEL
-        and requested_reasoning_effort == RC_PRERELEASE_REASONING_EFFORT
+        and isinstance(requested_model, str)
+        and bool(requested_model)
+        and requested_reasoning_effort in ALLOWED_REASONING_EFFORTS
         and model_identity_verified
+        and release_catalog_verified
+        and source_git_state_verified
         and credential_class == "dedicated"
     )
     stable = prerelease and not untested_capabilities
@@ -301,7 +681,7 @@ def build_isolated_env(
 ) -> dict[str, str]:
     parent = os.environ if source is None else source
     env = {key: value for key, value in parent.items() if key in SAFE_ENV_KEYS}
-    env["PATH"] = parent.get("PATH", os.defpath)
+    env["PATH"] = EVAL_TOOL_PATH
     env["HOME"] = str(home)
     env["CODEX_HOME"] = str(codex_home)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -387,8 +767,11 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
     models: set[str] = set()
     providers: set[str] = set()
     efforts: set[str] = set()
+    thread_ids: set[str] = set()
     session_count = 0
     turn_count = 0
+    task_complete_count = 0
+    parse_errors = 0
     session_observations: list[dict[str, object]] = []
     sessions_root = codex_home / "sessions"
     if not sessions_root.is_dir():
@@ -396,8 +779,11 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
             "models": [],
             "providers": [],
             "reasoning_efforts": [],
+            "thread_ids": [],
             "session_count": 0,
             "turn_count": 0,
+            "task_complete_count": 0,
+            "parse_errors": 0,
             "session_observations": [],
         }
     for path in sorted(sessions_root.rglob("*.jsonl")):
@@ -410,28 +796,50 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
         file_models: set[str] = set()
         file_providers: set[str] = set()
         file_efforts: set[str] = set()
+        file_thread_ids: set[str] = set()
+        file_context_turn_ids: set[str] = set()
+        file_completion_turn_ids: set[str] = set()
         file_session_count = 0
         file_turn_count = 0
+        file_parse_errors = 0
         for line in lines:
+            if not line.strip():
+                continue
             try:
                 record = json.loads(line)
             except json.JSONDecodeError:
+                file_parse_errors += 1
                 continue
             if not isinstance(record, dict):
+                file_parse_errors += 1
                 continue
             payload = record.get("payload")
-            if not isinstance(payload, dict) or str(payload.get("cwd", "")) != expected_cwd:
+            if not isinstance(payload, dict):
                 continue
-            if record.get("type") == "session_meta":
+            record_type = record.get("type")
+            if (
+                record_type == "session_meta"
+                and str(payload.get("cwd", "")) == expected_cwd
+            ):
                 session_count += 1
                 file_session_count += 1
+                thread_id = payload.get("id")
+                if isinstance(thread_id, str):
+                    thread_ids.add(thread_id)
+                    file_thread_ids.add(thread_id)
                 provider = payload.get("model_provider")
                 if isinstance(provider, str) and provider:
                     providers.add(provider)
                     file_providers.add(provider)
-            if record.get("type") == "turn_context":
+            if (
+                record_type == "turn_context"
+                and str(payload.get("cwd", "")) == expected_cwd
+            ):
                 turn_count += 1
                 file_turn_count += 1
+                turn_id = payload.get("turn_id")
+                if isinstance(turn_id, str) and turn_id:
+                    file_context_turn_ids.add(turn_id)
                 model = payload.get("model")
                 effort = payload.get("effort")
                 if isinstance(model, str) and model:
@@ -440,28 +848,45 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
                 if isinstance(effort, str) and effort:
                     efforts.add(effort)
                     file_efforts.add(effort)
+            if record_type == "event_msg" and payload.get("type") == "task_complete":
+                turn_id = payload.get("turn_id")
+                if isinstance(turn_id, str) and turn_id:
+                    file_completion_turn_ids.add(turn_id)
         if file_session_count or file_turn_count:
+            task_complete_count += len(file_completion_turn_ids)
+            parse_errors += file_parse_errors
             session_observations.append(
                 {
                     "providers": sorted(file_providers),
                     "models": sorted(file_models),
                     "reasoning_efforts": sorted(file_efforts),
+                    "thread_ids": sorted(file_thread_ids),
                     "session_count": file_session_count,
                     "turn_count": file_turn_count,
+                    "task_complete_count": len(file_completion_turn_ids),
+                    "context_turn_ids": sorted(file_context_turn_ids),
+                    "completion_turn_ids": sorted(file_completion_turn_ids),
+                    "parse_errors": file_parse_errors,
                 }
             )
     return {
         "models": sorted(models),
         "providers": sorted(providers),
         "reasoning_efforts": sorted(efforts),
+        "thread_ids": sorted(thread_ids),
         "session_count": session_count,
         "turn_count": turn_count,
+        "task_complete_count": task_complete_count,
+        "parse_errors": parse_errors,
         "session_observations": session_observations,
     }
 
 
 def execution_identity_matches(
-    identity: dict[str, object], model: str | None, reasoning_effort: str | None
+    identity: dict[str, object],
+    model: str | None,
+    reasoning_effort: str | None,
+    thread_id: str | None = None,
 ) -> bool:
     raw_session_observations = identity.get("session_observations", [])
     session_observations = (
@@ -469,7 +894,16 @@ def execution_identity_matches(
         if isinstance(raw_session_observations, list)
         else []
     )
-    return bool(session_observations) and all(
+    root_observations = (
+        [
+            observation
+            for observation in session_observations
+            if observation.get("thread_ids") == [thread_id]
+        ]
+        if thread_id is not None
+        else session_observations
+    )
+    return len(root_observations) == 1 and all(
         observation.get("providers") == ["openai"]
         and isinstance(observation.get("models"), list)
         and len(observation["models"]) == 1
@@ -480,9 +914,36 @@ def execution_identity_matches(
             reasoning_effort is None
             or observation["reasoning_efforts"] == [reasoning_effort]
         )
-        and observation.get("session_count", 0) >= 1
-        and observation.get("turn_count", 0) >= 1
-        for observation in session_observations
+        and observation.get("turn_count") == 1
+        and observation.get("session_count") == 1
+        and observation.get("task_complete_count") == 1
+        and observation.get("parse_errors") == 0
+        and isinstance(observation.get("thread_ids"), list)
+        and len(observation["thread_ids"]) == 1
+        and THREAD_ID_RE.fullmatch(str(observation["thread_ids"][0])) is not None
+        and (thread_id is None or observation["thread_ids"] == [thread_id])
+        and observation.get("context_turn_ids")
+        == observation.get("completion_turn_ids")
+        and isinstance(observation.get("context_turn_ids"), list)
+        and len(observation["context_turn_ids"]) == 1
+        for observation in root_observations
+    )
+
+
+def child_execution_identity_matches(
+    observation: dict[str, object], thread_id: str
+) -> bool:
+    return (
+        observation.get("providers") == ["openai"]
+        and observation.get("thread_ids") == [thread_id]
+        and observation.get("session_count") == 1
+        and observation.get("turn_count") == 1
+        and observation.get("task_complete_count") == 1
+        and observation.get("parse_errors") == 0
+        and observation.get("context_turn_ids")
+        == observation.get("completion_turn_ids")
+        and isinstance(observation.get("context_turn_ids"), list)
+        and len(observation["context_turn_ids"]) == 1
     )
 
 
@@ -619,17 +1080,43 @@ def event_surface(
     tool_item_ids: set[str] = set()
     spawns: dict[str, dict[str, object]] = {}
     waits: dict[str, dict[str, object]] = {}
+    spawn_counts: dict[str, int] = {}
+    wait_counts: dict[str, int] = {}
     successful_tool_event_indexes: list[int] = []
     task_action_event_indexes: list[int] = []
     collaboration_event_indexes: list[int] = []
     last_file_change_event_index = -1
     passive_skill_read_ids: set[str] = set()
+    jsonl_parse_errors = 0
+    thread_started_ids: list[str] = []
+    turn_started_count = 0
+    turn_completed_count = 0
+    turn_failed_count = 0
+    top_level_error_count = 0
     for index, line in enumerate(events_text.splitlines()):
+        if not line.strip():
+            continue
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
+            jsonl_parse_errors += 1
             continue
-        if not isinstance(event, dict) or event.get("type") not in {
+        if not isinstance(event, dict):
+            jsonl_parse_errors += 1
+            continue
+        event_type = event.get("type")
+        if event_type == "thread.started":
+            thread_id = event.get("thread_id")
+            thread_started_ids.append(thread_id if isinstance(thread_id, str) else "")
+        elif event_type == "turn.started":
+            turn_started_count += 1
+        elif event_type == "turn.completed":
+            turn_completed_count += 1
+        elif event_type == "turn.failed":
+            turn_failed_count += 1
+        elif event_type == "error":
+            top_level_error_count += 1
+        if event_type not in {
             "item.started",
             "item.completed",
         }:
@@ -649,8 +1136,14 @@ def event_surface(
         if item_type in TOOL_ITEM_TYPES:
             status = item.get("status")
             exit_code = item.get("exit_code")
-            command_ok = item_type != "command_execution" or exit_code in {None, 0}
-            status_ok = status not in {"failed", "cancelled"}
+            if item_type == "command_execution":
+                tool_success = (
+                    status == "completed"
+                    and type(exit_code) is int
+                    and exit_code == 0
+                )
+            else:
+                tool_success = status == "completed"
             passive_skill_read = is_passive_skill_read(
                 item, installed_skill_path, fixture_root
             )
@@ -665,7 +1158,7 @@ def event_surface(
                 passive_skill_read_ids.add(item_id)
             else:
                 task_action_event_indexes.append(index)
-            if completed and command_ok and status_ok:
+            if completed and tool_success:
                 tool_item_ids.add(str(item.get("id", f"event-{index}")))
                 successful_tool_event_indexes.append(index)
                 if item_type == "file_change":
@@ -683,6 +1176,7 @@ def event_surface(
         if item.get("tool") == "spawn_agent":
             for receiver_id in receiver_ids:
                 if isinstance(receiver_id, str) and receiver_id:
+                    spawn_counts[receiver_id] = spawn_counts.get(receiver_id, 0) + 1
                     spawns[receiver_id] = {
                         "spawn_event_index": index,
                         "prompt": item.get("prompt") if isinstance(item.get("prompt"), str) else "",
@@ -700,11 +1194,52 @@ def event_surface(
                     continue
                 message = state.get("message")
                 if state.get("status") == "completed" and isinstance(message, str) and message.strip():
+                    wait_counts[receiver_id] = wait_counts.get(receiver_id, 0) + 1
                     waits[receiver_id] = {
                         "wait_event_index": index,
                         "message": message,
+                        "sender_thread_id": item.get("sender_thread_id"),
+                        "receiver_declared": receiver_id in receiver_ids,
                     }
 
+    root_thread_id = (
+        thread_started_ids[0]
+        if len(thread_started_ids) == 1
+        and THREAD_ID_RE.fullmatch(thread_started_ids[0]) is not None
+        else None
+    )
+    collaboration_identity_errors: list[str] = []
+    valid_spawns: dict[str, dict[str, object]] = {}
+    for receiver_id, spawn in spawns.items():
+        if (
+            root_thread_id is None
+            or THREAD_ID_RE.fullmatch(receiver_id) is None
+            or receiver_id == root_thread_id
+            or spawn.get("sender_thread_id") != root_thread_id
+            or spawn_counts.get(receiver_id) != 1
+        ):
+            collaboration_identity_errors.append(
+                f"invalid root spawn identity for receiver {receiver_id!r}"
+            )
+            continue
+        valid_spawns[receiver_id] = spawn
+    valid_waits: dict[str, dict[str, object]] = {}
+    for receiver_id, wait in waits.items():
+        if (
+            root_thread_id is None
+            or THREAD_ID_RE.fullmatch(receiver_id) is None
+            or receiver_id == root_thread_id
+            or wait.get("sender_thread_id") != root_thread_id
+            or wait.get("receiver_declared") is not True
+            or wait_counts.get(receiver_id) != 1
+        ):
+            collaboration_identity_errors.append(
+                f"invalid root wait identity for receiver {receiver_id!r}"
+            )
+            continue
+        valid_waits[receiver_id] = wait
+    spawns = valid_spawns
+    waits = valid_waits
     completed_reviews = {
         receiver_id: {**spawns[receiver_id], **waits[receiver_id]}
         for receiver_id in sorted(set(spawns) & set(waits))
@@ -723,6 +1258,13 @@ def event_surface(
         "task_action_event_indexes": task_action_event_indexes,
         "collaboration_event_indexes": collaboration_event_indexes,
         "last_file_change_event_index": last_file_change_event_index,
+        "jsonl_parse_errors": jsonl_parse_errors,
+        "thread_started_ids": thread_started_ids,
+        "turn_started_count": turn_started_count,
+        "turn_completed_count": turn_completed_count,
+        "turn_failed_count": turn_failed_count,
+        "top_level_error_count": top_level_error_count,
+        "collaboration_identity_errors": collaboration_identity_errors,
     }
 
 
@@ -998,20 +1540,155 @@ def checked_artifact(fixture: Path, relative: PurePosixPath) -> Path:
 
 
 def changed_paths(fixture: Path) -> set[str]:
-    result = subprocess.run(
-        ["git", "-C", str(fixture), "status", "--porcelain=v1"],
-        text=True,
-        capture_output=True,
-        check=True,
-    )
+    observation = hardened_git_observation(fixture)
+    status = bytes(observation["status_bytes"]).decode("utf-8", errors="strict")
     paths: set[str] = set()
-    for line in result.stdout.splitlines():
+    for line in status.splitlines():
         if len(line) >= 4:
             path = line[3:]
             if " -> " in path:
                 path = path.split(" -> ", 1)[1]
             paths.add(path)
     return paths
+
+
+def fixture_file_manifest(fixture: Path) -> dict[str, str]:
+    """Hash the visible fixture tree without trusting its Git index or status."""
+    root = fixture.resolve(strict=True)
+    root_info = root.lstat()
+    if root.is_symlink() or not stat.S_ISDIR(root_info.st_mode):
+        raise RuntimeError(f"fixture root must be a non-symlink directory: {fixture}")
+    manifest: dict[str, str] = {}
+
+    def visit(directory: Path) -> None:
+        with os.scandir(directory) as iterator:
+            entries = sorted(iterator, key=lambda item: os.fsencode(item.name))
+        for entry in entries:
+            if directory == root and entry.name == ".git":
+                continue
+            path = directory / entry.name
+            relative = path.relative_to(root).as_posix()
+            before = path.lstat()
+            mode = stat.S_IMODE(before.st_mode)
+            if stat.S_ISLNK(before.st_mode):
+                target = os.readlink(path)
+                after = path.lstat()
+                if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino):
+                    raise RuntimeError(f"fixture symlink changed during manifest read: {relative}")
+                manifest[relative] = f"symlink:{mode:o}:{target}"
+                continue
+            if stat.S_ISDIR(before.st_mode):
+                manifest[relative] = f"directory:{mode:o}"
+                visit(path)
+                after = path.lstat()
+                if (
+                    not stat.S_ISDIR(after.st_mode)
+                    or (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino)
+                ):
+                    raise RuntimeError(
+                        f"fixture directory changed during manifest read: {relative}"
+                    )
+                continue
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                raise RuntimeError(
+                    f"fixture contains a non-regular or multiply-linked entry: {relative}"
+                )
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            descriptor = os.open(path, flags)
+            try:
+                opened = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(opened.st_mode)
+                    or opened.st_nlink != 1
+                    or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino)
+                ):
+                    raise RuntimeError(
+                        f"fixture file changed before manifest read: {relative}"
+                    )
+                digest = hashlib.sha256()
+                while chunk := os.read(descriptor, 1024 * 1024):
+                    digest.update(chunk)
+            finally:
+                os.close(descriptor)
+            after = path.lstat()
+            if (
+                not stat.S_ISREG(after.st_mode)
+                or after.st_nlink != 1
+                or (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino)
+            ):
+                raise RuntimeError(f"fixture file changed during manifest read: {relative}")
+            manifest[relative] = f"file:{mode:o}:{digest.hexdigest()}"
+
+    visit(root)
+    return manifest
+
+
+def fixture_scope_failures(
+    baseline_manifest: dict[str, str],
+    final_manifest: dict[str, str],
+    baseline_head: object,
+    final_head: object,
+    expected_file: str | None,
+) -> tuple[list[str], list[str]]:
+    changed = sorted(
+        path
+        for path in set(baseline_manifest) | set(final_manifest)
+        if baseline_manifest.get(path) != final_manifest.get(path)
+    )
+    allowed_paths: set[str] = set()
+    if expected_file is not None:
+        allowed_paths.add(expected_file)
+        expected_path = PurePosixPath(expected_file)
+        for parent in expected_path.parents:
+            if parent == PurePosixPath("."):
+                continue
+            parent_text = parent.as_posix()
+            if (
+                parent_text not in baseline_manifest
+                and str(final_manifest.get(parent_text, "")).startswith("directory:")
+            ):
+                allowed_paths.add(parent_text)
+    allowed = sorted(allowed_paths)
+    failures: list[str] = []
+    if changed != allowed:
+        failures.append(
+            f"fixture manifest scope mismatch: expected {allowed!r}, observed {changed!r}"
+        )
+    if final_head != baseline_head:
+        failures.append("fixture HEAD changed during model execution")
+    return failures, changed
+
+
+def run_evaluated_codex(
+    command: list[str],
+    *,
+    timeout: int | float,
+    env: dict[str, str],
+) -> tuple[subprocess.CompletedProcess[str], bool]:
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        kill_remaining_process_group(process.pid)
+        return (
+            subprocess.CompletedProcess(command, process.returncode, stdout, stderr),
+            False,
+        )
+    except subprocess.TimeoutExpired:
+        stdout, stderr = stop_process_group(process)
+        return (
+            subprocess.CompletedProcess(command, process.returncode, stdout, stderr),
+            True,
+        )
+    except BaseException:
+        stop_process_group(process)
+        raise
 
 
 def run_case(
@@ -1033,9 +1710,22 @@ def run_case(
     sandbox = str(case.get("sandbox", "read-only"))
     if sandbox not in ALLOWED_SANDBOXES:
         raise RuntimeError(f"case {case['id']} requests unsafe sandbox {sandbox!r}")
+    expected_file_value = case.get("expected_file")
+    expected_manifest_file = (
+        safe_relative_artifact(expected_file_value, str(case["id"])).as_posix()
+        if isinstance(expected_file_value, str)
+        else None
+    )
+    baseline_manifest = fixture_file_manifest(fixture)
+    baseline_git = hardened_git_observation(fixture)
+    if bytes(baseline_git["status_bytes"]).strip():
+        raise RuntimeError(f"case {case['id']} fixture baseline is not clean")
+    if fixture_file_manifest(fixture) != baseline_manifest:
+        raise RuntimeError(f"case {case['id']} fixture changed during baseline observation")
     command = [
         str(codex_executable),
         "exec",
+        "--strict-config",
         "--ignore-user-config",
         "--ignore-rules",
         "--disable",
@@ -1046,6 +1736,8 @@ def run_case(
         "multi_agent",
         "-c",
         "shell_environment_policy.inherit=none",
+        "-c",
+        f"shell_environment_policy.set.PATH={json.dumps(EVAL_TOOL_PATH)}",
         "--sandbox",
         sandbox,
         "--json",
@@ -1060,11 +1752,8 @@ def run_case(
         command.extend(["-c", f"model_reasoning_effort={json.dumps(reasoning_effort)}"])
     command.append(str(case["prompt"]))
 
-    completed = subprocess.run(
+    completed, timed_out = run_evaluated_codex(
         command,
-        text=True,
-        capture_output=True,
-        check=False,
         timeout=timeout,
         env=env,
     )
@@ -1094,6 +1783,48 @@ def run_case(
     surface = str(parsed["surface"])
     final_lower = final_text.lower()
     failures = contract_failures(case, parsed)
+    thread_started_ids = parsed["thread_started_ids"]
+    assert isinstance(thread_started_ids, list)
+    lifecycle_thread_id = (
+        str(thread_started_ids[0])
+        if len(thread_started_ids) == 1
+        and THREAD_ID_RE.fullmatch(str(thread_started_ids[0])) is not None
+        else None
+    )
+    if parsed["jsonl_parse_errors"]:
+        failures.append(
+            f"codex --json emitted {parsed['jsonl_parse_errors']} malformed non-empty JSONL record(s)"
+        )
+    if lifecycle_thread_id is None:
+        failures.append("codex --json did not emit exactly one valid thread.started id")
+    if parsed["turn_started_count"] != 1:
+        failures.append("codex --json did not emit exactly one turn.started")
+    if parsed["turn_completed_count"] != 1:
+        failures.append("codex --json did not emit exactly one turn.completed")
+    if parsed["turn_failed_count"] != 0:
+        failures.append("codex --json emitted turn.failed")
+    if parsed["top_level_error_count"] != 0:
+        failures.append("codex --json emitted a top-level error")
+    raw_collaboration_identity_errors = parsed["collaboration_identity_errors"]
+    assert isinstance(raw_collaboration_identity_errors, list)
+    failures.extend(
+        f"collaboration event identity invalid: {error}"
+        for error in raw_collaboration_identity_errors
+    )
+    if timed_out:
+        failures.append(f"codex exceeded the {timeout}-second case limit")
+    final_manifest = fixture_file_manifest(fixture)
+    final_git = hardened_git_observation(fixture)
+    if fixture_file_manifest(fixture) != final_manifest:
+        raise RuntimeError(f"case {case['id']} fixture changed during final observation")
+    scope_failures, manifest_changed_paths = fixture_scope_failures(
+        baseline_manifest,
+        final_manifest,
+        baseline_git["head"],
+        final_git["head"],
+        expected_manifest_file,
+    )
+    failures.extend(scope_failures)
     if completed.returncode != 0:
         failures.append(f"codex exit code {completed.returncode}")
     if final_output_unsafe:
@@ -1120,7 +1851,7 @@ def run_case(
         else []
     )
     model_identity_verified = execution_identity_matches(
-        execution_identity, model, reasoning_effort
+        execution_identity, model, reasoning_effort, lifecycle_thread_id
     )
     if not model_identity_verified:
         failures.append(
@@ -1162,11 +1893,15 @@ def run_case(
                 f"unexpected final changed files: expected {[expected_file]!r}, "
                 f"observed {sorted(actual_changed)!r}"
             )
-        diff_check = subprocess.run(
-            ["git", "-C", str(fixture), "diff", "--check"],
-            text=True,
-            capture_output=True,
-            check=False,
+        diff_check = run_hardened_git(
+            fixture,
+            [
+                "--literal-pathspecs",
+                "diff",
+                "--check",
+                "--no-ext-diff",
+                "--no-textconv",
+            ],
         )
         if diff_check.returncode != 0:
             failures.append("git diff --check failed for expected artifact")
@@ -1174,6 +1909,7 @@ def run_case(
     completed_reviews = parsed["reviews_completed"]
     assert isinstance(completed_reviews, dict)
     review_ids: list[str] = []
+    review_session_identity_ids: list[str] = []
     context_verified_review_ids: list[str] = []
     reviewer_terminals: dict[str, dict[str, str]] = {}
     review_prompt_self_contained = False
@@ -1187,6 +1923,15 @@ def run_case(
             message = str(review.get("message", ""))
             sender_id = review.get("sender_thread_id")
             if receiver_id == sender_id:
+                continue
+            child_observations = [
+                observation
+                for observation in session_observations
+                if observation.get("thread_ids") == [receiver_id]
+            ]
+            if len(child_observations) != 1 or not child_execution_identity_matches(
+                child_observations[0], receiver_id
+            ):
                 continue
             if expected_file and expected_file not in message:
                 continue
@@ -1219,6 +1964,7 @@ def run_case(
             if not any(last_file_change < int(index) < spawn_index for index in successful_indexes):
                 continue
             review_ids.append(receiver_id)
+            review_session_identity_ids.append(receiver_id)
             reviewer_terminals[receiver_id] = terminal
             if review.get("context_isolation_verified") is True:
                 context_verified_review_ids.append(receiver_id)
@@ -1259,6 +2005,7 @@ def run_case(
         "tool_events_completed": parsed["tool_events"],
         "collab_spawns_completed": len(parsed["spawn_completed"]),
         "reviewer_results_completed": len(review_ids),
+        "reviewer_session_identities_verified": len(review_session_identity_ids),
         "cold_context_isolation_verified_count": len(context_verified_review_ids),
         "review_receiver_ids": review_ids,
         "review_prompt_self_contained": review_prompt_self_contained,
@@ -1267,6 +2014,14 @@ def run_case(
         "observed_reasoning_efforts": observed_efforts,
         "model_identity_verified": model_identity_verified,
         "model_identity_session_count": len(session_observations),
+        "event_thread_id": lifecycle_thread_id,
+        "event_jsonl_parse_errors": parsed["jsonl_parse_errors"],
+        "event_turn_started_count": parsed["turn_started_count"],
+        "event_turn_completed_count": parsed["turn_completed_count"],
+        "event_turn_failed_count": parsed["turn_failed_count"],
+        "event_top_level_error_count": parsed["top_level_error_count"],
+        "fixture_head_unchanged": final_git["head"] == baseline_git["head"],
+        "fixture_manifest_changed_paths": manifest_changed_paths,
         "auth_exact_value_leak_detected": (
             events_leak or stderr_leak or final_leak or artifact_leak
         ),
@@ -1324,6 +2079,33 @@ def main() -> None:
         help="Explicit reasoning effort for the requested model.",
     )
     parser.add_argument(
+        "--catalog",
+        type=Path,
+        help=(
+            "Requested-thread catalog receipt from inspect_codex_models.py; a live-verified "
+            "judgment-class match is required for release eligibility."
+        ),
+    )
+    parser.add_argument(
+        "--catalog-state-db",
+        type=Path,
+        help="Canonical state_5.sqlite entry; required with --catalog.",
+    )
+    parser.add_argument(
+        "--catalog-codex-home",
+        type=Path,
+        help="Optional non-default Codex home used by the live catalog App Server.",
+    )
+    parser.add_argument(
+        "--catalog-thread-id",
+        help="Requested root task id; required with --catalog and must match its provenance.",
+    )
+    parser.add_argument(
+        "--catalog-cwd",
+        type=Path,
+        help="Existing project directory for live App Server readback; required with --catalog.",
+    )
+    parser.add_argument(
         "--case",
         action="append",
         dest="case_ids",
@@ -1362,6 +2144,28 @@ def main() -> None:
     codex_executable_sha256 = sha256_regular_nofollow(codex_executable)
 
     root = args.root.resolve()
+    if args.catalog is not None and (
+        args.catalog_state_db is None
+        or args.catalog_thread_id is None
+        or args.catalog_cwd is None
+    ):
+        raise RuntimeError(
+            "--catalog requires --catalog-state-db, --catalog-thread-id, and --catalog-cwd for live readback"
+        )
+    release_catalog = (
+        verify_release_catalog(
+            args.catalog,
+            args.model,
+            args.reasoning_effort,
+            codex_bin=str(codex_executable),
+            codex_home=args.catalog_codex_home,
+            state_db=args.catalog_state_db,
+            thread_id=args.catalog_thread_id,
+            cwd=args.catalog_cwd,
+        )
+        if args.catalog is not None
+        else {"verified": False, "reason": "no requested-thread catalog supplied"}
+    )
     out = prepare_output(args.out)
     check_contamination(root)
     runner_bytes = Path(__file__).read_bytes()
@@ -1393,6 +2197,13 @@ def main() -> None:
         for relative in EVALUATOR_DEPENDENCIES
     }
     source_git_state_start = source_git_state(root)
+    if source_git_state_start.get("worktree_dirty") is not False:
+        raise RuntimeError("auth-bearing model smoke requires a clean source worktree")
+    source_head_paths = set(RUNTIME_FILES) | set(EVALUATOR_DEPENDENCIES) | {
+        "evals/behavior_cases.json",
+        "scripts/run_model_evals.py",
+    }
+    source_head_manifest_start = source_head_manifest(root, source_head_paths)
     source_manifest = runtime_manifest(root)
 
     auth_source = args.auth_json.expanduser()
@@ -1420,7 +2231,6 @@ def main() -> None:
             isolated_codex_home.mkdir(mode=0o700)
             auth_target = isolated_codex_home / "auth.json"
             write_new_bytes(auth_target, auth_bytes)
-            subprocess.run(["git", "init", "-q", str(fixture)], check=True)
             (fixture / "README.md").write_text(
                 "# Agency model-eval fixture\n\n"
                 "Repository name: agency-model-eval-fixture.\n",
@@ -1431,28 +2241,7 @@ def main() -> None:
             copy_runtime(runtime_snapshot, skill_target)
             if runtime_manifest(skill_target) != snapshot_manifest:
                 raise RuntimeError(f"fixture runtime manifest mismatch for case {case_id}")
-            subprocess.run(
-                ["git", "-C", str(fixture), "config", "user.name", "Model Eval"],
-                check=True,
-            )
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(fixture),
-                    "config",
-                    "user.email",
-                    "model-eval@example.invalid",
-                ],
-                check=True,
-            )
-            subprocess.run(
-                ["git", "-C", str(fixture), "add", "README.md", ".agents"], check=True
-            )
-            subprocess.run(
-                ["git", "-C", str(fixture), "commit", "-qm", "model eval baseline"],
-                check=True,
-            )
+            initialize_fixture_repository(fixture)
             env = build_isolated_env(fixture_home, isolated_codex_home)
             results.append(
                 run_case(
@@ -1479,6 +2268,8 @@ def main() -> None:
                 for relative, digest in evaluator_dependency_hashes.items()
             )
             or source_git_state(root) != source_git_state_start
+            or source_head_manifest(root, source_head_paths)
+            != source_head_manifest_start
         )
     except (OSError, ValueError, RuntimeError):
         source_drift_detected = True
@@ -1511,6 +2302,9 @@ def main() -> None:
         args.model,
         args.reasoning_effort,
         model_identity_verified,
+        release_catalog.get("verified") is True,
+        source_git_state_start.get("available") is True
+        and source_git_state_start.get("worktree_dirty") is False,
         args.auth_credential_class,
         untested_capabilities,
     )
@@ -1523,8 +2317,8 @@ def main() -> None:
         "codex_executable_format": native_executable_format(codex_executable),
         "requested_model": args.model or "host_default",
         "requested_reasoning_effort": args.reasoning_effort or "host_default",
-        "prerelease_required_model": RC_PRERELEASE_MODEL,
-        "prerelease_required_reasoning_effort": RC_PRERELEASE_REASONING_EFFORT,
+        "prerelease_model_requirement": "current-catalog-openai-judgment",
+        "release_catalog": release_catalog,
         "observed_models": observed_models,
         "observed_model_providers": sorted(
             {
@@ -1548,6 +2342,10 @@ def main() -> None:
         "runner_sha256": sha256_bytes(runner_bytes),
         "evaluator_dependencies_sha256": evaluator_dependency_hashes,
         "source_git_state": source_git_state_start,
+        "source_head_manifest_sha256": sha256_bytes(
+            json.dumps(source_head_manifest_start, sort_keys=True).encode("utf-8")
+        ),
+        "source_head_path_count": len(source_head_manifest_start),
         "runtime_snapshot_verified": snapshot_manifest == source_manifest,
         "source_drift_detected": source_drift_detected,
         "suite_contract_verified": True,
@@ -1566,6 +2364,8 @@ def main() -> None:
             "dedicated_low_privilege_auth_recommended": True,
             "same_os_user_is_not_a_secret_boundary": True,
             "shell_environment_inherit": "none",
+            "process_path": EVAL_TOOL_PATH,
+            "tool_shell_path": EVAL_TOOL_PATH,
             "plugins_disabled": True,
             "apps_disabled": True,
             "credential_class": args.auth_credential_class,

@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "role_model_policy": "assets/role-model-policy.json",
   "self_skill_names": [
     "agency-chief-of-staff",
@@ -24,6 +24,12 @@
       "domain_skill_policy": "explicit-selected-only",
       "compat_execution": "main-or-isolated-worktree"
     },
+    "writer": {
+      "sandbox": "workspace-write",
+      "dispatch_when": ["user documentation", "release notes", "structured report", "polished delivery copy"],
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "main-or-isolated-worktree"
+    },
     "reviewer": {
       "sandbox": "read-only",
       "dispatch_when": ["independent cold review"],
@@ -35,12 +41,27 @@
       "dispatch_when": ["failing test", "log diagnosis", "flaky environment classification"],
       "domain_skill_policy": "explicit-selected-only",
       "compat_execution": "cli-profile-compat"
+    },
+    "supervisor": {
+      "sandbox": "read-only",
+      "dispatch_when": ["goal coverage audit", "evidence gap review", "release boundary check"],
+      "domain_skill_policy": "explicit-selected-only",
+      "compat_execution": "cli-profile-compat"
     }
   },
   "execution_modes": {
+    "native-direct-route": {
+      "status": "capability-gated",
+      "required_tool_namespace": "agents",
+      "required_spawn_fields": ["model", "reasoning_effort", "fork_turns"],
+      "fork_turns": "none",
+      "catalog_adapter": "scripts/inspect_codex_models.py",
+      "receipt_verifier": "scripts/verify_role_route_receipt.py"
+    },
     "native-custom-agent": {
-      "status": "optional-enhancement",
-      "requires_named_profile_selection_readback": true
+      "status": "capability-gated",
+      "requires_named_profile_selection_readback": true,
+      "receipt_verifier": "scripts/verify_role_route_receipt.py"
     },
     "cli-profile-compat": {
       "status": "permanent-fallback",
@@ -57,7 +78,7 @@
     },
     "main-or-isolated-worktree": {
       "status": "write-path",
-      "profiles": ["developer"],
+      "profiles": ["developer", "writer"],
       "prompt_only_sandbox_claim": false
     }
   },
@@ -65,6 +86,10 @@
     "small-bug": {
       "owner": "main",
       "optional_profiles": ["codebase-researcher", "reviewer"]
+    },
+    "documentation-delivery": {
+      "owner": "main",
+      "optional_profiles": ["codebase-researcher", "writer", "reviewer"]
     },
     "cross-file-feature": {
       "owner": "main",
@@ -85,7 +110,7 @@
     },
     "security-release": {
       "owner": "main",
-      "optional_profiles": ["codebase-researcher", "reviewer"],
+      "optional_profiles": ["codebase-researcher", "reviewer", "supervisor"],
       "requires_fresh_release_evidence": true
     }
   }
