@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "policy_name": "agency-role-model-routing",
   "root_ownership": "always",
   "exact_model_resolution": [
@@ -17,8 +17,8 @@
     "balanced": {
       "relative_cost_units": 2,
       "intent": "scoped implementation, integration, and multi-cause diagnosis",
-      "default_reasoning": "high",
-      "elevated_reasoning": "xhigh"
+      "default_reasoning": "medium",
+      "elevated_reasoning": "high"
     },
     "judgment": {
       "relative_cost_units": 4,
@@ -31,19 +31,19 @@
     "economy": {
       "max_delegated_roles": 1,
       "max_parallel_roles": 1,
-      "max_relative_cost_units": 4,
+      "max_relative_cost_units": 5,
       "max_auto_upgrades_per_role": 0
     },
     "balanced": {
       "max_delegated_roles": 3,
-      "max_parallel_roles": 2,
-      "max_relative_cost_units": 8,
+      "max_parallel_roles": 3,
+      "max_relative_cost_units": 10,
       "max_auto_upgrades_per_role": 1
     },
     "quality": {
-      "max_delegated_roles": 4,
-      "max_parallel_roles": 2,
-      "max_relative_cost_units": 16,
+      "max_delegated_roles": 5,
+      "max_parallel_roles": 3,
+      "max_relative_cost_units": 20,
       "max_auto_upgrades_per_role": 1
     }
   },
@@ -66,6 +66,12 @@
       "budget_priority": 70,
       "independent_required": false
     },
+    "writer": {
+      "default_model_class": "balanced",
+      "high_risk_model_class": "judgment",
+      "budget_priority": 65,
+      "independent_required": false
+    },
     "reviewer": {
       "default_model_class": "judgment",
       "high_risk_model_class": "judgment",
@@ -77,14 +83,28 @@
       "high_risk_model_class": "balanced",
       "budget_priority": 60,
       "independent_required": false
+    },
+    "supervisor": {
+      "default_model_class": "judgment",
+      "high_risk_model_class": "judgment",
+      "budget_priority": 90,
+      "independent_required": true
     }
   },
   "route_contract": {
     "override_fork_turns": "none",
+    "native_tool_namespace": "agents",
+    "required_direct_spawn_fields": ["model", "reasoning_effort", "fork_turns"],
+    "required_agent_spawn_fields": ["agent_type", "fork_turns"],
     "same_provider_required_for_direct_model": true,
     "custom_agent_requires_authenticated_provider": true,
     "source_templates_pin_models": false,
     "automatic_global_config_writes": false,
+    "external_models_default_enabled": false,
+    "catalog_adapter": "scripts/inspect_codex_models.py",
+    "live_catalog_verification_required_for_dispatch": true,
+    "receipt_verifier": "scripts/verify_role_route_receipt.py",
+    "compatibility_fallback": "scripts/run_profile_compat.py",
     "truth_states": [
       "planned",
       "planned-unverified",
@@ -94,15 +114,25 @@
       "unavailable"
     ]
   },
+  "native_routing": {
+    "configurator": "scripts/configure_native_routing.py",
+    "explicit_apply_required": true,
+    "new_task_required_after_apply": true,
+    "managed_fields": [
+      "features.multi_agent_v2.hide_spawn_agent_metadata",
+      "features.multi_agent_v2.tool_namespace",
+      "features.multi_agent_v2.multi_agent_mode_hint_text",
+      "features.multi_agent_v2.usage_hint_text"
+    ]
+  },
   "external_advisor": {
     "default": "none",
+    "enabled_by_default": false,
+    "core_dependency": false,
     "mode": "root-facing-read-only",
     "may_edit": false,
     "may_delegate": false,
     "may_approve_final_delivery": false,
-    "optional_adapters": [
-      "openai-custom-agent",
-      "future-host-scoped-adapter"
-    ]
+    "optional_adapters": ["openai-custom-agent", "claude-fable-mcp"]
   }
 }

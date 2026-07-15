@@ -1,0 +1,7 @@
+AGENCY_WORKER: true
+委派目标：以 reviewer 身份独立审核当前 README 是否准确描述已安装 Skill 的能力和证据边界。
+读取范围：README.md；git diff -- README.md；git diff --check。
+写入范围：无。
+期望产物：REVIEW_TARGET、REVIEW_READBACK、REVIEW_FINDINGS、REVIEW_RESIDUAL_RISK、REVIEW_VERDICT，均填实际读回值。
+验证要求：直接读取当前 artifact 与相关 diff 后返回实际读回及判定；不得使用主线程提供的值。
+停止条件：返回唯一终态；不启动、不派发。

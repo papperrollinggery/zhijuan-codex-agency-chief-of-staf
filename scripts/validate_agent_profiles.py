@@ -9,22 +9,28 @@ import re
 import sys
 from pathlib import Path
 
-from resolve_role_route import load_json, validate_policy
+sys.dont_write_bytecode = True
+
+from resolve_role_route import REASONING_LEVELS, load_json, validate_policy
 
 
 PROFILE_NAMES = (
     "codebase-researcher",
     "technical-architect",
     "developer",
+    "writer",
     "reviewer",
     "test-debugger",
+    "supervisor",
 )
 EXPECTED_SANDBOXES = {
     "codebase-researcher": "read-only",
     "technical-architect": "read-only",
     "developer": "workspace-write",
+    "writer": "workspace-write",
     "reviewer": "read-only",
     "test-debugger": "read-only",
+    "supervisor": "read-only",
 }
 SELF_SKILL_NAMES = {
     "agency-chief-of-staff",
@@ -125,9 +131,25 @@ def skill_name_from_file(path: Path) -> str:
     raise AssertionError("unreachable")
 
 
-def validate_profile(path: Path, expected_name: str, allow_bindings: bool) -> dict[str, object]:
+def validate_profile(
+    path: Path,
+    expected_name: str,
+    allow_bindings: bool,
+    expected_route: tuple[str, str] | None = None,
+) -> dict[str, object]:
     parsed = parse_profile(path)
-    allowed = {"name", "description", "developer_instructions", "sandbox_mode", "skills.config"}
+    base_fields = {
+        "name",
+        "description",
+        "developer_instructions",
+        "sandbox_mode",
+        "skills.config",
+    }
+    route_fields = {"model", "model_reasoning_effort"}
+    present_route_fields = set(parsed) & route_fields
+    if present_route_fields and present_route_fields != route_fields:
+        fail(f"{path.name} must set model and model_reasoning_effort together")
+    allowed = base_fields | (route_fields if expected_route is not None else set())
     if set(parsed) != allowed:
         fail(f"{path.name} fields must be exactly {sorted(allowed)}")
     if parsed["name"] != expected_name:
@@ -138,10 +160,17 @@ def validate_profile(path: Path, expected_name: str, allow_bindings: bool) -> di
     for marker in ("Do not spawn another agent", "Never activate agency-chief-of-staff"):
         if marker not in instructions:
             fail(f"{path.name} missing bounded-worker marker: {marker}")
-    if re.search(r"^model(?:_reasoning_effort)?\s*=", path.read_text(encoding="utf-8"), re.MULTILINE):
-        fail(f"{path.name} must inherit the host model and reasoning configuration")
-    if "luna" in path.read_text(encoding="utf-8").lower():
-        fail(f"{path.name} must not select Luna")
+    if expected_route is None:
+        if present_route_fields:
+            fail(f"{path.name} must inherit the host model and reasoning configuration")
+    else:
+        expected_model, expected_reasoning = expected_route
+        if parsed["model"] != expected_model:
+            fail(f"{path.name} routed model mismatch")
+        if parsed["model_reasoning_effort"] != expected_reasoning:
+            fail(f"{path.name} routed reasoning mismatch")
+        if expected_reasoning not in REASONING_LEVELS:
+            fail(f"{path.name} routed reasoning is unsupported")
     skills = parsed["skills.config"]
     assert isinstance(skills, list)
     if skills and not allow_bindings:
@@ -158,8 +187,8 @@ def validate_profile(path: Path, expected_name: str, allow_bindings: bool) -> di
 
 def validate_routing(path: Path) -> dict[str, object]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("schema_version") != 3:
-        fail("agent-routing.json schema_version must be 3")
+    if data.get("schema_version") != 4:
+        fail("agent-routing.json schema_version must be 4")
     if data.get("role_model_policy") != "assets/role-model-policy.json":
         fail("agent-routing.json role-model policy reference mismatch")
     if set(data.get("self_skill_names", [])) != SELF_SKILL_NAMES:
@@ -174,22 +203,39 @@ def validate_routing(path: Path) -> dict[str, object]:
         if profile.get("domain_skill_policy") != "explicit-selected-only":
             fail(f"agent-routing.json domain skill policy mismatch: {name}")
         expected_execution = (
-            "main-or-isolated-worktree" if name == "developer" else "cli-profile-compat"
+            "main-or-isolated-worktree"
+            if name in {"developer", "writer"}
+            else "cli-profile-compat"
         )
         if profile.get("compat_execution") != expected_execution:
             fail(f"agent-routing.json compatibility execution mismatch: {name}")
     modes = data.get("execution_modes")
     if not isinstance(modes, dict) or set(modes) != {
+        "native-direct-route",
         "native-custom-agent",
         "cli-profile-compat",
         "main-or-isolated-worktree",
     }:
         fail("agent-routing.json execution mode set mismatch")
+    direct = modes["native-direct-route"]
+    if (
+        not isinstance(direct, dict)
+        or direct.get("status") != "capability-gated"
+        or direct.get("required_tool_namespace") != "agents"
+        or direct.get("required_spawn_fields")
+        != ["model", "reasoning_effort", "fork_turns"]
+        or direct.get("fork_turns") != "none"
+        or direct.get("catalog_adapter") != "scripts/inspect_codex_models.py"
+        or direct.get("receipt_verifier") != "scripts/verify_role_route_receipt.py"
+    ):
+        fail("native direct route execution contract mismatch")
     native = modes["native-custom-agent"]
-    if not isinstance(native, dict) or native.get("status") != "optional-enhancement":
-        fail("native custom-agent mode must remain an optional enhancement")
+    if not isinstance(native, dict) or native.get("status") != "capability-gated":
+        fail("native custom-agent mode must remain capability gated")
     if native.get("requires_named_profile_selection_readback") is not True:
         fail("native custom-agent mode must require named-profile readback")
+    if native.get("receipt_verifier") != "scripts/verify_role_route_receipt.py":
+        fail("native custom-agent mode receipt verifier mismatch")
     compat = modes["cli-profile-compat"]
     if (
         not isinstance(compat, dict)
@@ -211,7 +257,7 @@ def validate_routing(path: Path) -> dict[str, object]:
     if (
         not isinstance(write_path, dict)
         or write_path.get("status") != "write-path"
-        or write_path.get("profiles") != ["developer"]
+        or write_path.get("profiles") != ["developer", "writer"]
         or write_path.get("prompt_only_sandbox_claim") is not False
     ):
         fail("main-or-isolated-worktree execution contract mismatch")
@@ -251,7 +297,7 @@ def main() -> None:
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     result = validate_profile_set(args.root.resolve())
-    print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else "Agent profiles valid: 5 bounded profiles; project/template parity verified.")
+    print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else "Agent profiles valid: 7 bounded profiles; project/template parity verified.")
 
 
 if __name__ == "__main__":

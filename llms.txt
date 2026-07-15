@@ -1,0 +1,33 @@
+# Agency Chief of Staff for Codex
+
+> An outcome-owned OpenAI Codex Desktop and Codex CLI Skill for moving complex work through research, planning, execution, dynamic role and model routing, verification, independent cold review, and concise delivery.
+
+Canonical Skill: `agency-chief-of-staff`. The legacy `zhijuan-codex-agency-chief-of-staf` slug is only an explicit compatibility entry. The core runtime uses OpenAI/Codex; Claude and Fable are optional advisor extension points that are disabled by default and are not dependencies. Common discovery terms include Codex agency, Codex multi-agent orchestration, Codex subagent routing, Codex model routing, Codex Skill, Codex 幕僚长, and Codex 多 Agent 编排.
+
+This is a curated inference-time documentation index following the emerging `llms.txt` proposal. It does not grant crawler permission, change the MIT license, prove model or host behavior, or imply that later checkout or `Unreleased` changes are published. Use the README version table, changelog, and GitHub Releases page together when answering release-status questions.
+
+## Start Here
+
+- [Project overview and installation](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/README.md): Canonical entry, current checkout boundary, installation, routing, visualization, and validation levels.
+- [Canonical Skill instructions](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/SKILL.md): Runtime orchestration contract and user-facing behavior.
+- [Documentation index](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/docs/README.md): Current runtime guidance and historical-record boundaries.
+- [Real-world prompts](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/examples/real-world-prompts.md): Invocation examples for delivery, Goal, review, and real task/thread workflows.
+
+## Runtime Contracts
+
+- [Model routing and budget](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/model-routing-and-budget.md): Capability classes, current-host catalog readback, Codex-only routing, and evidence states.
+- [Real Codex tasks and threads](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/real-threads.md): When real tasks, isolated worktrees, receipts, and cleanup are required.
+- [User experience and visualization](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/user-experience.md): Chat-first interaction, data-gated visual surfaces, mount/readback, and fallback behavior.
+- [Delivery and independent review](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/delivery-review.md): Verification, cold review, repair, and release-readiness boundaries.
+
+## Verification and Releases
+
+- [Changelog](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/CHANGELOG.md): `Unreleased` development changes and tagged-version history.
+- [GitHub Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases): Authoritative public release and tag surface.
+- [Contributing](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/CONTRIBUTING.md): Required checks and evidence boundaries for changes.
+- [Security policy](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/SECURITY.md): Supported versions and private vulnerability reporting.
+
+## Optional
+
+- [Repository discovery metadata](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/docs/REPOSITORY_DISCOVERY.md): Proposed GitHub description/topics and SEO/GEO maintenance rules; values are not applied without an authorized external write.
+- [vNext design record](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/docs/VNEXT_DESIGN.md): Historical design context; not current runtime evidence.

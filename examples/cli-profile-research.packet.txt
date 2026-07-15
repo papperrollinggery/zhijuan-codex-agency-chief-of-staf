@@ -1,0 +1,7 @@
+AGENCY_WORKER: true
+委派目标：以 codebase-researcher 身份独立核对 README 一览表中的 canonical Skill 与 exact-model 运行时边界，并在读回中逐字引用该表格字段及其值。
+读取范围：README.md；git diff -- README.md；git diff --check。
+写入范围：无。
+期望产物：RESEARCH_READBACK、RESEARCH_STATUS，均填实际读回值。
+验证要求：直接读取当前 artifact 与相关 diff；不得使用主线程提供的值，不得推断未读内容。
+停止条件：返回唯一终态；不启动、不派发。

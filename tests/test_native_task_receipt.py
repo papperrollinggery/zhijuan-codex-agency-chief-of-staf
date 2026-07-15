@@ -13,11 +13,70 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "verify_native_task_receipt.py"
 sys.path.insert(0, str(ROOT / "scripts"))
 import install_skill  # noqa: E402
+from verify_native_task_receipt import (  # noqa: E402
+    git_state,
+    read_regular_bytes,
+    require_unchanged_snapshot,
+    write_new_private_file,
+)
 
 
 class NativeTaskReceiptTests(unittest.TestCase):
     parent_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
     reviewer_id = "019f57ba-4b5d-76a2-bfe9-93cc7f0403c7"
+
+    def test_git_state_does_not_execute_local_fsmonitor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Receipt Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(root),
+                    "config",
+                    "user.email",
+                    "receipt@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = root / "artifact.txt"
+            artifact.write_text("before\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "artifact.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "base"], check=True
+            )
+            sentinel = root / "fsmonitor-ran"
+            helper = root / "fsmonitor.sh"
+            helper.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\nprintf '0\\n'\n", encoding="utf-8"
+            )
+            helper.chmod(0o700)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "core.fsmonitor", str(helper)],
+                check=True,
+            )
+            artifact.write_text("after\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "status", "--porcelain=v1"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue(sentinel.exists())
+            sentinel.unlink()
+            observed = git_state(root)
+            self.assertFalse(sentinel.exists())
+            self.assertFalse(observed["clean"])
+            self.assertTrue(observed["fsmonitor_disabled"])
+            self.assertTrue(observed["lazy_fetch_disabled"])
 
     def write_rollout(
         self,
@@ -41,7 +100,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
             },
             {
                 "type": "turn_context",
-                "payload": {"model": "gpt-5.6-sol", "effort": "max"},
+                "payload": {
+                    "turn_id": "turn-1",
+                    "model": "gpt-5.6-sol",
+                    "effort": "max",
+                },
             },
             {
                 "type": "response_item",
@@ -50,10 +113,11 @@ class NativeTaskReceiptTests(unittest.TestCase):
                     "name": "exec",
                     "status": "completed",
                     "call_id": "call-read",
-                    "input": (
-                        f"sed -n '1,20p' {artifact}"
-                        if artifact
-                        else "sed -n '1,20p' README.md"
+                    "input": json.dumps(
+                        {
+                            "cmd": "cat -- README.md",
+                            "workdir": str(path.parent),
+                        }
                     ),
                 },
             },
@@ -137,7 +201,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
             artifact=artifact,
         )
 
-        database_path = base / "state.sqlite"
+        database_path = base / "state_5.sqlite"
         database = sqlite3.connect(database_path)
         database.execute(
             """
@@ -220,13 +284,17 @@ class NativeTaskReceiptTests(unittest.TestCase):
         installed_root: Path,
         model: str = "gpt-5.6-sol",
         script: Path = SCRIPT,
+        out: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        output_args = ["--out", str(out)] if out is not None else []
         return subprocess.run(
             [
                 "python3",
                 str(script),
                 "--state-db",
                 str(database),
+                "--codex-home",
+                str(database.parent),
                 "--source-root",
                 str(database.parent / "source"),
                 "--installed-root",
@@ -249,11 +317,50 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 str(database.parent / "README.md"),
                 "--require-archived",
                 "--require-clean-source",
+                *output_args,
             ],
             text=True,
             capture_output=True,
             check=False,
         )
+
+    def test_receipt_output_is_new_private_and_never_follows_existing_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            direct = base / "direct.json"
+            written = write_new_private_file(direct, b"verified\n")
+            self.assertEqual(written, direct)
+            self.assertEqual(direct.read_bytes(), b"verified\n")
+            self.assertEqual(direct.stat().st_mode & 0o777, 0o600)
+            with self.assertRaisesRegex(ValueError, "refusing overwrite"):
+                write_new_private_file(direct, b"clobber\n")
+
+            external = base / "external.txt"
+            external.write_text("DO-NOT-CLOBBER\n", encoding="utf-8")
+            hardlink = base / "hardlink.json"
+            hardlink.hardlink_to(external)
+            with self.assertRaisesRegex(ValueError, "refusing overwrite"):
+                write_new_private_file(hardlink, b"clobber\n")
+            self.assertEqual(external.read_text(encoding="utf-8"), "DO-NOT-CLOBBER\n")
+
+            symlink = base / "symlink.json"
+            symlink.symlink_to(external)
+            with self.assertRaisesRegex(ValueError, "refusing overwrite"):
+                write_new_private_file(symlink, b"clobber\n")
+            self.assertEqual(external.read_text(encoding="utf-8"), "DO-NOT-CLOBBER\n")
+
+    def test_verifier_out_refuses_existing_hardlink_without_clobbering(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            database, installed_root = self.make_fixture(base)
+            external = base / "external.txt"
+            external.write_text("DO-NOT-CLOBBER\n", encoding="utf-8")
+            output = base / "receipt.json"
+            output.hardlink_to(external)
+            result = self.run_verifier(database, installed_root, out=output)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("refusing overwrite", result.stderr)
+            self.assertEqual(external.read_text(encoding="utf-8"), "DO-NOT-CLOBBER\n")
 
     def test_verifies_bound_native_parent_and_reviewer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -269,11 +376,98 @@ class NativeTaskReceiptTests(unittest.TestCase):
             )
             self.assertEqual(payload["reviewer_tool_read"]["paired_exec_outputs"], 1)
             self.assertEqual(payload["reviewer_identity"]["agent_role"], "reviewer")
+            self.assertTrue(payload["canonical_state_store_bound"])
+            self.assertTrue(payload["state_identity_guarded"])
+            self.assertTrue(payload["state_wal_aware"])
             self.assertFalse(payload["historical_writes_verified"])
             self.assertEqual(payload["agents_md_state"], "unverified")
             self.assertIn("current_source_observation", payload)
             self.assertNotIn("source", payload)
             self.assertNotIn("agents_md_routing_dependency", payload)
+
+    def test_completion_turn_must_bind_expected_model_and_effort(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            connection = sqlite3.connect(database)
+            rollout_path = Path(
+                connection.execute(
+                    "SELECT rollout_path FROM threads WHERE id = ?", (self.parent_id,)
+                ).fetchone()[0]
+            )
+            connection.close()
+            records = [json.loads(line) for line in rollout_path.read_text().splitlines()]
+            for record in records:
+                if record.get("type") == "turn_context":
+                    record["payload"]["turn_id"] = "earlier-turn"
+            records.insert(
+                2,
+                {
+                    "type": "turn_context",
+                    "payload": {
+                        "turn_id": "turn-1",
+                        "model": "switched-model",
+                        "effort": "low",
+                    },
+                },
+            )
+            rollout_path.write_text(
+                "\n".join(json.dumps(record) for record in records) + "\n",
+                encoding="utf-8",
+            )
+            result = self.run_verifier(database, installed_root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("completion turn model identity mismatch", result.stderr)
+
+    def test_state_database_must_be_canonical_and_not_arbitrary_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            database, installed_root = self.make_fixture(base)
+            arbitrary = base / "arbitrary.sqlite"
+            arbitrary.write_bytes(database.read_bytes())
+            arbitrary_result = self.run_verifier(arbitrary, installed_root)
+            self.assertNotEqual(arbitrary_result.returncode, 0)
+            self.assertIn("codexHome/state_5.sqlite", arbitrary_result.stderr)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            database, installed_root = self.make_fixture(base)
+            real = base / "real-state.sqlite"
+            database.rename(real)
+            allowed = base / "sqlite" / "state_5.sqlite"
+            allowed.parent.mkdir()
+            allowed.write_bytes(real.read_bytes())
+            database.symlink_to(real)
+            symlink_result = self.run_verifier(database, installed_root)
+            self.assertNotEqual(symlink_result.returncode, 0)
+            self.assertIn("symlink target is invalid", symlink_result.stderr)
+
+    def test_secure_snapshot_detects_same_path_content_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact = Path(tmp) / "artifact.txt"
+            artifact.write_text("first\n", encoding="utf-8")
+            _data, snapshot = read_regular_bytes(artifact, "artifact")
+            artifact.write_text("second\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "changed during"):
+                require_unchanged_snapshot(artifact, "artifact", snapshot)
+
+    def test_canonical_state_reader_observes_uncheckpointed_wal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            database, installed_root = self.make_fixture(Path(tmp))
+            writer = sqlite3.connect(database)
+            try:
+                writer.execute("PRAGMA journal_mode=WAL")
+                writer.execute("PRAGMA wal_autocheckpoint=0")
+                writer.execute(
+                    "UPDATE threads SET source = ? WHERE id = ?",
+                    ("wal-visible", self.parent_id),
+                )
+                writer.commit()
+                self.assertTrue(Path(str(database) + "-wal").is_file())
+                result = self.run_verifier(database, installed_root)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["parent"]["source"], "wal-visible")
+            finally:
+                writer.close()
 
     def test_installed_bundles_include_and_run_native_receipt_verifier(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -309,7 +503,7 @@ class NativeTaskReceiptTests(unittest.TestCase):
                 if payload.get("type") == "custom_tool_call":
                     payload["input"] = json.dumps(
                         {
-                            "cmd": f"sed -n '1,20p' {database.parent / 'README.md'}",
+                            "cmd": "cat -- README.md",
                             "workdir": str(database.parent),
                         }
                     )
@@ -474,15 +668,15 @@ class NativeTaskReceiptTests(unittest.TestCase):
             self.assertNotEqual(weak_marker.returncode, 0)
             self.assertIn("at least 16 characters", weak_marker.stderr)
 
-    def test_rejects_wrong_model_and_luna(self) -> None:
+    def test_rejects_wrong_model_and_external_claude(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             database, installed_root = self.make_fixture(Path(tmp))
             wrong = self.run_verifier(database, installed_root, model="gpt-5.6-terra")
             self.assertNotEqual(wrong.returncode, 0)
             self.assertIn("model identity mismatch", wrong.stderr)
-            luna = self.run_verifier(database, installed_root, model="gpt-5.6-luna")
-            self.assertNotEqual(luna.returncode, 0)
-            self.assertIn("Luna is not allowed", luna.stderr)
+            external = self.run_verifier(database, installed_root, model="claude-fable-5")
+            self.assertNotEqual(external.returncode, 0)
+            self.assertIn("external Claude models are disabled", external.stderr)
 
     def test_rejects_duplicate_extra_and_prefixed_pass_reviewer_schema(self) -> None:
         invalid_finals = (

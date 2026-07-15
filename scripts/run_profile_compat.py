@@ -12,6 +12,7 @@ import signal
 import shlex
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any
 sys.dont_write_bytecode = True
 
 from validate_agent_profiles import PROFILE_NAMES, validate_profile
+from inspect_codex_models import canonical_state_connection, canonical_state_database
 from protocol_contract import (
     REVIEW_FIELDS as CONTRACT_REVIEW_FIELDS,
     WORKER_FIELDS as CONTRACT_WORKER_FIELDS,
@@ -37,8 +39,9 @@ READ_ONLY_PROFILES = {
     "technical-architect",
     "reviewer",
     "test-debugger",
+    "supervisor",
 }
-REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max"}
+REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
 PROCESS_ENV_ALLOWLIST = {
     "CODEX_HOME",
     "COLORTERM",
@@ -54,7 +57,25 @@ PROCESS_ENV_ALLOWLIST = {
     "USER",
 }
 TOOL_SHELL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+TOOL_SHELL_TMPDIR = "/tmp"
+GIT_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+GIT_TOOL_ENVIRONMENT = {
+    "GIT_ATTR_NOSYSTEM": "1",
+    "GIT_ATTR_SOURCE": GIT_EMPTY_TREE,
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "core.fsmonitor",
+    "GIT_CONFIG_VALUE_0": "false",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_NO_LAZY_FETCH": "1",
+    "GIT_NO_REPLACE_OBJECTS": "1",
+    "GIT_PAGER": "cat",
+    "PAGER": "cat",
+}
 GIT_DIFF_PROFILES = {"codebase-researcher", "reviewer"}
+RECEIPT_YIELD_TIME_MS = 10000
+RECEIPT_MAX_OUTPUT_TOKENS = 50000
 
 
 def fail(message: str) -> None:
@@ -65,8 +86,69 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def read_regular_bytes(path: Path, label: str) -> bytes:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} must be a non-symlink regular file: {path}") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            fail(f"{label} must be a single regular file: {path}")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            return handle.read()
+    finally:
+        os.close(descriptor)
+
+
+def regular_file_snapshot(path: Path, label: str) -> dict[str, object]:
+    """Capture content and inode identity through one no-follow descriptor."""
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} must be a non-symlink regular file: {path}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            fail(f"{label} must be a single regular file: {path}")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            data = handle.read()
+        after = os.fstat(descriptor)
+        if (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        ) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        ):
+            fail(f"{label} changed while it was read: {path}")
+        return {
+            "device": after.st_dev,
+            "inode": after.st_ino,
+            "mode": stat.S_IMODE(after.st_mode),
+            "size": after.st_size,
+            "mtime_ns": after.st_mtime_ns,
+            "ctime_ns": after.st_ctime_ns,
+            "sha256": sha256_bytes(data),
+        }
+    finally:
+        os.close(descriptor)
+
+
 def sha256(path: Path) -> str:
-    return sha256_bytes(path.read_bytes())
+    return sha256_bytes(read_regular_bytes(path, "hash input"))
 
 
 def file_hash_snapshot(paths: list[Path]) -> dict[str, str]:
@@ -84,21 +166,14 @@ def require_regular_file(path: Path, label: str) -> Path:
 
 
 def resolve_state_database(path: Path, codex_home: Path) -> Path:
-    home = codex_home.resolve()
     try:
-        resolved = path.resolve(strict=True)
+        return canonical_state_database(path, codex_home)
     except FileNotFoundError as exc:
         raise ValueError(f"state database does not exist: {path}") from exc
-    if not resolved.is_relative_to(home):
-        fail("state database must resolve inside CODEX_HOME")
-    if not resolved.is_file():
-        fail(f"state database target must be a regular file: {resolved}")
-    return resolved
 
 
 def read_packet(path: Path) -> str:
-    require_regular_file(path, "worker packet")
-    data = path.read_bytes()
+    data = read_regular_bytes(path, "worker packet")
     if len(data) > 64 * 1024:
         fail("worker packet exceeds 64 KiB")
     try:
@@ -117,8 +192,8 @@ def resolve_profile(root: Path, profile_name: str) -> tuple[Path, dict[str, obje
         fail(f"unknown profile: {profile_name}")
     if profile_name not in READ_ONLY_PROFILES:
         fail(
-            "cli-profile-compat only supports read-only profiles; developer work must "
-            "stay in the main outcome-owner session or an isolated worktree"
+            "cli-profile-compat only supports read-only profiles; developer and writer "
+            "work must stay in the main outcome-owner session or an isolated worktree"
         )
     if root.is_symlink() or not root.is_dir():
         fail(f"profile root must be a regular directory: {root}")
@@ -178,9 +253,28 @@ def build_command(
     model: str,
     reasoning_effort: str,
     profile: dict[str, object],
+    artifact: Path,
     git_workdir: Path | None,
     git_diff_target: str | None,
 ) -> list[str]:
+    def receipt_wrapper(command: str, workdir: Path) -> str:
+        arguments = json.dumps(
+            {
+                "cmd": command,
+                "workdir": str(workdir),
+                "yield_time_ms": RECEIPT_YIELD_TIME_MS,
+                "max_output_tokens": RECEIPT_MAX_OUTPUT_TOKENS,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        return (
+            " When exec_command is exposed through functions.exec, the entire "
+            "wrapper source must contain exactly these two statements and no others: "
+            f"const receipt = await tools.exec_command({arguments}); "
+            "text(JSON.stringify(receipt)); Do not print stdout and exit_code separately."
+        )
+
     developer_instructions = str(profile["developer_instructions"])
     if profile.get("name") == "reviewer":
         developer_instructions += (
@@ -192,14 +286,32 @@ def build_command(
             "REVIEW_TARGET to the project-relative required artifact and include every "
             "required current artifact fact in REVIEW_READBACK."
         )
+    try:
+        read_target = artifact.relative_to(cwd).as_posix()
+    except ValueError:
+        read_target = str(artifact)
+    exact_read_command = f"cat -- {shlex.quote(read_target)}"
+    developer_instructions += (
+        "\nArtifact receipt requirement: before the final response, make one "
+        "standalone exec_command call with cmd exactly "
+        f"{json.dumps(exact_read_command)} and workdir exactly "
+        f"{json.dumps(str(cwd))}. Do not chain, pipe, number, or truncate this "
+        "command. Continue only after the tool reports exit code 0."
+        + receipt_wrapper(exact_read_command, cwd)
+    )
     if git_workdir is not None and git_diff_target is not None:
-        exact_command = f"git diff -- {shlex.quote(git_diff_target)}"
+        exact_command = (
+            "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs "
+            "diff --no-ext-diff --no-textconv -- "
+            f"{shlex.quote(git_diff_target)} 2>/dev/null"
+        )
         developer_instructions += (
             "\nCompatibility receipt requirement: before the final response, make one "
             "standalone exec_command call with cmd exactly "
             f"{json.dumps(exact_command)} and workdir exactly "
             f"{json.dumps(str(git_workdir))}. Do not chain or pipe this command. "
             "Continue only after the tool reports exit code 0."
+            + receipt_wrapper(exact_command, git_workdir)
         )
     command = [
         str(executable),
@@ -232,9 +344,19 @@ def build_command(
         "-c",
         f"shell_environment_policy.set.PATH={json.dumps(TOOL_SHELL_PATH)}",
         "-c",
-        "developer_instructions="
-        + json.dumps(developer_instructions, ensure_ascii=False),
+        f"shell_environment_policy.set.TMPDIR={json.dumps(TOOL_SHELL_TMPDIR)}",
     ]
+    for key, value in GIT_TOOL_ENVIRONMENT.items():
+        command.extend(
+            ["-c", f"shell_environment_policy.set.{key}={json.dumps(value)}"]
+        )
+    command.extend(
+        [
+            "-c",
+            "developer_instructions="
+            + json.dumps(developer_instructions, ensure_ascii=False),
+        ]
+    )
     skills = toml_skills_config(profile["skills.config"])
     if skills is not None:
         command.extend(["-c", f"skills.config={skills}"])
@@ -308,16 +430,153 @@ def file_state(path: Path) -> str:
     return "FILE:" + sha256(path)
 
 
-def git_root(cwd: Path) -> Path:
-    result = subprocess.run(
-        ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
-        text=True,
-        capture_output=True,
+def hardened_git_environment() -> dict[str, str]:
+    """Return the complete, non-inheriting environment for receipt Git reads."""
+    return {
+        "PATH": TOOL_SHELL_PATH,
+        "TMPDIR": TOOL_SHELL_TMPDIR,
+        "LANG": "C",
+        "LC_ALL": "C",
+        **GIT_TOOL_ENVIRONMENT,
+    }
+
+
+def run_hardened_git(
+    root: Path,
+    arguments: list[str],
+    *,
+    input_bytes: bytes | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a Git read with executable config surfaces disabled or fail-closed."""
+    return subprocess.run(
+        [
+            "git",
+            "--no-lazy-fetch",
+            "-C",
+            str(root),
+            "-c",
+            "core.fsmonitor=false",
+            *arguments,
+        ],
+        input=input_bytes,
+        env=hardened_git_environment(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         check=False,
     )
+
+
+def hardened_git_observation(root: Path) -> dict[str, object]:
+    """Read HEAD/status without executing filters, fsmonitor, or lazy fetches."""
+    revision = run_hardened_git(root, ["rev-parse", "HEAD"])
+    paths = run_hardened_git(
+        root,
+        ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    )
+    if revision.returncode != 0 or paths.returncode != 0:
+        detail = (revision.stderr or paths.stderr).decode("utf-8", errors="replace").strip()
+        fail(f"hardened Git identity read failed: {detail or 'unknown Git error'}")
+    index_flags = run_hardened_git(
+        root,
+        ["ls-files", "-v", "-z", "--cached"],
+    )
+    if index_flags.returncode != 0:
+        detail = index_flags.stderr.decode("utf-8", errors="replace").strip()
+        fail(f"Git index-flag inventory failed: {detail or index_flags.returncode}")
+    index_records = [value for value in index_flags.stdout.split(b"\0") if value]
+    for record in index_records:
+        if len(record) < 3 or record[1:2] != b" ":
+            fail("Git index-flag inventory returned an invalid record")
+        if record[:1] != b"H":
+            path = os.fsdecode(record[2:])
+            fail(
+                "Git index flags can conceal worktree bytes; refusing "
+                f"{record[:1].decode('ascii', errors='replace')} {path}"
+            )
+    path_records = [value for value in paths.stdout.split(b"\0") if value]
+    if path_records:
+        attributes = run_hardened_git(
+            root,
+            ["check-attr", "-z", "--stdin", "filter"],
+            input_bytes=b"\0".join(path_records) + b"\0",
+        )
+        if attributes.returncode != 0:
+            detail = attributes.stderr.decode("utf-8", errors="replace").strip()
+            fail(f"Git filter inventory failed: {detail or attributes.returncode}")
+        fields = attributes.stdout.split(b"\0")
+        if not fields or fields[-1] != b"" or (len(fields) - 1) % 3:
+            fail("Git filter inventory returned an invalid record set")
+        for index in range(0, len(fields) - 1, 3):
+            value = fields[index + 2]
+            if value not in {b"unspecified", b"unset"}:
+                path = os.fsdecode(fields[index])
+                fail(f"Git state read refuses executable clean filter on {path}: {os.fsdecode(value)}")
+    status = run_hardened_git(
+        root,
+        [
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=all",
+        ],
+    )
+    if status.returncode != 0:
+        detail = status.stderr.decode("utf-8", errors="replace").strip()
+        fail(f"hardened Git status failed: {detail or status.returncode}")
+    try:
+        head = revision.stdout.decode("ascii").strip()
+    except UnicodeDecodeError as exc:
+        raise ValueError("Git HEAD was not ASCII") from exc
+    if not re.fullmatch(r"[0-9a-fA-F]{40,64}", head):
+        fail("Git HEAD did not resolve to an object id")
+    return {
+        "head": head,
+        "status_bytes": status.stdout,
+        "filter_paths_checked": len(path_records),
+        "index_flags_checked": len(index_records),
+        "index_flags_verified": True,
+        "fsmonitor_disabled": True,
+        "lazy_fetch_disabled": True,
+        "replace_objects_disabled": True,
+        "submodules_ignored": True,
+    }
+
+
+def git_root(cwd: Path) -> Path:
+    result = run_hardened_git(cwd, ["rev-parse", "--show-toplevel"])
     if result.returncode != 0 or not result.stdout.strip():
         fail("compat profile cwd must be inside a Git worktree")
-    return Path(result.stdout.strip()).resolve()
+    return Path(os.fsdecode(result.stdout.strip())).resolve()
+
+
+def git_filter_safety(project_root: Path, artifact: Path) -> dict[str, str]:
+    root = project_root.resolve()
+    try:
+        target = artifact.resolve().relative_to(root).as_posix()
+    except ValueError as exc:
+        raise ValueError("git safety artifact must stay inside the worktree") from exc
+    result = run_hardened_git(
+        root,
+        ["--literal-pathspecs", "check-attr", "-z", "filter", "--", target],
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", errors="replace").strip()
+        fail(f"git clean-filter preflight failed: {detail or result.returncode}")
+    fields = result.stdout.split(b"\0")
+    if len(fields) != 4 or fields[-1] != b"":
+        fail("git clean-filter preflight returned an invalid record")
+    if fields[0] != os.fsencode(target) or fields[1] != b"filter":
+        fail("git clean-filter preflight was not bound to the artifact")
+    value = fields[2].decode("utf-8", errors="strict")
+    if value not in {"unspecified", "unset"}:
+        fail(f"artifact has an executable Git clean filter: {value}")
+    return {
+        "artifact": target,
+        "filter_attribute": value,
+        "attribute_source": GIT_EMPTY_TREE,
+        "system_attributes_disabled": "true",
+        "system_and_global_config_disabled": "true",
+    }
 
 
 def agents_snapshot(cwd: Path, codex_home: Path) -> dict[str, str]:
@@ -331,17 +590,21 @@ def agents_snapshot(cwd: Path, codex_home: Path) -> dict[str, str]:
     return {str(path): file_state(path) for path in sorted(paths)}
 
 
-def rollout_records(path: Path) -> list[dict[str, Any]]:
-    require_regular_file(path, "rollout")
+def rollout_records(path: Path) -> tuple[list[dict[str, Any]], bytes]:
+    data = read_regular_bytes(path, "rollout")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("rollout must be UTF-8 JSONL") from exc
     records: list[dict[str, Any]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for number, line in enumerate(text.splitlines(), 1):
         try:
             value = json.loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid rollout JSON at line {number}") from exc
         if isinstance(value, dict):
             records.append(value)
-    return records
+    return records, data
 
 
 def string_content(value: Any) -> str:
@@ -354,15 +617,46 @@ def string_content(value: Any) -> str:
     return ""
 
 
-def command_candidates(call_input: str) -> list[tuple[str, Path | None]]:
+def structured_exec_candidate(
+    value: object,
+) -> tuple[str, Path, int | None, int | None] | None:
+    if not isinstance(value, dict) or set(value) - {
+        "cmd",
+        "workdir",
+        "yield_time_ms",
+        "max_output_tokens",
+    }:
+        return None
+    if set(value) < {"cmd", "workdir"}:
+        return None
+    if not isinstance(value.get("cmd"), str) or not isinstance(
+        value.get("workdir"), str
+    ):
+        return None
+    for key in ("yield_time_ms", "max_output_tokens"):
+        if key in value and (type(value[key]) is not int or value[key] < 0):
+            return None
+    workdir = Path(value["workdir"]).expanduser()
+    if not workdir.is_absolute():
+        return None
+    return (
+        value["cmd"],
+        workdir,
+        value.get("yield_time_ms"),
+        value.get("max_output_tokens"),
+    )
+
+
+def command_candidates(
+    call_input: str,
+) -> list[tuple[str, Path, int | None, int | None]]:
     try:
         parsed = json.loads(call_input)
     except json.JSONDecodeError:
         parsed = None
-    if isinstance(parsed, dict) and isinstance(parsed.get("cmd"), str):
-        raw_cwd = parsed.get("workdir")
-        cwd = Path(raw_cwd).expanduser().absolute() if isinstance(raw_cwd, str) else None
-        return [(parsed["cmd"], cwd)]
+    candidate = structured_exec_candidate(parsed)
+    if candidate is not None:
+        return [candidate]
 
     wrapper = re.fullmatch(
         r"\s*(?://\s*@exec:[^\r\n]*\r?\n)?"
@@ -373,19 +667,16 @@ def command_candidates(call_input: str) -> list[tuple[str, Path | None]]:
         re.DOTALL,
     )
     if wrapper is None:
-        if re.search(r"\b(?:tools|exec_command)\b", call_input):
-            return []
-        return [(call_input, None)]
+        return []
 
     raw_arguments = wrapper.group("arguments")
     try:
         arguments = json.loads(raw_arguments)
     except json.JSONDecodeError:
         arguments = None
-    if isinstance(arguments, dict) and isinstance(arguments.get("cmd"), str):
-        raw_cwd = arguments.get("workdir")
-        cwd = Path(raw_cwd).expanduser().absolute() if isinstance(raw_cwd, str) else None
-        return [(arguments["cmd"], cwd)]
+    candidate = structured_exec_candidate(arguments)
+    if candidate is not None:
+        return [candidate]
 
     string_literal = r'"(?:\\.|[^"\\])*"'
     object_pattern = re.compile(
@@ -402,7 +693,8 @@ def command_candidates(call_input: str) -> list[tuple[str, Path | None]]:
         raw_cwd = json.loads(match.group("workdir"))
     except json.JSONDecodeError:
         return []
-    return [(command, Path(raw_cwd).expanduser().absolute())]
+    candidate = structured_exec_candidate({"cmd": command, "workdir": raw_cwd})
+    return [candidate] if candidate is not None else []
 
 
 def has_unquoted_shell_control(command: str) -> bool:
@@ -431,54 +723,22 @@ def has_unquoted_shell_control(command: str) -> bool:
     return single or double or escaped
 
 
-def command_reads_artifact(call_input: str, artifact: Path) -> bool:
+def command_reads_artifact(
+    call_input: str, artifact: Path, expected_workdir: Path
+) -> bool:
     candidates = command_candidates(call_input)
     if len(candidates) != 1:
         return False
-    command, cwd = candidates[0]
-    if has_unquoted_shell_control(command):
+    command, cwd, _yield_time_ms, _max_output_tokens = candidates[0]
+    workdir = expected_workdir.resolve()
+    if cwd is None or cwd.resolve() != workdir:
         return False
     try:
-        argv = shlex.split(command)
+        read_target = artifact.resolve().relative_to(workdir).as_posix()
     except ValueError:
-        return False
-    allowed_executables = {
-        "cat": "cat",
-        "/bin/cat": "cat",
-        "head": "head",
-        "/usr/bin/head": "head",
-        "sed": "sed",
-        "/usr/bin/sed": "sed",
-        "tail": "tail",
-        "/usr/bin/tail": "tail",
-    }
-    reader = allowed_executables.get(argv[0]) if argv else None
-    if reader is None:
-        return False
-
-    if reader == "cat":
-        path_arguments = argv[2:] if len(argv) == 3 and argv[1] == "--" else argv[1:]
-    elif reader == "sed":
-        if len(argv) != 4 or argv[1] != "-n" or re.fullmatch(r"\d+(?:,\d+)?p", argv[2]) is None:
-            return False
-        path_arguments = argv[3:]
-    else:
-        if len(argv) != 4 or argv[1] != "-n" or not argv[2].isdigit():
-            return False
-        path_arguments = argv[3:]
-    if len(path_arguments) != 1:
-        return False
-
-    artifact = artifact.resolve()
-    candidate = Path(path_arguments[0]).expanduser()
-    if not candidate.is_absolute():
-        if cwd is None:
-            return False
-        candidate = cwd / candidate
-    try:
-        return candidate.resolve(strict=True) == artifact
-    except (FileNotFoundError, OSError):
-        return False
+        read_target = str(artifact.resolve())
+    expected = f"cat -- {shlex.quote(read_target)}"
+    return command == expected
 
 
 def exec_pairs_before_completion(
@@ -528,26 +788,23 @@ def command_reads_git_diff(
     candidates = command_candidates(call_input)
     if len(candidates) != 1:
         return False
-    for command, workdir in candidates:
-        if workdir is None or has_unquoted_shell_control(command):
-            continue
-        try:
-            argv = shlex.split(command)
-        except ValueError:
-            continue
-        if (
-            len(argv) != 4
-            or argv[0] != "git"
-            or argv[1:3] != ["diff", "--"]
-            or workdir.resolve() != project_root
-        ):
-            continue
-        target = Path(argv[3]).expanduser()
-        if not target.is_absolute():
-            target = workdir / target
-        if target.resolve() == artifact:
-            return True
-    return False
+    command, workdir, yield_time_ms, max_output_tokens = candidates[0]
+    project_root = project_root.resolve()
+    if (
+        workdir.resolve() != project_root
+        or yield_time_ms != RECEIPT_YIELD_TIME_MS
+        or max_output_tokens != RECEIPT_MAX_OUTPUT_TOKENS
+    ):
+        return False
+    try:
+        target = artifact.resolve().relative_to(project_root).as_posix()
+    except ValueError:
+        return False
+    return command == (
+        "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs "
+        "diff --no-ext-diff --no-textconv -- "
+        f"{shlex.quote(target)} 2>/dev/null"
+    )
 
 
 def structured_tool_result(raw_output: object) -> dict[str, object] | None:
@@ -584,35 +841,93 @@ def output_proves_exit_zero(raw_output: object) -> bool:
 
 
 def verify_git_diff_read(
-    records: list[dict[str, Any]], project_root: Path, artifact: Path
+    records: list[dict[str, Any]],
+    project_root: Path,
+    artifact: Path,
+    filter_safety: dict[str, str],
 ) -> dict[str, object]:
+    project_root = project_root.resolve()
+    artifact = artifact.resolve()
+    try:
+        target = artifact.relative_to(project_root).as_posix()
+    except ValueError as exc:
+        raise ValueError("git diff artifact must stay inside the project root") from exc
+    target_before = regular_file_snapshot(artifact, "git diff artifact")
+    source_before = hardened_git_observation(project_root)
+    expected = run_hardened_git(
+        project_root,
+        [
+            "--literal-pathspecs",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--",
+            target,
+        ],
+    )
+    if expected.returncode != 0:
+        detail = expected.stderr.decode("utf-8", errors="replace").strip()
+        fail(f"hardened Git diff read failed: {detail or expected.returncode}")
+    try:
+        expected_output = expected.stdout.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("hardened Git diff output must be UTF-8") from exc
+    target_after = regular_file_snapshot(artifact, "git diff artifact")
+    source_after = hardened_git_observation(project_root)
+    if target_before != target_after:
+        fail("git diff artifact changed during receipt verification")
+    if source_before != source_after:
+        fail("Git source state changed during receipt verification")
+
     pairs = exec_pairs_before_completion(records)
-    matched = [
-        call_id
-        for call_id, (call_input, _output, raw_output) in pairs.items()
-        if command_reads_git_diff(call_input, project_root, artifact)
-        and output_proves_exit_zero(raw_output)
-    ]
+    matched: list[str] = []
+    for call_id, (call_input, _output, raw_output) in pairs.items():
+        if not command_reads_git_diff(call_input, project_root, artifact):
+            continue
+        result = structured_tool_result(raw_output)
+        if (
+            result is not None
+            and result["exit_code"] == 0
+            and result["output"] == expected_output
+        ):
+            matched.append(call_id)
     if not matched:
-        fail("no successful standalone git diff/output pair proves current diff access")
+        fail(
+            "no complete standalone git diff/output pair matches the hardened host read"
+        )
     return {
         "required": True,
         "project_root": str(project_root),
         "artifact": str(artifact),
         "bound_read_calls": len(matched),
         "bound_output_sha256": [
-            sha256_bytes(pairs[call_id][1].encode("utf-8")) for call_id in matched
+            sha256_bytes(
+                str(structured_tool_result(pairs[call_id][2])["output"]).encode("utf-8")
+            )
+            for call_id in matched
         ],
+        "expected_output_sha256": sha256_bytes(expected.stdout),
+        "exact_output_match": True,
+        "required_yield_time_ms": RECEIPT_YIELD_TIME_MS,
+        "required_max_output_tokens": RECEIPT_MAX_OUTPUT_TOKENS,
+        "target_snapshot": target_before,
+        "source_head": source_before["head"],
+        "source_status_sha256": sha256_bytes(source_before["status_bytes"]),
+        "source_state_unchanged": True,
         "exit_code_zero": True,
+        "clean_filter_safety": filter_safety,
     }
 
 
 def verify_direct_read(
-    records: list[dict[str, Any]], artifact: Path, markers: list[str]
+    records: list[dict[str, Any]],
+    artifact: Path,
+    markers: list[str],
+    expected_workdir: Path,
 ) -> dict[str, object]:
     require_regular_file(artifact, "required read artifact")
     pairs = exec_pairs_before_completion(records)
-    artifact_bytes = artifact.read_bytes()
+    artifact_bytes = read_regular_bytes(artifact, "required read artifact")
     artifact_hash = sha256_bytes(artifact_bytes)
     try:
         artifact_text = artifact_bytes.decode("utf-8")
@@ -628,7 +943,7 @@ def verify_direct_read(
     matched = [
         call_id
         for call_id, (call_input, output, _raw_output) in pairs.items()
-        if command_reads_artifact(call_input, artifact)
+        if command_reads_artifact(call_input, artifact, expected_workdir)
         and all(marker in output for marker in markers)
         and output_proves_exit_zero(_raw_output)
         and (
@@ -651,17 +966,29 @@ def verify_direct_read(
     }
 
 
-def completed_message(records: list[dict[str, Any]]) -> str:
-    messages = [
-        record["payload"].get("last_agent_message")
+def completion_payload(records: list[dict[str, Any]]) -> dict[str, Any]:
+    completions = [
+        record["payload"]
         for record in records
         if record.get("type") == "event_msg"
         and isinstance(record.get("payload"), dict)
         and record["payload"].get("type") == "task_complete"
     ]
-    if len(messages) != 1 or not isinstance(messages[0], str) or not messages[0].strip():
+    if len(completions) != 1:
         fail("rollout task completion message is not unique")
-    return messages[0]
+    completion = completions[0]
+    if (
+        not isinstance(completion.get("turn_id"), str)
+        or not completion["turn_id"]
+        or not isinstance(completion.get("last_agent_message"), str)
+        or not completion["last_agent_message"].strip()
+    ):
+        fail("rollout task completion lacks a bound turn or non-empty message")
+    return completion
+
+
+def completed_message(records: list[dict[str, Any]]) -> str:
+    return str(completion_payload(records)["last_agent_message"])
 
 
 def verify_reviewer_schema(
@@ -683,13 +1010,14 @@ def verify_reviewer_schema(
     return {key.lower(): value for key, value in parsed.items()}
 
 
-def thread_row(database_path: Path, thread_id: str) -> dict[str, Any]:
-    connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
-    connection.row_factory = sqlite3.Row
-    try:
+def thread_row(
+    database_path: Path, thread_id: str, codex_home: Path
+) -> dict[str, Any]:
+    with canonical_state_connection(
+        database_path, codex_home
+    ) as (connection, _state_identity):
+        connection.row_factory = sqlite3.Row
         row = connection.execute("SELECT * FROM threads WHERE id = ?", (thread_id,)).fetchone()
-    finally:
-        connection.close()
     if row is None:
         fail(f"compat thread is missing from state database: {thread_id}")
     return dict(row)
@@ -719,7 +1047,7 @@ def verify_read_only_sandbox(raw_policy: object) -> dict[str, object]:
 
 def verify_rollout_identity(
     records: list[dict[str, Any]], thread_id: str, model: str, effort: str
-) -> None:
+) -> str:
     metas = [
         record.get("payload", {})
         for record in records
@@ -729,16 +1057,21 @@ def verify_rollout_identity(
     ]
     if len(metas) != 1 or metas[0].get("model_provider") != "openai":
         fail("rollout session identity is not uniquely bound to OpenAI")
+    completion = completion_payload(records)
     contexts = [
         record.get("payload", {})
         for record in records
         if record.get("type") == "turn_context"
         and isinstance(record.get("payload"), dict)
-        and record["payload"].get("model") == model
-        and record["payload"].get("effort") == effort
+        and record["payload"].get("turn_id") == completion["turn_id"]
     ]
-    if not contexts:
-        fail("rollout does not bind the requested model and reasoning effort")
+    if len(contexts) != 1:
+        fail("rollout completion turn does not have exactly one turn context")
+    if contexts[0].get("model") != model or contexts[0].get("effort") != effort:
+        fail(
+            "rollout completion turn does not bind the requested model and reasoning effort"
+        )
+    return str(completion["last_agent_message"])
 
 
 def archive_thread(executable: Path, thread_id: str, env: dict[str, str]) -> None:
@@ -766,14 +1099,37 @@ def stop_process_group(
         except ProcessLookupError:
             pass
     try:
-        return process.communicate(timeout=grace_seconds)
+        output = process.communicate(timeout=grace_seconds)
     except subprocess.TimeoutExpired:
-        if process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        return process.communicate()
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        output = process.communicate()
+    finally:
+        kill_remaining_process_group(process.pid)
+    return output
+
+
+def kill_remaining_process_group(process_group_id: int) -> None:
+    """Kill processes still in the original group or fail if cleanup is observable."""
+    try:
+        os.killpg(process_group_id, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError as exc:
+        try:
+            os.killpg(process_group_id, 0)
+        except ProcessLookupError:
+            # The group disappeared between kill and verification.
+            return
+        except PermissionError as probe_exc:
+            raise ValueError(
+                "process-group cleanup could not be verified after permission denial"
+            ) from probe_exc
+        raise ValueError(
+            "process-group cleanup was denied while the group still existed"
+        ) from exc
 
 
 def run_codex(
@@ -795,6 +1151,7 @@ def run_codex(
     )
     try:
         stdout, stderr = process.communicate(packet, timeout=timeout_seconds)
+        kill_remaining_process_group(process.pid)
         return subprocess.CompletedProcess(command, process.returncode, stdout, stderr), False
     except subprocess.TimeoutExpired:
         stdout, stderr = stop_process_group(process)
@@ -823,8 +1180,10 @@ def main() -> None:
     parser.add_argument("--timeout-seconds", type=int, default=300)
     args = parser.parse_args()
 
-    if not MODEL_RE.fullmatch(args.model) or "luna" in args.model.lower():
-        fail("model must be an explicit non-Luna model slug")
+    if not MODEL_RE.fullmatch(args.model):
+        fail("model must be an explicit model slug")
+    if args.model.lower().startswith("claude-"):
+        fail("external Claude models are disabled in the core Codex route")
     if not args.required_read_marker:
         fail("at least one --required-read-marker is required")
     if not args.required_final_marker:
@@ -875,7 +1234,7 @@ def main() -> None:
     )
     if not state_db.is_absolute():
         fail("--state-db must be absolute")
-    state_db = resolve_state_database(state_db, codex_home)
+    resolve_state_database(state_db, codex_home)
 
     runner_path = Path(__file__).resolve()
     bound_skill_paths = [
@@ -897,6 +1256,11 @@ def main() -> None:
             raise ValueError(
                 "reviewer and codebase-researcher artifacts must be inside the Git worktree"
             ) from exc
+    git_filter_before = (
+        git_filter_safety(project_root, artifact)
+        if args.profile in GIT_DIFF_PROFILES
+        else None
+    )
     before_agents = agents_snapshot(cwd, codex_home)
     command = build_command(
         executable=executable,
@@ -904,6 +1268,7 @@ def main() -> None:
         model=args.model,
         reasoning_effort=args.reasoning_effort,
         profile=profile,
+        artifact=artifact,
         git_workdir=project_root if git_diff_target is not None else None,
         git_diff_target=git_diff_target,
     )
@@ -925,13 +1290,20 @@ def main() -> None:
     immutable_after = file_hash_snapshot(immutable_paths)
     if immutable_before != immutable_after:
         fail("immutable execution input changed during compat execution")
+    git_filter_after = (
+        git_filter_safety(project_root, artifact)
+        if args.profile in GIT_DIFF_PROFILES
+        else None
+    )
+    if git_filter_before != git_filter_after:
+        fail("Git clean-filter safety changed during compat execution")
     if timed_out:
-        if thread_id is not None and thread_row(state_db, thread_id).get("archived") != 1:
+        if thread_id is not None and thread_row(state_db, thread_id, codex_home).get("archived") != 1:
             fail(f"timed-out compat thread cleanup is incomplete: {thread_id}")
         suffix = f"; archived thread: {thread_id}" if thread_id is not None else ""
         fail(f"codex exec exceeded the {args.timeout_seconds}-second limit{suffix}")
     if result.returncode != 0:
-        if thread_id is not None and thread_row(state_db, thread_id).get("archived") != 1:
+        if thread_id is not None and thread_row(state_db, thread_id, codex_home).get("archived") != 1:
             fail(f"failed compat thread cleanup is incomplete: {thread_id}")
         suffix = f"; archived thread: {thread_id}" if thread_id is not None else ""
         fail(f"codex exec failed with exit code {result.returncode}{suffix}")
@@ -940,7 +1312,7 @@ def main() -> None:
         fail("codex exec thread identity changed during event parsing")
     assert thread_id is not None
 
-    row = thread_row(state_db, thread_id)
+    row = thread_row(state_db, thread_id, codex_home)
     required_columns = {
         "rollout_path",
         "model_provider",
@@ -973,17 +1345,22 @@ def main() -> None:
         fail("cli-profile-compat must not masquerade as a native custom-agent role")
 
     rollout = Path(str(row["rollout_path"])).expanduser()
-    records = rollout_records(rollout)
-    verify_rollout_identity(records, thread_id, args.model, args.reasoning_effort)
-    final_message = completed_message(records)
+    records, rollout_bytes = rollout_records(rollout)
+    final_message = verify_rollout_identity(
+        records, thread_id, args.model, args.reasoning_effort
+    )
     if final_message != stdout_final:
         fail("stdout final does not match the persisted task completion")
     for marker in args.required_final_marker:
         if marker not in final_message:
             fail("persisted final is missing a required marker")
-    read_receipt = verify_direct_read(records, artifact, args.required_read_marker)
+    read_receipt = verify_direct_read(
+        records, artifact, args.required_read_marker, cwd
+    )
     git_diff_receipt = (
-        verify_git_diff_read(records, project_root, artifact)
+        verify_git_diff_read(
+            records, project_root, artifact, git_filter_before or {}
+        )
         if args.profile in GIT_DIFF_PROFILES
         else None
     )
@@ -1023,6 +1400,8 @@ def main() -> None:
         "subagent_recursion_disabled": True,
         "shell_dispatch": False,
         "tool_shell_path": TOOL_SHELL_PATH,
+        "tool_shell_tmpdir": TOOL_SHELL_TMPDIR,
+        "tool_shell_git_environment": GIT_TOOL_ENVIRONMENT,
         "timeout_seconds": args.timeout_seconds,
         "process_environment_keys": sorted(env),
         "secret_like_process_environment_forwarded": False,
@@ -1036,7 +1415,7 @@ def main() -> None:
             "source": row["source"],
             "archived": True,
             "sandbox_policy": sandbox_policy,
-            "rollout_sha256": sha256(rollout),
+            "rollout_sha256": sha256_bytes(rollout_bytes),
             "final_sha256": sha256_bytes(final_message.encode("utf-8")),
         },
         "artifact_read": read_receipt,

@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
+import shutil
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -22,6 +26,21 @@ class ProfileCompatibilityTests(unittest.TestCase):
     thread_id = "019f5d00-1111-7222-8333-444455556666"
     marker = "COMPAT_HIDDEN_FACT_Z9K4"
 
+    def test_process_group_permission_race_is_verified_or_fails_closed(self) -> None:
+        with mock.patch.object(
+            run_profile_compat.os,
+            "killpg",
+            side_effect=[PermissionError(), ProcessLookupError()],
+        ):
+            run_profile_compat.kill_remaining_process_group(12345)
+        with mock.patch.object(
+            run_profile_compat.os,
+            "killpg",
+            side_effect=[PermissionError(), None],
+        ):
+            with self.assertRaisesRegex(ValueError, "still existed"):
+                run_profile_compat.kill_remaining_process_group(12345)
+
     def make_fixture(self, base: Path) -> dict[str, Path]:
         project = base / "project"
         project.mkdir()
@@ -30,6 +49,37 @@ class ProfileCompatibilityTests(unittest.TestCase):
         agents.write_text("PROJECT SENTINEL\n", encoding="utf-8")
         artifact = project / "artifact.txt"
         artifact.write_text(f"current artifact {self.marker}\n", encoding="utf-8")
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(project),
+                "-c",
+                "core.hooksPath=/dev/null",
+                "add",
+                "--",
+                "AGENTS.md",
+                "artifact.txt",
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(project),
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "user.name=Profile Compatibility Test",
+                "-c",
+                "user.email=profile-compat@example.invalid",
+                "commit",
+                "-qm",
+                "fixture baseline",
+            ],
+            check=True,
+        )
         packet = base / "packet.txt"
         packet.write_text(
             "AGENCY_WORKER: true\n"
@@ -74,6 +124,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
         mutate_input = base / "mutate-input"
         slow = base / "slow-run"
         git_failure = base / "git-failure"
+        truncate_git = base / "truncate-git"
         env_log = base / "env.json"
         final = (
             "REVIEW_TARGET: artifact.txt\n"
@@ -117,6 +168,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 mutate_input = Path({str(mutate_input)!r})
                 slow = Path({str(slow)!r})
                 git_failure = Path({str(git_failure)!r})
+                truncate_git = Path({str(truncate_git)!r})
                 env_log = Path({str(env_log)!r})
                 if args[0] == "archive":
                     connection = sqlite3.connect(database)
@@ -138,8 +190,13 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 if mutate.exists():
                     (cwd / "AGENTS.md").write_text("MUTATED\\n", encoding="utf-8")
                 final = {final!r}
-                read_command = "sed -n '1,80p' " + shlex.quote(str(artifact))
-                git_command = "git diff -- " + shlex.quote(str(artifact.relative_to(cwd)))
+                read_command = "cat -- " + shlex.quote(str(artifact.relative_to(cwd)))
+                git_command = (
+                    "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs "
+                    "diff --no-ext-diff --no-textconv -- "
+                    + shlex.quote(str(artifact.relative_to(cwd)))
+                    + " 2>/dev/null"
+                )
                 read_output = [
                     {{"type": "input_text", "text": "Script completed\\nOutput:\\n"}},
                     {{"type": "input_text", "text": json.dumps({{
@@ -153,16 +210,21 @@ class ProfileCompatibilityTests(unittest.TestCase):
                     {{"type": "input_text", "text": json.dumps({{
                         "exit_code": 127 if git_failure.exists() else 0,
                         "output": ('{{\"exit_code\":0}} command not found: git'
-                                   if git_failure.exists() else "diff inspected"),
+                                   if git_failure.exists() else ""),
                         "wall_time_seconds": 0.01,
                     }})}},
                 ]
                 records = [
                     {{"type": "session_meta", "payload": {{"id": THREAD_ID, "model_provider": "openai"}}}},
-                    {{"type": "turn_context", "payload": {{"model": model, "effort": effort}}}},
-                    {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "read-1", "input": read_command}}}},
+                    {{"type": "turn_context", "payload": {{"turn_id": "turn-1", "model": model, "effort": effort}}}},
+                    {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "read-1", "input": json.dumps({{"cmd": read_command, "workdir": str(cwd)}})}}}},
                     {{"type": "response_item", "payload": {{"type": "custom_tool_call_output", "call_id": "read-1", "output": read_output}}}},
-                    {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "git-1", "input": json.dumps({{"cmd": git_command, "workdir": str(cwd)}})}}}},
+                    {{"type": "response_item", "payload": {{"type": "custom_tool_call", "name": "exec", "status": "completed", "call_id": "git-1", "input": json.dumps({{
+                        "cmd": git_command,
+                        "workdir": str(cwd),
+                        "yield_time_ms": 10000,
+                        "max_output_tokens": 0 if truncate_git.exists() else 50000,
+                    }})}}}},
                     {{"type": "response_item", "payload": {{"type": "custom_tool_call_output", "call_id": "git-1", "output": git_output}}}},
                     {{"type": "event_msg", "payload": {{"type": "task_complete", "turn_id": "turn-1", "last_agent_message": final}}}},
                 ]
@@ -201,6 +263,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
             "mutate_input": mutate_input,
             "slow": slow,
             "git_failure": git_failure,
+            "truncate_git": truncate_git,
             "env_log": env_log,
         }
 
@@ -275,6 +338,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
             self.assertEqual(
                 receipt["tool_shell_path"], "/usr/bin:/bin:/usr/sbin:/sbin"
             )
+            self.assertEqual(receipt["tool_shell_tmpdir"], "/tmp")
             self.assertTrue(receipt["agents_md"]["unchanged"])
             self.assertFalse(receipt["secret_like_process_environment_forwarded"])
             args = json.loads(fixture["args_log"].read_text(encoding="utf-8"))
@@ -287,11 +351,49 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 'shell_environment_policy.set.PATH="/usr/bin:/bin:/usr/sbin:/sbin"',
                 args,
             )
+            self.assertIn('shell_environment_policy.set.TMPDIR="/tmp"', args)
+            for key, value in run_profile_compat.GIT_TOOL_ENVIRONMENT.items():
+                self.assertIn(
+                    f"shell_environment_policy.set.{key}={json.dumps(value)}",
+                    args,
+                )
             developer_config = next(
                 value for value in args if value.startswith("developer_instructions=")
             )
+            developer_text = json.loads(developer_config.split("=", 1)[1])
             self.assertIn(
-                "REVIEW_VERDICT value must be exactly PASS or FAIL", developer_config
+                "REVIEW_VERDICT value must be exactly PASS or FAIL", developer_text
+            )
+            self.assertIn(
+                "const receipt = await tools.exec_command", developer_text
+            )
+            self.assertIn("text(JSON.stringify(receipt));", developer_text)
+            self.assertIn(
+                "Do not print stdout and exit_code separately", developer_text
+            )
+            wrappers = re.findall(
+                r"const receipt = await tools\.exec_command\((\{[^\n]*?\})\); "
+                r"text\(JSON\.stringify\(receipt\)\);",
+                developer_text,
+            )
+            self.assertEqual(len(wrappers), 2)
+            wrapper_candidates = [
+                run_profile_compat.command_candidates(
+                    "const receipt = await tools.exec_command("
+                    + wrapper
+                    + "); text(JSON.stringify(receipt));"
+                )
+                for wrapper in wrappers
+            ]
+            self.assertTrue(all(len(candidates) == 1 for candidates in wrapper_candidates))
+            wrapper_commands = {candidates[0][0] for candidates in wrapper_candidates}
+            self.assertIn(
+                "cat -- artifact.txt",
+                wrapper_commands,
+            )
+            self.assertIn(
+                "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- artifact.txt 2>/dev/null",
+                wrapper_commands,
             )
             self.assertEqual(
                 fixture["packet_log"].read_text(encoding="utf-8"),
@@ -361,7 +463,21 @@ class ProfileCompatibilityTests(unittest.TestCase):
             fixture["git_failure"].write_text("1", encoding="utf-8")
             result = self.run_compat(fixture)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("no successful standalone git diff", result.stderr)
+            self.assertIn("no complete standalone git diff", result.stderr)
+            connection = sqlite3.connect(fixture["database"])
+            archived = connection.execute(
+                "SELECT archived FROM threads WHERE id = ?", (self.thread_id,)
+            ).fetchone()[0]
+            connection.close()
+            self.assertEqual(archived, 1)
+
+    def test_rejects_truncated_git_diff_proof_after_archiving(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = self.make_fixture(Path(tmp))
+            fixture["truncate_git"].write_text("1", encoding="utf-8")
+            result = self.run_compat(fixture)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("no complete standalone git diff", result.stderr)
             connection = sqlite3.connect(fixture["database"])
             archived = connection.execute(
                 "SELECT archived FROM threads WHERE id = ?", (self.thread_id,)
@@ -393,7 +509,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
         )
         self.assertTrue(run_profile_compat.output_proves_exit_zero(malicious_output))
 
-    def test_rejects_write_profile_and_luna_before_execution(self) -> None:
+    def test_rejects_write_profile_and_external_claude_before_execution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fixture = self.make_fixture(Path(tmp))
             base_command = [
@@ -426,14 +542,14 @@ class ProfileCompatibilityTests(unittest.TestCase):
             )
             self.assertNotEqual(developer.returncode, 0)
             self.assertIn("only supports read-only", developer.stderr)
-            luna_command = [
-                "gpt-5.6-luna" if item == "gpt-5.6-sol" else item for item in base_command
+            external_command = [
+                "claude-fable-5" if item == "gpt-5.6-sol" else item for item in base_command
             ]
-            luna = subprocess.run(
-                luna_command, text=True, capture_output=True, check=False, env=env
+            external = subprocess.run(
+                external_command, text=True, capture_output=True, check=False, env=env
             )
-            self.assertNotEqual(luna.returncode, 0)
-            self.assertIn("non-Luna", luna.stderr)
+            self.assertNotEqual(external.returncode, 0)
+            self.assertIn("external Claude models are disabled", external.stderr)
 
     def test_reviewer_schema_rejects_duplicates_extra_lines_and_suffixes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -504,28 +620,47 @@ class ProfileCompatibilityTests(unittest.TestCase):
             artifact = Path(tmp) / "artifact.txt"
             artifact.write_text("current fact\n", encoding="utf-8")
             call_input = (
-                'const r = await tools.exec_command({"cmd":"/bin/cat artifact.txt",'
+                'const r = await tools.exec_command({"cmd":"cat -- artifact.txt",'
                 f'"workdir":{json.dumps(str(artifact.parent))},'
                 '"yield_time_ms":10000}); text(JSON.stringify(r))'
             )
             self.assertTrue(
-                run_profile_compat.command_reads_artifact(call_input, artifact)
+                run_profile_compat.command_reads_artifact(
+                    call_input, artifact, artifact.parent
+                )
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(
+                    json.dumps(
+                        {
+                            "cmd": "cat -- artifact.txt",
+                            "workdir": str(artifact.parent),
+                            "shell": "/tmp/repository-controlled-shell",
+                        }
+                    ),
+                    artifact,
+                    artifact.parent,
+                )
             )
             escaped_js_input = (
                 'const r = await tools.exec_command({\n'
-                '  cmd: "cat artifact.txt",\n'
+                '  cmd: "cat -- artifact.txt",\n'
                 f'  workdir: {json.dumps(str(artifact.parent))}\n'
                 '}); text(JSON.stringify(r));'
             )
             self.assertTrue(
-                run_profile_compat.command_reads_artifact(escaped_js_input, artifact)
+                run_profile_compat.command_reads_artifact(
+                    escaped_js_input, artifact, artifact.parent
+                )
             )
             piped = escaped_js_input.replace(
-                'cat artifact.txt',
-                'cat artifact.txt | wc -l',
+                'cat -- artifact.txt',
+                'cat -- artifact.txt | wc -l',
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(piped, artifact)
+                run_profile_compat.command_reads_artifact(
+                    piped, artifact, artifact.parent
+                )
             )
 
     def test_direct_read_rejects_marker_from_another_file(self) -> None:
@@ -572,7 +707,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 {"type": "event_msg", "payload": {"type": "task_complete"}},
             ]
             with self.assertRaisesRegex(ValueError, "marker is not present"):
-                run_profile_compat.verify_direct_read(records, artifact, [marker])
+                run_profile_compat.verify_direct_read(
+                    records, artifact, [marker], base
+                )
 
     def test_direct_read_rejects_multi_command_wrapper_and_decoy_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -588,7 +725,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 "]); text(results);"
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(multi_call, artifact)
+                run_profile_compat.command_reads_artifact(
+                    multi_call, artifact, base
+                )
             )
             reversed_hidden = (
                 "const decoy = await tools.exec_command({"
@@ -597,7 +736,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 f'"cmd":"cat {artifact}","workdir":"{base}"}});'
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(reversed_hidden, artifact)
+                run_profile_compat.command_reads_artifact(
+                    reversed_hidden, artifact, base
+                )
             )
             bracket_hidden = (
                 "const target = await tools.exec_command({"
@@ -606,14 +747,18 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 f'"workdir":"{base}","cmd":"cat {decoy}"}});'
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(bracket_hidden, artifact)
+                run_profile_compat.command_reads_artifact(
+                    bracket_hidden, artifact, base
+                )
             )
             aliased_hidden = (
                 "const run = tools.exec_command;"
                 f'run({{"cmd":"cat {artifact}","workdir":"{base}"}});'
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(aliased_hidden, artifact)
+                run_profile_compat.command_reads_artifact(
+                    aliased_hidden, artifact, base
+                )
             )
             computed_hidden = (
                 "const target = await tools.exec_command({"
@@ -622,7 +767,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 f't[method]({{"cmd":"cat {decoy}","workdir":"{base}"}});'
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(computed_hidden, artifact)
+                run_profile_compat.command_reads_artifact(
+                    computed_hidden, artifact, base
+                )
             )
             dynamic_bracket = (
                 "const target = await tools.exec_command({"
@@ -632,7 +779,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 "text(JSON.stringify(target))"
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(dynamic_bracket, artifact)
+                run_profile_compat.command_reads_artifact(
+                    dynamic_bracket, artifact, base
+                )
             )
             dynamic_alias = (
                 "const target = await tools.exec_command({"
@@ -643,12 +792,15 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 "text(JSON.stringify(target))"
             )
             self.assertFalse(
-                run_profile_compat.command_reads_artifact(dynamic_alias, artifact)
+                run_profile_compat.command_reads_artifact(
+                    dynamic_alias, artifact, base
+                )
             )
             self.assertFalse(
                 run_profile_compat.command_reads_artifact(
                     json.dumps({"cmd": f"/tmp/cat {artifact}", "workdir": str(base)}),
                     artifact.resolve(),
+                    base,
                 )
             )
             self.assertFalse(
@@ -660,6 +812,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
                         }
                     ),
                     artifact,
+                    base,
                 )
             )
 
@@ -671,7 +824,26 @@ class ProfileCompatibilityTests(unittest.TestCase):
             self.assertTrue(
                 run_profile_compat.command_reads_git_diff(
                     json.dumps(
-                        {"cmd": "git diff -- artifact.txt", "workdir": str(project)}
+                        {
+                            "cmd": "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- artifact.txt 2>/dev/null",
+                            "workdir": str(project),
+                            "yield_time_ms": 10000,
+                            "max_output_tokens": 50000,
+                        }
+                    ),
+                    project.resolve(),
+                    artifact.resolve(),
+                )
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_git_diff(
+                    json.dumps(
+                        {
+                            "cmd": "git -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- artifact.txt",
+                            "workdir": str(project),
+                            "yield_time_ms": 10000,
+                            "max_output_tokens": 50000,
+                        }
                     ),
                     project.resolve(),
                     artifact.resolve(),
@@ -682,14 +854,462 @@ class ProfileCompatibilityTests(unittest.TestCase):
                     run_profile_compat.command_reads_git_diff(
                         json.dumps(
                             {
-                                "cmd": f"{executable} diff -- artifact.txt",
+                                "cmd": f"{executable} --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- artifact.txt",
                                 "workdir": str(project),
+                                "yield_time_ms": 10000,
+                                "max_output_tokens": 50000,
                             }
                         ),
                         project.resolve(),
                         artifact.resolve(),
                     )
                 )
+
+    def test_exact_read_commands_reject_unquoted_glob_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / "[a]"
+            decoy = project / "a"
+            artifact.write_text("target\n", encoding="utf-8")
+            decoy.write_text("decoy\n", encoding="utf-8")
+            unquoted_read = json.dumps(
+                {"cmd": "cat -- [a]", "workdir": str(project)}
+            )
+            unquoted_diff = json.dumps(
+                {
+                    "cmd": "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- [a] 2>/dev/null",
+                    "workdir": str(project),
+                    "yield_time_ms": 10000,
+                    "max_output_tokens": 50000,
+                }
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_artifact(
+                    unquoted_read, artifact, project
+                )
+            )
+            self.assertFalse(
+                run_profile_compat.command_reads_git_diff(
+                    unquoted_diff, project, artifact
+                )
+            )
+            self.assertTrue(
+                run_profile_compat.command_reads_artifact(
+                    json.dumps(
+                        {"cmd": "cat -- '[a]'", "workdir": str(project)}
+                    ),
+                    artifact,
+                    project,
+                )
+            )
+            self.assertTrue(
+                run_profile_compat.command_reads_git_diff(
+                    json.dumps(
+                        {
+                            "cmd": "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- '[a]' 2>/dev/null",
+                            "workdir": str(project),
+                            "yield_time_ms": 10000,
+                            "max_output_tokens": 50000,
+                        }
+                    ),
+                    project,
+                    artifact,
+                )
+            )
+
+    def test_git_diff_receipt_forces_literal_pathspec_magic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            artifact = project / ":(top)decoy.txt"
+            artifact.write_text("target\n", encoding="utf-8")
+            self.assertFalse(
+                run_profile_compat.command_reads_git_diff(
+                    json.dumps(
+                        {
+                            "cmd": "git diff -- ':(top)decoy.txt'",
+                            "workdir": str(project),
+                            "yield_time_ms": 10000,
+                            "max_output_tokens": 50000,
+                        }
+                    ),
+                    project,
+                    artifact,
+                )
+            )
+            self.assertTrue(
+                run_profile_compat.command_reads_git_diff(
+                    json.dumps(
+                        {
+                            "cmd": "git --no-lazy-fetch -c core.fsmonitor=false --literal-pathspecs diff --no-ext-diff --no-textconv -- ':(top)decoy.txt' 2>/dev/null",
+                            "workdir": str(project),
+                            "yield_time_ms": 10000,
+                            "max_output_tokens": 50000,
+                        }
+                    ),
+                    project,
+                    artifact,
+                )
+            )
+
+    def test_hardened_git_diff_never_executes_textconv_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(project)], check=True)
+            subprocess.run(
+                ["git", "-C", str(project), "config", "user.name", "Compat Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "--no-lazy-fetch",
+                    "-C",
+                    str(project),
+                    "config",
+                    "user.email",
+                    "compat@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = project / "artifact.txt"
+            attributes = project / ".gitattributes"
+            helper = project / "textconv.sh"
+            sentinel = project / "textconv-ran"
+            artifact.write_text("before\n", encoding="utf-8")
+            attributes.write_text("artifact.txt diff=hostile\n", encoding="utf-8")
+            helper.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\ncat \"$1\"\n", encoding="utf-8"
+            )
+            helper.chmod(0o700)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "config",
+                    "diff.hostile.textconv",
+                    str(helper),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(project), "add", "artifact.txt", ".gitattributes"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(project), "commit", "-qm", "base"], check=True
+            )
+            artifact.write_text("after\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(project), "diff", "--", "artifact.txt"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue(sentinel.exists())
+            sentinel.unlink()
+            hardened = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "--literal-pathspecs",
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--",
+                    "artifact.txt",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertFalse(sentinel.exists())
+            self.assertIn("-before", hardened.stdout)
+            self.assertIn("+after", hardened.stdout)
+
+    def test_safe_git_environment_blocks_clean_filters_and_checks_info_attrs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(project)], check=True)
+            subprocess.run(
+                ["git", "-C", str(project), "config", "user.name", "Compat Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "config",
+                    "user.email",
+                    "compat@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = project / "artifact.foo"
+            attributes = project / ".gitattributes"
+            helper = project / "clean-filter.sh"
+            sentinel = project / "clean-filter-ran"
+            artifact.write_text("before\n", encoding="utf-8")
+            attributes.write_text("artifact.foo filter=hostile\n", encoding="utf-8")
+            helper.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\ncat\n", encoding="utf-8"
+            )
+            helper.chmod(0o700)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "config",
+                    "filter.hostile.clean",
+                    str(helper),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(project), "add", "artifact.foo", ".gitattributes"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(project), "commit", "-qm", "base"], check=True
+            )
+            sentinel.unlink(missing_ok=True)
+            artifact.write_text("after\n", encoding="utf-8")
+            safety = run_profile_compat.git_filter_safety(project, artifact)
+            self.assertEqual(safety["filter_attribute"], "unspecified")
+            environment = {
+                "PATH": run_profile_compat.TOOL_SHELL_PATH,
+                "TMPDIR": run_profile_compat.TOOL_SHELL_TMPDIR,
+                "LANG": "C",
+                "LC_ALL": "C",
+                **run_profile_compat.GIT_TOOL_ENVIRONMENT,
+            }
+            hardened = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "--literal-pathspecs",
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--",
+                    "artifact.foo",
+                ],
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertFalse(sentinel.exists())
+            self.assertIn("+after", hardened.stdout)
+
+            info_attributes = project / ".git" / "info" / "attributes"
+            info_attributes.write_text(
+                "artifact.foo filter=hostile\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "executable Git clean filter"):
+                run_profile_compat.git_filter_safety(project, artifact)
+
+    def test_safe_git_environment_disables_local_fsmonitor_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(project)], check=True)
+            subprocess.run(
+                ["git", "-C", str(project), "config", "user.name", "Compat Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "config",
+                    "user.email",
+                    "compat@example.invalid",
+                ],
+                check=True,
+            )
+            artifact = project / "artifact.txt"
+            helper = project / "fsmonitor.sh"
+            sentinel = project / "fsmonitor-ran"
+            artifact.write_text("before\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(project), "add", "artifact.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(project), "commit", "-qm", "base"], check=True
+            )
+            helper.write_text(
+                f"#!/bin/sh\ntouch {sentinel}\nprintf '0\\n'\n", encoding="utf-8"
+            )
+            helper.chmod(0o700)
+            subprocess.run(
+                ["git", "-C", str(project), "config", "core.fsmonitor", str(helper)],
+                check=True,
+            )
+            artifact.write_text("after\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(project), "diff", "--", "artifact.txt"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue(sentinel.exists())
+            sentinel.unlink()
+            environment = {
+                "PATH": run_profile_compat.TOOL_SHELL_PATH,
+                "TMPDIR": run_profile_compat.TOOL_SHELL_TMPDIR,
+                "LANG": "C",
+                "LC_ALL": "C",
+                **run_profile_compat.GIT_TOOL_ENVIRONMENT,
+            }
+            hardened = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(project),
+                    "-c",
+                    "core.fsmonitor=false",
+                    "--literal-pathspecs",
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--",
+                    "artifact.txt",
+                ],
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertFalse(sentinel.exists())
+            self.assertIn("+after", hardened.stdout)
+
+    def test_safe_git_environment_blocks_partial_clone_lazy_fetch_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            seed = base / "seed"
+            seed.mkdir()
+            subprocess.run(["git", "init", "-q", str(seed)], check=True)
+            subprocess.run(
+                ["git", "-C", str(seed), "config", "user.name", "Compat Test"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(seed),
+                    "config",
+                    "user.email",
+                    "compat@example.invalid",
+                ],
+                check=True,
+            )
+            (seed / "artifact.txt").write_text("before\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(seed), "add", "artifact.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(seed), "commit", "-qm", "base"], check=True
+            )
+            blob = subprocess.run(
+                ["git", "-C", str(seed), "rev-parse", "HEAD:artifact.txt"],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            donor = base / "donor.git"
+            subprocess.run(
+                ["git", "clone", "-q", "--bare", str(seed), str(donor)], check=True
+            )
+
+            def make_partial(name: str) -> tuple[Path, Path]:
+                project = base / name
+                shutil.copytree(seed, project)
+                sentinel = base / f"{name}-upload-pack-ran"
+                helper = base / f"{name}-upload-pack.sh"
+                helper.write_text(
+                    "#!/bin/sh\n"
+                    f"touch {shlex.quote(str(sentinel))}\n"
+                    "exec git-upload-pack \"$@\"\n",
+                    encoding="utf-8",
+                )
+                helper.chmod(0o700)
+                config = ["git", "-C", str(project), "config"]
+                for key, value in (
+                    ("remote.origin.url", str(donor)),
+                    ("remote.origin.promisor", "true"),
+                    ("remote.origin.partialclonefilter", "blob:none"),
+                    ("remote.origin.uploadpack", str(helper)),
+                    ("extensions.partialClone", "origin"),
+                ):
+                    subprocess.run([*config, key, value], check=True)
+                object_path = project / ".git" / "objects" / blob[:2] / blob[2:]
+                self.assertTrue(object_path.is_file(), "fixture blob must be loose")
+                object_path.unlink()
+                (project / "artifact.txt").write_text("after\n", encoding="utf-8")
+                return project, sentinel
+
+            unsafe, unsafe_sentinel = make_partial("unsafe")
+            unsafe_environment = {
+                key: value
+                for key, value in run_profile_compat.hardened_git_environment().items()
+                if key != "GIT_NO_LAZY_FETCH"
+            }
+            unsafe_result = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(unsafe),
+                    "-c",
+                    "core.fsmonitor=false",
+                    "--literal-pathspecs",
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--",
+                    "artifact.txt",
+                ],
+                env=unsafe_environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(unsafe_result.returncode, 0, unsafe_result.stderr)
+            self.assertTrue(unsafe_sentinel.exists())
+
+            safe, safe_sentinel = make_partial("safe")
+            safe_result = subprocess.run(
+                [
+                    "git",
+                    "--no-lazy-fetch",
+                    "-C",
+                    str(safe),
+                    "-c",
+                    "core.fsmonitor=false",
+                    "--literal-pathspecs",
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--",
+                    "artifact.txt",
+                ],
+                env={
+                    key: value
+                    for key, value in run_profile_compat.hardened_git_environment().items()
+                    if key != "GIT_NO_LAZY_FETCH"
+                },
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(safe_result.returncode, 0)
+            self.assertFalse(safe_sentinel.exists())
+
     def test_reviewer_schema_binds_target_and_readback_to_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
@@ -723,6 +1343,92 @@ class ProfileCompatibilityTests(unittest.TestCase):
                     project_root=project,
                     markers=[self.marker],
                 )
+
+    def test_completion_turn_must_bind_requested_model_and_effort(self) -> None:
+        records = [
+            {
+                "type": "session_meta",
+                "payload": {
+                    "id": self.thread_id,
+                    "model_provider": "openai",
+                },
+            },
+            {
+                "type": "turn_context",
+                "payload": {
+                    "turn_id": "target-turn",
+                    "model": "gpt-5.6-sol",
+                    "effort": "max",
+                },
+            },
+            {
+                "type": "turn_context",
+                "payload": {
+                    "turn_id": "completion-turn",
+                    "model": "gpt-other",
+                    "effort": "low",
+                },
+            },
+            {
+                "type": "event_msg",
+                "payload": {
+                    "type": "task_complete",
+                    "turn_id": "completion-turn",
+                    "last_agent_message": "completed by other model",
+                },
+            },
+        ]
+        with self.assertRaisesRegex(ValueError, "completion turn"):
+            run_profile_compat.verify_rollout_identity(
+                records, self.thread_id, "gpt-5.6-sol", "max"
+            )
+
+        records[2]["payload"]["model"] = "gpt-5.6-sol"
+        records[2]["payload"]["effort"] = "max"
+        records[1]["payload"]["turn_id"] = "completion-turn"
+        with self.assertRaisesRegex(ValueError, "exactly one turn context"):
+            run_profile_compat.verify_rollout_identity(
+                records, self.thread_id, "gpt-5.6-sol", "max"
+            )
+
+        del records[1]
+        self.assertEqual(
+            run_profile_compat.verify_rollout_identity(
+                records, self.thread_id, "gpt-5.6-sol", "max"
+            ),
+            "completed by other model",
+        )
+
+    def test_rollout_snapshot_rejects_symlink_and_hashes_parsed_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            rollout = root / "rollout.jsonl"
+            rollout.write_text(
+                json.dumps(
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "turn_id": "turn-1",
+                            "last_agent_message": "same bytes",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            records, snapshot = run_profile_compat.rollout_records(rollout)
+            self.assertEqual(
+                run_profile_compat.completed_message(records), "same bytes"
+            )
+            self.assertEqual(
+                run_profile_compat.sha256_bytes(snapshot),
+                run_profile_compat.sha256_bytes(rollout.read_bytes()),
+            )
+            link = root / "rollout-link.jsonl"
+            link.symlink_to(rollout)
+            with self.assertRaisesRegex(ValueError, "non-symlink"):
+                run_profile_compat.rollout_records(link)
 
     def test_direct_read_requires_structured_exit_zero(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -765,7 +1471,9 @@ class ProfileCompatibilityTests(unittest.TestCase):
                 {"type": "event_msg", "payload": {"type": "task_complete"}},
             ]
             with self.assertRaisesRegex(ValueError, "no single direct exec/output pair"):
-                run_profile_compat.verify_direct_read(records, artifact, [marker])
+                run_profile_compat.verify_direct_read(
+                    records, artifact, [marker], base
+                )
 
     def test_packet_rejects_trailing_blank_line(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -865,7 +1573,7 @@ class ProfileCompatibilityTests(unittest.TestCase):
             outside.write_bytes(b"outside")
             link.unlink()
             link.symlink_to(outside)
-            with self.assertRaisesRegex(ValueError, "inside CODEX_HOME"):
+            with self.assertRaisesRegex(ValueError, "symlink target"):
                 run_profile_compat.resolve_state_database(link, codex_home)
 
     def test_timeout_kills_and_archives_started_thread(self) -> None:

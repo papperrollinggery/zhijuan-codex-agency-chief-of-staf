@@ -44,15 +44,21 @@ EXPECTED_RUNTIME_FILES = (
     "assets/codex_agents/codebase-researcher.toml",
     "assets/codex_agents/technical-architect.toml",
     "assets/codex_agents/developer.toml",
+    "assets/codex_agents/writer.toml",
     "assets/codex_agents/reviewer.toml",
     "assets/codex_agents/test-debugger.toml",
+    "assets/codex_agents/supervisor.toml",
     "scripts/audit_historical_threads.py",
     "scripts/install_skill.py",
     "scripts/install_agent_profiles.py",
     "scripts/run_profile_compat.py",
+    "scripts/configure_native_routing.py",
+    "scripts/inspect_codex_models.py",
     "scripts/verify_native_task_receipt.py",
+    "scripts/verify_role_route_receipt.py",
     "scripts/protocol_contract.py",
     "scripts/validate_visualization_data.py",
+    "scripts/render_visualization.py",
     "scripts/resolve_role_route.py",
     "scripts/validate_agent_profiles.py",
 )
@@ -84,9 +90,21 @@ REQUIRED_PUBLIC_FILES = {
     "CONTRIBUTING.md",
     "LICENSE",
     "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
     "Makefile",
+    "docs/README.md",
+    "docs/REPOSITORY_DISCOVERY.md",
+    "llms.txt",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/pull_request_template.md",
     ".github/workflows/ci.yml",
 }
+PUBLIC_MARKDOWN_LINK_FILES = (
+    "README.md",
+    "docs/README.md",
+    "docs/REPOSITORY_DISCOVERY.md",
+)
 REQUIRED_MODEL_SMOKE_IDS = {
     "explicit-small-direct",
     "explicit-readonly-structured",
@@ -121,8 +139,8 @@ DATA_CONTRACT_REQUIRED_FIELDS = {
     "decision": ["title", "summary", "choices", "recommended_index"],
     "impact": ["title", "changed_item", "downstream_items", "next_review"],
     "evidence-list": ["title", "items"],
-    "numeric-trend": ["title", "observations", "source_definition"],
-    "image-review": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings"],
+    "numeric-trend": ["title", "summary", "observations", "missing_values", "source_definition"],
+    "image-review": ["title", "image_path", "image_sha256", "alt_text", "review_target", "region_findings", "revision_effect"],
 }
 REQUIRED_VISUAL_BEHAVIOR_CASES = {
     "visualized-dependent-stages",
@@ -206,6 +224,27 @@ def validate_links(root: Path, text: str) -> None:
             fail(f"SKILL.md references missing file: {rel}")
 
 
+def validate_public_markdown_links(root: Path) -> None:
+    root_resolved = root.resolve()
+    for relative in PUBLIC_MARKDOWN_LINK_FILES:
+        source = root / relative
+        text = source.read_text(encoding="utf-8")
+        for raw_target in re.findall(r"(?<!!)\[[^\]]+\]\(([^)]+)\)", text):
+            target = raw_target.strip().removeprefix("<").removesuffix(">")
+            if not target or target.startswith("#") or re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I):
+                continue
+            target = target.split("#", 1)[0]
+            if not target:
+                continue
+            resolved = (source.parent / target).resolve()
+            try:
+                resolved.relative_to(root_resolved)
+            except ValueError as exc:
+                raise ValueError(f"public Markdown link escapes package: {relative} -> {raw_target}") from exc
+            if not resolved.exists():
+                fail(f"public Markdown link target is missing: {relative} -> {raw_target}")
+
+
 def parse_fixed_openai_yaml(path: Path) -> dict[str, dict[str, object]]:
     """Parse the deliberately tiny two-level YAML schema without a dependency."""
     result: dict[str, dict[str, object]] = {}
@@ -268,8 +307,8 @@ def validate_openai_yaml(path: Path) -> None:
 def validate_visualization_assets(root: Path) -> None:
     registry_path = root / "assets" / "visualizations" / "surface-registry.json"
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
-    if registry.get("registry_version") != "1.0":
-        fail("visualization registry must use version 1.0")
+    if registry.get("registry_version") != "2.0":
+        fail("visualization registry must use version 2.0")
     surfaces = registry.get("surfaces")
     if not isinstance(surfaces, list):
         fail("visualization registry surfaces must be a list")
@@ -283,14 +322,21 @@ def validate_visualization_assets(root: Path) -> None:
     for item in surfaces:
         if not isinstance(item, dict):
             fail("visualization registry surface must be an object")
-        for key in ("kind", "use_when", "preferred_visual", "required_visible", "fallback", "forbidden"):
+        for key in ("kind", "use_when", "preferred_visual", "delivery", "required_visible", "fallback", "forbidden"):
             if key not in item or not item[key]:
                 fail(f"visualization surface {item.get('kind')!r} missing {key}")
+        expected_delivery = (
+            "inline-fragment"
+            if item.get("kind") in {"task-stage", "decision"}
+            else "fallback-only"
+        )
+        if item.get("delivery") != expected_delivery:
+            fail(f"visualization surface {item.get('kind')!r} delivery drift")
 
     data_contract_path = root / "assets" / "visualizations" / "data-contract.json"
     data_contract = json.loads(data_contract_path.read_text(encoding="utf-8"))
     data_surfaces = data_contract.get("surfaces")
-    if data_contract.get("schema_version") != "1.0" or not isinstance(data_surfaces, dict):
+    if data_contract.get("schema_version") != "2.0" or not isinstance(data_surfaces, dict):
         fail("visualization data contract is invalid")
     if set(data_surfaces) != DATA_GATED_VISUAL_SURFACES:
         fail("visualization data contract does not match data-gated surface set")
@@ -300,7 +346,12 @@ def validate_visualization_assets(root: Path) -> None:
             fail(f"visualization data contract {kind} required fields drift")
     if data_surfaces["task-stage"].get("stage_count") != [3, 12]:
         fail("visualization data contract task-stage count drift")
-    if data_surfaces["decision"].get("choice_count") != [2, 3]:
+    if (
+        data_surfaces["task-stage"].get("optional") != ["blocker"]
+        or data_surfaces["decision"].get("choice_count") != [2, 3]
+        or data_surfaces["decision"].get("choice_fields")
+        != ["label", "tradeoff", "downstream_effect"]
+    ):
         fail("visualization data contract decision count drift")
     if (
         data_surfaces["impact"].get("item_count") != [3, 12]
@@ -308,23 +359,52 @@ def validate_visualization_assets(root: Path) -> None:
         != ["item", "disposition", "impact"]
     ):
         fail("visualization data contract impact fields drift")
-    if data_surfaces["evidence-list"].get("item_count") != [5, 12]:
+    if (
+        data_surfaces["evidence-list"].get("item_count") != [5, 12]
+        or data_surfaces["evidence-list"].get("item_fields")
+        != ["item", "status", "meaning"]
+        or data_surfaces["evidence-list"].get("optional_item_fields")
+        != ["next_action"]
+    ):
         fail("visualization data contract evidence-list count drift")
-    if data_surfaces["numeric-trend"].get("observation_fields") != ["name", "value", "unit", "dimension"]:
+    if (
+        data_surfaces["numeric-trend"].get("observation_fields")
+        != ["name", "value", "unit", "dimension"]
+        or data_surfaces["numeric-trend"].get("missing_observation_field")
+        != "missing_reason"
+        or data_surfaces["numeric-trend"].get("finite_observation_required") is not True
+    ):
         fail("visualization data contract numeric-trend fields drift")
-    if data_surfaces["image-review"].get("image_sha256_required") is not True:
+    if (
+        data_surfaces["image-review"].get("image_sha256_required") is not True
+        or data_surfaces["image-review"].get("image_max_bytes") != 67108864
+    ):
         fail("visualization data contract image-review verification drift")
-    mount_readback = data_contract.get("mount_readback")
+    mount_readback = data_contract.get("host_mount_evidence")
     if (
         not isinstance(mount_readback, dict)
-        or mount_readback.get("required_when_host_returns_mount_state")
-        != ["surface", "mount_id", "rendered"]
+        or mount_readback.get("source") != "host-only"
+        or mount_readback.get("payload_fields_forbidden")
+        != ["host_mount", "mount_id", "mount_readback", "rendered"]
+        or mount_readback.get("required_if_available")
+        != ["thread_id", "surface", "fragment_file", "fragment_sha256", "mount_id", "rendered"]
+        or mount_readback.get("field_constraints")
+        != {
+            "thread_id": "non-empty current host thread identifier",
+            "surface": "must equal the manifest surface",
+            "fragment_file": "must equal the manifest fragment file",
+            "fragment_sha256": "64 lowercase hex characters equal to the manifest fragment sha256",
+            "mount_id": "non-empty host-issued identifier",
+            "rendered": True,
+        }
         or mount_readback.get("image_binding_required_when_image_review")
         != ["image_path", "image_sha256"]
+        or mount_readback.get("renderer_image_copy_fields")
+        != ["file", "sha256", "bytes"]
         or not isinstance(mount_readback.get("fallback_when_unavailable"), str)
         or not mount_readback["fallback_when_unavailable"]
     ):
-        fail("visualization data contract mount/readback rule is invalid")
+        fail("visualization data contract host mount evidence rule is invalid")
 
     templates = {
         "task": root / "assets" / "visualizations" / "task-surface.html",
@@ -332,12 +412,33 @@ def validate_visualization_assets(root: Path) -> None:
     }
     for name, template_path in templates.items():
         html = template_path.read_text(encoding="utf-8")
-        for marker in ("<meta name=\"viewport\"", "width:min(720px,100%)", "@media (max-width:", "prefers-reduced-motion"):
+        lowered = html.lower()
+        for forbidden in ("<!doctype", "<html", "<head", "<body"):
+            if forbidden in lowered:
+                fail(f"{name} visualization template must be an inline fragment")
+        if not html.startswith('<section id="__ROOT_ID__"'):
+            fail(f"{name} visualization template must start with its single dynamic root")
+        if html.count('id="__ROOT_ID__"') != 1:
+            fail(f"{name} visualization template must contain exactly one root id")
+        for marker in ("width: 100%", "var(--foreground)"):
             if marker not in html:
                 fail(f"{name} visualization template missing responsive/accessibility marker: {marker}")
+        if name == "task" and "@media (max-width: 420px)" not in html:
+            fail("task visualization template missing narrow-screen reflow")
+        if name == "decision" and re.search(r"#__ROOT_ID__\s+\.viz-grid", html):
+            fail("decision visualization template must not override host utilities")
+        if re.search(r"(?m)^\s*max-width\s*:", html) or "white-space: nowrap" in html:
+            fail(f"{name} visualization template must remain host-responsive")
+        if re.search(r"#[0-9a-fA-F]{3,8}\b", html):
+            fail(f"{name} visualization template must use host theme tokens")
         if re.search(r"<(?:script|link|img|iframe|video|audio|source)[^>]+(?:src|href)=", html, re.IGNORECASE):
             fail(f"{name} visualization template must not load external resources")
-        if re.search(r"(?:url\s*\(|@import|fetch\s*\(|WebSocket\s*\()", html, re.IGNORECASE):
+        if re.search(
+            r"(?:url\s*\(|@import|fetch\s*\(|WebSocket\s*\(|"
+            r"XMLHttpRequest\s*\(|EventSource\s*\(|sendBeacon\s*\()",
+            html,
+            re.IGNORECASE,
+        ):
             fail(f"{name} visualization template must not use network-capable resources")
         if ":hover" in html:
             fail(f"compact {name} visualization must not add hover-only styling")
@@ -350,12 +451,26 @@ def validate_visualization_assets(root: Path) -> None:
             if term.lower() in visible.lower():
                 fail(f"{name} visualization template exposes backstage term: {term}")
     task_html = templates["task"].read_text(encoding="utf-8")
-    if "aria-current=\"step\"" not in task_html:
-        fail("task visualization template must identify the current step")
+    if "__STAGES__" not in task_html or "__NEXT_STEP__" not in task_html:
+        fail("task visualization template must bind rendered stage state")
+    if "__GOAL__" in task_html:
+        fail("task visualization must keep narrative goal outside the fragment")
     decision_html = templates["decision"].read_text(encoding="utf-8")
-    for marker in ("aria-pressed=\"true\"", "min-height:44px", "window.openai.sendFollowUpMessage"):
+    if "__SUMMARY__" in decision_html:
+        fail("decision visualization must keep narrative summary outside the fragment")
+    for marker in ('aria-live="polite"', "globalThis.openai", "await host.sendFollowUpMessage", "catch (_error)"):
         if marker not in decision_html:
             fail(f"decision visualization template missing interaction marker: {marker}")
+    for marker in (
+        '.replaceAll("<", "\\\\u003c")',
+        '.replaceAll(">", "\\\\u003e")',
+        '.replaceAll("\\u2028", "\\\\u2028")',
+        '.replaceAll("\\u2029", "\\\\u2029")',
+    ):
+        if marker not in decision_html:
+            fail("decision visualization must escape prompt delimiter characters")
+    if decision_html.count("</decision-selection-data>") != 1:
+        fail("decision visualization must contain exactly one literal closing delimiter")
 
 
 def validate_worker_protocol_docs(root: Path, skill_text: str) -> None:
@@ -578,6 +693,7 @@ def main() -> None:
     missing_public = sorted(REQUIRED_PUBLIC_FILES - authored_relatives)
     if missing_public:
         fail(f"public package missing required files: {', '.join(missing_public)}")
+    validate_public_markdown_links(root)
     authored_text = "\n".join(
         path.read_text(encoding="utf-8", errors="replace") for path in authored_files
     )

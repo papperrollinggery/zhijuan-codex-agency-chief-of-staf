@@ -22,8 +22,10 @@
 - `codebase-researcher`：只读代码地图、复现路径、依赖和证据。
 - `technical-architect`：只读接口、数据流、约束、迁移和最小架构边界。
 - `developer`：`workspace-write` 的隔离写 lane；只改 packet 明确范围并运行测试。
+- `writer`：`workspace-write` 的文档、发布说明与用户交付文字 lane；不得顺手改实现。
 - `reviewer`：只读独立审查；不能修复或接受主线程预判。
 - `test-debugger`：只读失败诊断；只有测试或日志分析有独立收益时启用。
+- `supervisor`：只读检查 Goal、证据闭环与发布边界；不能指挥其他 Agent、取代 root 或批准交付。
 
 默认最多启用满足任务所需的最少角色。多个 writer 必须使用不重叠文件或隔离 worktree。
 
@@ -56,21 +58,21 @@ python3 scripts/install_agent_profiles.py \
   --skill developer=/absolute/path/to/domain-skill/SKILL.md
 ```
 
-安装器只管理五个同名 TOML 文件，保留目标目录中的其他文件；冲突时 fail closed，只有显式 `--force` 才替换托管文件。它不读取或写入 `AGENTS.md`，并拒绝把本 Skill 的两个入口绑定回子 Agent。
+安装器只管理七个同名 TOML 文件，保留目标目录中的其他文件；冲突时 fail closed，只有显式 `--force` 才替换托管文件。它不读取或写入 `AGENTS.md`，并拒绝把本 Skill 的两个入口绑定回子 Agent。
 
 ## 派发与回收
 
 1. 使用主 `SKILL.md` 的完整 worker packet；在委派目标中点名 profile 和必要领域 Skill。
 2. 先用 `scripts/resolve_role_route.py` 或同等决策选择最少角色、预算和模型能力档；精确 model/reasoning override 必须来自当前 catalog 并使用 `fork_turns="none"`。
 3. native schema 能按名称选择并读回 profile 时，记录 spawn 返回的非空 id/path；真实 task/thread 还要 readback 状态、cwd/worktree 和产物。
-4. native schema 没有 profile 选择字段、拒绝该字段或 state 中没有角色绑定时，read-only profile 立即走下述 CLI 兼容通道；不要等待未来接口，也不要把普通 subagent 的提示词当 profile 证据。该兼容 runner 仍要求显式非 Luna 模型；不能把 native 路由候选直接带入。
+4. native schema 没有 profile 选择字段、拒绝该字段或 state 中没有角色绑定时，read-only profile 可走下述 CLI 兼容通道；不要把普通 subagent 的提示词当 profile 证据。模型必须先从当前 Codex catalog 解析，并由 state/rollout 读回确认；不得猜 ID 或使用外部 Claude 模型。
 5. 分别记录 route planned、accepted 和 confirmed；配置文件、工具接受或 worker 自述都不能单独证明实际模型身份。
 6. 主线程验证 diff、测试和范围后记录采纳、部分采纳或拒绝。
 7. 完成、失败或替换的 task/thread 及时归档；native subagent 终态返回后不重复唤醒。
 
-## 永久 CLI 兼容通道
+## Codex CLI 兼容通道
 
-`scripts/run_profile_compat.py` 是 custom-agent 接口长期缺失时的正式执行面，不是临时诊断脚本。它只接受 `codebase-researcher`、`technical-architect`、`reviewer` 和 `test-debugger` 四个 `read-only` profile；`developer` 永远由主线程或隔离 worktree 执行。
+`scripts/run_profile_compat.py` 是 native custom-agent 接口不能选择命名 profile 时的内置执行面。它接受 `codebase-researcher`、`technical-architect`、`reviewer`、`test-debugger` 和 `supervisor` 五个 `read-only` profile；`developer` 与 `writer` 由主线程或隔离 worktree 执行。
 
 最小调用：
 
@@ -79,14 +81,14 @@ python3 scripts/run_profile_compat.py \
   --profile reviewer \
   --packet /absolute/path/reviewer.packet.txt \
   --cwd /absolute/project \
-  --model <explicit-non-Luna-model> \
+  --model <exact-current-openai-model> \
   --reasoning-effort <effort> \
   --required-read /absolute/project/current-artifact \
   --required-read-marker '<hidden current fact>' \
   --required-final-marker '<same current fact>'
 ```
 
-Runner 使用参数数组而非 shell 派发，忽略用户 model/provider 配置但保留 execpolicy rules，只向 Codex 进程传最小非敏感环境 allowlist；工具 shell 不继承调用者环境，只注入固定 `/usr/bin:/bin:/usr/sbin:/sbin`，避免 secret 与用户级可执行路径泄漏，同时保证系统 `git` 可调用。Runner 强制 OpenAI、显式非 Luna model、结构化 `read-only` sandbox、禁用 apps/remote plugins/递归 subagent，并设置 1–1800 秒有界超时（默认 300 秒）。无论正常、失败或超时，只要读到 `thread.started` 就先终止进程组并归档。随后从 state DB 和 rollout 读回真实 thread、provider/model/reasoning、直接 artifact read、唯一终态与 archive 状态，并比较全局和 worktree 的 `AGENTS.md` / `AGENTS.override.md` 前后状态。`reviewer` 与 `codebase-researcher` 还必须从项目根以单独命令成功执行 `git diff -- <artifact>`，并把 call/output 绑定进收据；退出码只从绑定 tool wrapper 的唯一结构化顶层数值字段读取，不扫描 stdout 文本。`git` 不可用、diff 未读或结构化退出码非 0 即 fail closed。
+Runner 使用参数数组而非 shell 派发，忽略用户 model/provider 配置但保留 execpolicy rules，只向 Codex 进程传最小非敏感环境 allowlist；工具 shell 不继承调用者环境，只注入固定 `/usr/bin:/bin:/usr/sbin:/sbin`，避免 secret 与用户级可执行路径泄漏，同时保证系统 `git` 可调用。Runner 强制 OpenAI、显式 catalog model、结构化 `read-only` sandbox、禁用 apps/remote plugins/递归 subagent，并设置 1–1800 秒有界超时（默认 300 秒）。无论正常、失败或超时，只要读到 `thread.started` 就先终止进程组并归档。随后从 state DB 和 rollout 读回真实 thread、provider/model/reasoning、直接 artifact read、唯一终态与 archive 状态，并比较全局和 worktree 的 `AGENTS.md` / `AGENTS.override.md` 前后状态。`reviewer` 与 `codebase-researcher` 还必须从项目根以单独命令成功执行 `git diff -- <artifact>`，并把 call/output 绑定进收据；退出码只从绑定 tool wrapper 的唯一结构化顶层数值字段读取，不扫描 stdout 文本。`git` 不可用、diff 未读或结构化退出码非 0 即 fail closed。
 
 成功收据必须写 `execution_mode: cli-profile-compat`、`native_custom_agent_selected: false`、`native_agent_role: null`、`context_mode: standalone-cli-session`，并列出实际注入面、不可变输入哈希和绑定 tool-output 哈希。当前持久化状态不能证明父上下文隔离，必须保留 `cold_context_isolation: unverified`。这证明的是不同 thread 中的独立只读 profile 会话，不得改写成“原生 reviewer 角色已选中”或“cold-context isolation 已验证”。
 

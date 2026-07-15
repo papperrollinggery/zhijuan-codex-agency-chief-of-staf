@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
+import stat
 import sys
 import tempfile
 import uuid
@@ -14,12 +17,17 @@ from pathlib import Path
 
 sys.dont_write_bytecode = True
 
+from resolve_role_route import REASONING_LEVELS
 from validate_agent_profiles import (
     PROFILE_NAMES,
     SELF_SKILL_NAMES,
     skill_name_from_file,
     validate_profile,
 )
+
+
+MAX_ROUTE_PLAN_BYTES = 1024 * 1024
+MODEL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}\Z")
 
 
 def parse_binding(value: str) -> tuple[str, Path]:
@@ -37,8 +45,19 @@ def parse_binding(value: str) -> tuple[str, Path]:
     return role, path.resolve()
 
 
-def rendered_profile(template: Path, skill_paths: list[Path]) -> bytes:
+def rendered_profile(
+    template: Path,
+    skill_paths: list[Path],
+    route: tuple[str, str] | None = None,
+) -> bytes:
     text = template.read_text(encoding="utf-8").rstrip() + "\n"
+    if route is not None:
+        model, reasoning = route
+        text += (
+            "\n"
+            f"model = {json.dumps(model)}\n"
+            f"model_reasoning_effort = {json.dumps(reasoning)}\n"
+        )
     for path in skill_paths:
         text += (
             "\n[[skills.config]]\n"
@@ -46,6 +65,108 @@ def rendered_profile(template: Path, skill_paths: list[Path]) -> bytes:
             "enabled = true\n"
         )
     return text.encode("utf-8")
+
+
+def read_route_plan(path: Path) -> tuple[dict[str, object], str]:
+    expanded = path.expanduser()
+    if not expanded.is_absolute():
+        raise ValueError("--route-plan must be an absolute path")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    descriptor = os.open(expanded, flags)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+            raise ValueError("route plan must be a single-link regular file")
+        if before.st_size > MAX_ROUTE_PLAN_BYTES:
+            raise ValueError("route plan exceeds 1 MiB")
+        chunks: list[bytes] = []
+        remaining = MAX_ROUTE_PLAN_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(descriptor, min(65536, remaining))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        data = b"".join(chunks)
+        after = os.fstat(descriptor)
+        if len(data) > MAX_ROUTE_PLAN_BYTES:
+            raise ValueError("route plan exceeds 1 MiB")
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ):
+            raise ValueError("route plan changed while it was read")
+        public = os.stat(expanded, follow_symlinks=False)
+        if (public.st_dev, public.st_ino) != (after.st_dev, after.st_ino):
+            raise ValueError("route plan path identity changed while it was read")
+    finally:
+        os.close(descriptor)
+    try:
+        parsed = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("route plan must be valid UTF-8 JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("route plan must be a JSON object")
+    return parsed, hashlib.sha256(data).hexdigest()
+
+
+def route_bindings_from_plan(plan: dict[str, object]) -> dict[str, tuple[str, str]]:
+    claims = plan.get("claims")
+    if (
+        plan.get("schema_version") != 2
+        or plan.get("status") != "plan-only"
+        or plan.get("route_mode") != "direct"
+        or not isinstance(claims, dict)
+        or claims.get("catalog_live_readback_verified") is not True
+        or claims.get("catalog_provenance_locally_consistent") is not True
+        or claims.get("accepted") is not False
+        or claims.get("confirmed") is not False
+    ):
+        raise ValueError(
+            "route plan is not a schema-consistent unaccepted direct plan"
+        )
+    delegated = plan.get("delegated")
+    if not isinstance(delegated, list) or not delegated:
+        raise ValueError("route plan has no delegated roles")
+    result: dict[str, tuple[str, str]] = {}
+    for entry in delegated:
+        if not isinstance(entry, dict):
+            raise ValueError("route plan delegated entry must be an object")
+        role = entry.get("role")
+        model = entry.get("model")
+        reasoning = entry.get("reasoning")
+        contract = entry.get("dispatch_contract")
+        if not isinstance(role, str) or role not in PROFILE_NAMES or role in result:
+            raise ValueError("route plan has an unknown or duplicate role")
+        if entry.get("provider") != "openai" or entry.get("route_state") != "planned":
+            raise ValueError(f"route plan role is not an available OpenAI route: {role}")
+        if not isinstance(model, str) or not MODEL_ID_RE.fullmatch(model):
+            raise ValueError(f"route plan model id is invalid: {role}")
+        if not isinstance(reasoning, str) or reasoning not in REASONING_LEVELS:
+            raise ValueError(f"route plan reasoning is invalid: {role}")
+        if entry.get("fork_turns") != "none" or not isinstance(contract, dict):
+            raise ValueError(f"route plan does not isolate the role: {role}")
+        arguments = contract.get("arguments")
+        if (
+            contract.get("namespace") != "agents"
+            or not isinstance(arguments, dict)
+            or arguments
+            != {
+                "model": model,
+                "reasoning_effort": reasoning,
+                "fork_turns": "none",
+            }
+        ):
+            raise ValueError(f"route plan dispatch contract mismatch: {role}")
+        result[role] = (model, reasoning)
+    return result
 
 
 def best_effort_remove(path: Path) -> bool:
@@ -85,12 +206,19 @@ def install_profiles(
     bindings: dict[str, list[Path]],
     force: bool,
     dry_run: bool,
+    routes: dict[str, tuple[str, str]] | None = None,
+    route_plan_sha256: str | None = None,
 ) -> dict[str, object]:
     if target_root.is_symlink() or (target_root.exists() and not target_root.is_dir()):
         raise ValueError("agent target root must be a non-symlink directory")
     templates = source_root / "assets" / "codex_agents"
+    routes = routes or {}
     rendered = {
-        name: rendered_profile(templates / f"{name}.toml", bindings.get(name, []))
+        name: rendered_profile(
+            templates / f"{name}.toml",
+            bindings.get(name, []),
+            routes.get(name),
+        )
         for name in PROFILE_NAMES
     }
     states: dict[str, str] = {}
@@ -121,7 +249,12 @@ def install_profiles(
             for name, content in rendered.items():
                 staged = staging / f"{name}.toml"
                 staged.write_bytes(content)
-                validate_profile(staged, name, allow_bindings=True)
+                validate_profile(
+                    staged,
+                    name,
+                    allow_bindings=True,
+                    expected_route=routes.get(name),
+                )
             for name in PROFILE_NAMES:
                 target = target_root / f"{name}.toml"
                 if target.exists():
@@ -132,7 +265,12 @@ def install_profiles(
                 target = target_root / f"{name}.toml"
                 (staging / f"{name}.toml").rename(target)
                 promoted.add(name)
-                validate_profile(target, name, allow_bindings=True)
+                validate_profile(
+                    target,
+                    name,
+                    allow_bindings=True,
+                    expected_route=routes.get(name),
+                )
         except Exception as exc:
             recovery_errors: list[str] = []
             for name in reversed(PROFILE_NAMES):
@@ -171,6 +309,15 @@ def install_profiles(
         "skill_bindings": {
             role: [str(path) for path in paths] for role, paths in bindings.items()
         },
+        "route_bindings": {
+            role: {"model": route[0], "model_reasoning_effort": route[1]}
+            for role, route in sorted(routes.items())
+        },
+        "route_plan_sha256": route_plan_sha256,
+        "route_plan_attestation": (
+            "caller-asserted-unverified" if routes else None
+        ),
+        "route_state": "configured-unverified" if routes else "inherited-unverified",
         "self_skill_bindings": False,
         "agents_md_touched": False,
     }
@@ -188,6 +335,17 @@ def main() -> None:
         type=Path,
         required=True,
         help="Exact project .codex/agents directory to manage.",
+    )
+    parser.add_argument(
+        "--route-plan",
+        type=Path,
+        help=(
+            "Absolute resolver JSON that the caller freshly generated with "
+            "--verify-live-catalog. The installer validates its schema and binds its "
+            "hash but does not independently re-run the live attestation. "
+            "Selected profiles receive exact model and reasoning overrides; spawn/runtime "
+            "still require independent readback."
+        ),
     )
     parser.add_argument(
         "--skill",
@@ -210,7 +368,20 @@ def main() -> None:
             raise ValueError(f"duplicate --skill binding: {raw}")
         seen.add(item)
         bindings.setdefault(role, []).append(path)
-    result = install_profiles(source_root, target_root, bindings, args.force, args.dry_run)
+    routes: dict[str, tuple[str, str]] = {}
+    route_plan_sha256: str | None = None
+    if args.route_plan is not None:
+        route_plan, route_plan_sha256 = read_route_plan(args.route_plan)
+        routes = route_bindings_from_plan(route_plan)
+    result = install_profiles(
+        source_root,
+        target_root,
+        bindings,
+        args.force,
+        args.dry_run,
+        routes,
+        route_plan_sha256,
+    )
     print(
         json.dumps(result, ensure_ascii=False, indent=2)
         if args.json

@@ -60,6 +60,39 @@ class ValidatePackageMutationTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("missing file", result.stderr)
 
+    def test_rejects_missing_public_discovery_assets(self) -> None:
+        required = (
+            "docs/README.md",
+            "docs/REPOSITORY_DISCOVERY.md",
+            "llms.txt",
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+            ".github/ISSUE_TEMPLATE/config.yml",
+            ".github/pull_request_template.md",
+        )
+        for relative in required:
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as tmp:
+                root = self.make_copy(Path(tmp))
+                (root / relative).unlink()
+                result = self.validate(root)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("public package missing required files", result.stderr)
+
+    def test_rejects_broken_public_markdown_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.make_copy(Path(tmp))
+            path = root / "README.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "(docs/REPOSITORY_DISCOVERY.md)",
+                    "(docs/missing-discovery.md)",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            result = self.validate(root)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("public Markdown link target is missing", result.stderr)
+
     def test_rejects_installer_manifest_self_proof_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self.make_copy(Path(tmp))
@@ -79,7 +112,7 @@ class ValidatePackageMutationTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             path.write_text(
                 text.replace(
-                    'display_name: "Zhijuan 可视化结果幕僚长"',
+                    'display_name: "Agency Chief of Staff · Codex 幕僚长"',
                     'display_name: "unterminated',
                 ),
                 encoding="utf-8",
@@ -94,8 +127,8 @@ class ValidatePackageMutationTests(unittest.TestCase):
             path = root / "assets" / "visualizations" / "task-surface.html"
             path.write_text(
                 path.read_text(encoding="utf-8").replace(
-                    "任务正在推进",
-                    "请查看 JSON 与 sha256",
+                    "</section>",
+                    "<p>请查看 JSON 与 sha256</p></section>",
                 ),
                 encoding="utf-8",
             )
@@ -177,12 +210,15 @@ class ValidatePackageMutationTests(unittest.TestCase):
         for injection, expected in (
             ('<img src="https://example.invalid/a.png">', "external resources"),
             ('<style>.card{background-image:url(https://example.invalid/a.png)}</style>', "network-capable"),
+            ('<script>new XMLHttpRequest()</script>', "network-capable"),
+            ('<script>new EventSource("/events")</script>', "network-capable"),
+            ('<script>navigator.sendBeacon("/event")</script>', "network-capable"),
             ('<style>@keyframes pulse{to{opacity:.5}}</style>', "animate or transition"),
         ):
             with self.subTest(injection=injection), tempfile.TemporaryDirectory() as tmp:
                 root = self.make_copy(Path(tmp))
                 path = root / "assets" / "visualizations" / "task-surface.html"
-                path.write_text(path.read_text(encoding="utf-8").replace("</body>", injection + "</body>"), encoding="utf-8")
+                path.write_text(path.read_text(encoding="utf-8").replace("</section>", injection + "</section>"), encoding="utf-8")
                 result = self.validate(root)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)

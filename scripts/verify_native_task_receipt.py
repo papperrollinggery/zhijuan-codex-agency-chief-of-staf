@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sqlite3
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +18,7 @@ from typing import Any
 sys.dont_write_bytecode = True
 
 from install_skill import INSTALL_NAMES, installed_manifest, runtime_manifest
+from inspect_codex_models import canonical_state_connection
 from protocol_contract import (
     REVIEW_FIELDS,
     WORKER_HEADER,
@@ -24,6 +27,7 @@ from protocol_contract import (
 )
 from run_profile_compat import (
     command_reads_artifact,
+    hardened_git_observation,
     output_proves_exit_zero,
     verify_read_only_sandbox,
 )
@@ -35,8 +39,140 @@ REVIEWER_FINAL_FIELDS = tuple(f"{field}:" for field in REVIEW_FIELDS[:-1]) + (
 )
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def read_regular_bytes(path: Path, label: str) -> tuple[bytes, dict[str, Any]]:
+    candidate = path.expanduser().absolute()
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(candidate, flags)
+    except OSError as exc:
+        raise ValueError(f"{label} must be a non-symlink regular file: {candidate}") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError(f"{label} must be a single regular file: {candidate}")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            data = handle.read()
+        current = candidate.lstat()
+        if (
+            stat.S_ISLNK(current.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino)
+        ):
+            raise ValueError(f"{label} changed while it was read: {candidate}")
+    finally:
+        os.close(descriptor)
+    return data, {
+        "path": str(candidate),
+        "device": info.st_dev,
+        "inode": info.st_ino,
+        "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
+
+def require_unchanged_snapshot(path: Path, label: str, expected: dict[str, Any]) -> None:
+    _data, observed = read_regular_bytes(path, label)
+    if observed != expected:
+        raise ValueError(f"{label} changed during receipt verification: {path}")
+
+
+def write_new_private_file(path: Path, payload: bytes) -> Path:
+    """Create one receipt without following or truncating an existing entry."""
+    candidate = path.expanduser().absolute()
+    if candidate.name in {"", ".", ".."}:
+        raise ValueError("receipt output must name a file")
+    parent = candidate.parent
+    parent.mkdir(parents=True, exist_ok=True)
+    directory_flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        directory_flags |= os.O_DIRECTORY
+    if hasattr(os, "O_CLOEXEC"):
+        directory_flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    try:
+        directory = os.open(parent, directory_flags)
+    except OSError as exc:
+        raise ValueError(
+            f"receipt output parent must be a non-symlink directory: {parent}"
+        ) from exc
+    descriptor: int | None = None
+    created = False
+    try:
+        directory_info = os.fstat(directory)
+        if not stat.S_ISDIR(directory_info.st_mode):
+            raise ValueError(f"receipt output parent is not a directory: {parent}")
+        parent_info = os.stat(parent, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(parent_info.st_mode)
+            or (parent_info.st_dev, parent_info.st_ino)
+            != (directory_info.st_dev, directory_info.st_ino)
+        ):
+            raise ValueError(
+                f"receipt output parent path changed before write: {parent}"
+            )
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(
+                candidate.name,
+                flags,
+                0o600,
+                dir_fd=directory,
+            )
+        except FileExistsError as exc:
+            raise ValueError(
+                f"receipt output already exists; refusing overwrite: {candidate}"
+            ) from exc
+        created = True
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError(
+                f"receipt output must be a new single regular file: {candidate}"
+            )
+        view = memoryview(payload)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("receipt output write made no progress")
+            view = view[written:]
+        os.fsync(descriptor)
+        current = os.stat(candidate.name, dir_fd=directory, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(current.st_mode)
+            or current.st_nlink != 1
+            or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino)
+        ):
+            raise ValueError(f"receipt output changed while it was written: {candidate}")
+        parent_after = os.stat(parent, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(parent_after.st_mode)
+            or (parent_after.st_dev, parent_after.st_ino)
+            != (directory_info.st_dev, directory_info.st_ino)
+        ):
+            raise ValueError(
+                f"receipt output parent path changed while writing: {parent}"
+            )
+        os.fsync(directory)
+        return candidate
+    except BaseException:
+        if created:
+            try:
+                os.unlink(candidate.name, dir_fd=directory)
+            except OSError:
+                pass
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        os.close(directory)
 
 
 def string_content(value: Any) -> str:
@@ -84,18 +220,21 @@ def verify_native_reviewer_identity(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def rollout_records(path: Path) -> list[dict[str, Any]]:
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"rollout is not a regular file: {path}")
+def rollout_records(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    data, snapshot = read_regular_bytes(path, "rollout")
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"rollout is not UTF-8: {path}") from exc
     records: list[dict[str, Any]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for number, line in enumerate(text.splitlines(), 1):
         try:
             record = json.loads(line)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid rollout JSON at line {number}: {path}") from exc
         if isinstance(record, dict):
             records.append(record)
-    return records
+    return records, snapshot
 
 
 def reviewer_binding(
@@ -106,12 +245,15 @@ def reviewer_binding(
     records: list[dict[str, Any]],
     parent_final: str,
 ) -> dict[str, str]:
-    edge = database.execute(
+    edges = database.execute(
         "SELECT status FROM thread_spawn_edges WHERE parent_thread_id = ? AND child_thread_id = ?",
         (parent_id, reviewer_id),
-    ).fetchone()
-    if edge is None:
-        raise ValueError("reviewer has no native spawn edge from parent")
+    ).fetchall()
+    if len(edges) != 1:
+        raise ValueError("reviewer has no native spawn edge uniquely bound from parent")
+    edge_status = edges[0][0]
+    if not isinstance(edge_status, str) or not edge_status:
+        raise ValueError("reviewer native spawn edge has no status")
     metas = [
         record.get("payload", {})
         for record in records
@@ -128,17 +270,24 @@ def reviewer_binding(
         "parent_thread_id": parent_id,
         "reviewer_thread_id": reviewer_id,
         "reviewer_agent_path": agent_path,
-        "spawn_edge_status": str(edge[0]),
+        "spawn_edge_status": edge_status,
     }
 
 
 def verify_reviewer_read(
-    records: list[dict[str, Any]], markers: list[str], artifact: str
-) -> dict[str, Any]:
+    records: list[dict[str, Any]],
+    markers: list[str],
+    artifact: str,
+    reviewer_cwd: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     artifact_path = Path(artifact).expanduser().absolute()
-    if artifact_path.is_symlink() or not artifact_path.is_file():
-        raise ValueError("reviewer artifact is not a regular file")
-    artifact_text = artifact_path.read_text(encoding="utf-8")
+    artifact_bytes, artifact_snapshot = read_regular_bytes(
+        artifact_path, "reviewer artifact"
+    )
+    try:
+        artifact_text = artifact_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("reviewer artifact must be UTF-8") from exc
     artifact_text_json = json.dumps(artifact_text, ensure_ascii=False)[1:-1]
     if any(marker not in artifact_text for marker in markers):
         raise ValueError("reviewer read marker is not present in the artifact bytes")
@@ -180,7 +329,7 @@ def verify_reviewer_read(
     for call_id, (output, raw_output) in outputs.items():
         call_input = calls[call_id]
         if (
-            command_reads_artifact(call_input, artifact_path)
+            command_reads_artifact(call_input, artifact_path, reviewer_cwd)
             and output_proves_exit_zero(raw_output)
             and (artifact_text in output or artifact_text_json in output)
             and all(marker in output for marker in markers)
@@ -188,13 +337,16 @@ def verify_reviewer_read(
             bound_calls.append(call_id)
     if not bound_calls:
         raise ValueError("no single reviewer exec/output pair proves the artifact read")
-    return {
-        "paired_exec_outputs": len(outputs),
-        "bound_read_calls": len(bound_calls),
-        "artifact": str(artifact_path),
-        "artifact_sha256": sha256(artifact_path),
-        "markers": markers,
-    }
+    return (
+        {
+            "paired_exec_outputs": len(outputs),
+            "bound_read_calls": len(bound_calls),
+            "artifact": str(artifact_path),
+            "artifact_sha256": artifact_snapshot["sha256"],
+            "markers": markers,
+        },
+        artifact_snapshot,
+    )
 
 
 def completed_message(records: list[dict[str, Any]]) -> str:
@@ -236,6 +388,8 @@ def verify_reviewer_schema(
 def verify_thread(
     row: dict[str, Any],
     *,
+    records: list[dict[str, Any]],
+    rollout_snapshot: dict[str, Any],
     expected_model: str,
     expected_effort: str,
     require_archived: bool,
@@ -254,8 +408,6 @@ def verify_thread(
     if require_archived and row["archived"] != 1:
         raise ValueError(f"thread cleanup is incomplete: {thread_id}")
 
-    rollout = Path(str(row["rollout_path"]))
-    records = rollout_records(rollout)
     session_meta = [
         record.get("payload", {})
         for record in records
@@ -266,17 +418,6 @@ def verify_thread(
     if len(session_meta) != 1 or session_meta[0].get("model_provider") != "openai":
         raise ValueError(f"rollout session identity is not uniquely bound: {thread_id}")
 
-    contexts = [
-        record.get("payload", {})
-        for record in records
-        if record.get("type") == "turn_context"
-        and isinstance(record.get("payload"), dict)
-        and record["payload"].get("model") == expected_model
-        and record["payload"].get("effort") == expected_effort
-    ]
-    if not contexts:
-        raise ValueError(f"rollout does not bind model and effort: {thread_id}")
-
     completions = [
         record["payload"]
         for record in records
@@ -286,6 +427,28 @@ def verify_thread(
     ]
     if len(completions) != 1:
         raise ValueError(f"thread needs exactly one task_complete event: {thread_id}")
+    completion_turn_id = completions[0].get("turn_id")
+    if not isinstance(completion_turn_id, str) or not completion_turn_id:
+        raise ValueError(f"thread task_complete has no turn id: {thread_id}")
+    contexts = [
+        record.get("payload", {})
+        for record in records
+        if record.get("type") == "turn_context"
+        and isinstance(record.get("payload"), dict)
+        and record["payload"].get("turn_id") == completion_turn_id
+    ]
+    if len(contexts) != 1:
+        raise ValueError(
+            f"completion turn does not have exactly one model context: {thread_id}"
+        )
+    if (
+        contexts[0].get("model") != expected_model
+        or contexts[0].get("effort") != expected_effort
+    ):
+        raise ValueError(
+            f"completion turn model identity mismatch: {thread_id}: "
+            f"{contexts[0].get('model')}/{contexts[0].get('effort')}"
+        )
     final_message = completions[0].get("last_agent_message")
     if not isinstance(final_message, str) or not final_message.strip():
         raise ValueError(f"thread task_complete has no final message: {thread_id}")
@@ -301,35 +464,30 @@ def verify_thread(
         "archived": bool(row["archived"]),
         "cwd": row["cwd"],
         "source": row["source"],
-        "rollout_sha256": sha256(rollout),
-        "task_complete_turn_id": completions[0].get("turn_id"),
+        "rollout_sha256": rollout_snapshot["sha256"],
+        "task_complete_turn_id": completion_turn_id,
         "final_sha256": hashlib.sha256(final_message.encode("utf-8")).hexdigest(),
     }
 
 
 def git_state(source: Path) -> dict[str, Any]:
-    head = subprocess.run(
-        ["git", "-C", str(source), "rev-parse", "HEAD"],
-        text=True,
-        capture_output=True,
-        check=True,
-    ).stdout.strip()
-    status = subprocess.run(
-        ["git", "-C", str(source), "status", "--porcelain=v1", "--untracked-files=all"],
-        text=True,
-        capture_output=True,
-        check=True,
-    ).stdout
+    observation = hardened_git_observation(source)
+    status = bytes(observation["status_bytes"])
     return {
-        "head": head,
+        "head": observation["head"],
         "clean": not bool(status),
-        "status_sha256": hashlib.sha256(status.encode("utf-8")).hexdigest(),
+        "status_sha256": hashlib.sha256(status).hexdigest(),
+        "filter_paths_checked": observation["filter_paths_checked"],
+        "fsmonitor_disabled": observation["fsmonitor_disabled"],
+        "lazy_fetch_disabled": observation["lazy_fetch_disabled"],
+        "submodules_ignored": observation["submodules_ignored"],
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-db", type=Path, required=True)
+    parser.add_argument("--codex-home", type=Path, default=Path.home() / ".codex")
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--installed-root", type=Path, required=True)
     parser.add_argument("--parent-id", required=True)
@@ -345,8 +503,8 @@ def main() -> None:
     parser.add_argument("--out", type=Path)
     args = parser.parse_args()
 
-    if "luna" in args.model.lower():
-        raise SystemExit("Luna is not allowed for this release receipt")
+    if args.model.lower().startswith("claude-"):
+        raise SystemExit("external Claude models are disabled in the core Codex receipt")
     if not args.parent_final_marker:
         raise SystemExit("at least one --parent-final-marker is required")
     if not args.reviewer_final_marker:
@@ -362,11 +520,14 @@ def main() -> None:
         raise SystemExit("receipt markers must be exact facts of at least 16 characters")
     if not args.require_archived or not args.require_clean_source:
         raise SystemExit("native task receipt requires archived tasks and a clean source")
-    source = args.source_root.resolve()
-    installed_root = args.installed_root.resolve()
-    state_db = args.state_db.resolve()
-    if state_db.is_symlink() or not state_db.is_file():
-        raise SystemExit(f"state database is not a regular file: {state_db}")
+    source_arg = args.source_root.expanduser().absolute()
+    installed_arg = args.installed_root.expanduser().absolute()
+    if source_arg.is_symlink() or installed_arg.is_symlink():
+        raise SystemExit("source and installed roots must not be symlinks")
+    source = source_arg.resolve(strict=True)
+    installed_root = installed_arg.resolve(strict=True)
+    codex_home = args.codex_home.expanduser().absolute()
+    state_db = args.state_db.expanduser()
 
     source_state = git_state(source)
     if args.require_clean_source and not source_state["clean"]:
@@ -381,11 +542,16 @@ def main() -> None:
             raise SystemExit(f"installed bundle does not match source: {skill_name}")
         installed[skill_name] = observed
 
-    database = sqlite3.connect(f"file:{state_db}?mode=ro", uri=True)
-    try:
+    with canonical_state_connection(
+        state_db, codex_home
+    ) as (database, state_identity):
         parent_row = thread_row(database, args.parent_id)
+        parent_rollout = Path(str(parent_row["rollout_path"]))
+        parent_records, parent_rollout_snapshot = rollout_records(parent_rollout)
         parent = verify_thread(
             parent_row,
+            records=parent_records,
+            rollout_snapshot=parent_rollout_snapshot,
             expected_model=args.model,
             expected_effort=args.reasoning_effort,
             require_archived=args.require_archived,
@@ -393,19 +559,23 @@ def main() -> None:
         )
         if "$agency-chief-of-staff" not in str(parent_row["first_user_message"]):
             raise ValueError("parent task did not explicitly invoke canonical skill")
-        parent_records = rollout_records(Path(str(parent_row["rollout_path"])))
         parent_final = completed_message(parent_records)
 
         reviewer_row = thread_row(database, args.reviewer_id)
         reviewer_identity = verify_native_reviewer_identity(reviewer_row)
+        reviewer_rollout = Path(str(reviewer_row["rollout_path"]))
+        reviewer_records, reviewer_rollout_snapshot = rollout_records(
+            reviewer_rollout
+        )
         reviewer = verify_thread(
             reviewer_row,
+            records=reviewer_records,
+            rollout_snapshot=reviewer_rollout_snapshot,
             expected_model=args.model,
             expected_effort=args.reasoning_effort,
             require_archived=args.require_archived,
             final_markers=args.reviewer_final_marker + list(REVIEWER_FINAL_FIELDS),
         )
-        reviewer_records = rollout_records(Path(str(reviewer_row["rollout_path"])))
         reviewer_artifact = Path(args.reviewer_artifact).expanduser().absolute()
         verify_reviewer_schema(
             completed_message(reviewer_records),
@@ -420,15 +590,42 @@ def main() -> None:
             records=reviewer_records,
             parent_final=parent_final,
         )
-        reviewer_read = verify_reviewer_read(
-            reviewer_records, args.reviewer_read_marker, args.reviewer_artifact
+        reviewer_read, reviewer_artifact_snapshot = verify_reviewer_read(
+            reviewer_records,
+            args.reviewer_read_marker,
+            args.reviewer_artifact,
+            Path(str(reviewer_row["cwd"])),
         )
-    finally:
-        database.close()
+
+    require_unchanged_snapshot(
+        parent_rollout, "parent rollout", parent_rollout_snapshot
+    )
+    require_unchanged_snapshot(
+        reviewer_rollout, "reviewer rollout", reviewer_rollout_snapshot
+    )
+    require_unchanged_snapshot(
+        reviewer_artifact, "reviewer artifact", reviewer_artifact_snapshot
+    )
+    source_state_after = git_state(source)
+    if source_state_after != source_state:
+        raise ValueError("source Git state changed during receipt verification")
+    for skill_name, before_manifest in installed.items():
+        observed_after = installed_manifest(installed_root / skill_name)
+        expected_after = runtime_manifest(source, skill_name)
+        if observed_after != before_manifest or expected_after != before_manifest:
+            raise ValueError(
+                f"source or installed bundle changed during verification: {skill_name}"
+            )
 
     receipt = {
         "receipt_type": "NATIVE_TASK_SMOKE_RECEIPT",
         "status": "verified",
+        "canonical_state_store_bound": True,
+        "state_identity_guarded": bool(state_identity.get("identity_guarded")),
+        "state_wal_aware": bool(state_identity.get("wal_aware")),
+        "state_readonly_transaction": bool(
+            state_identity.get("readonly_transaction")
+        ),
         "current_source_observation": source_state,
         "installed_bundle_manifests": installed,
         "parent": parent,
@@ -442,8 +639,7 @@ def main() -> None:
     }
     payload = json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"
     if args.out:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(payload, encoding="utf-8")
+        write_new_private_file(args.out, payload.encode("utf-8"))
     print(payload, end="")
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,46 @@ class AgentProfileTests(unittest.TestCase):
             encoding="utf-8",
         )
         return skill
+
+    def write_route_plan(
+        self,
+        path: Path,
+        *,
+        provider: str = "openai",
+        live_verified: bool = True,
+        contract_model: str = "gpt-current-review",
+    ) -> Path:
+        plan = {
+            "schema_version": 2,
+            "status": "plan-only",
+            "route_mode": "direct",
+            "delegated": [
+                {
+                    "role": "reviewer",
+                    "model": "gpt-current-review",
+                    "provider": provider,
+                    "reasoning": "high",
+                    "fork_turns": "none",
+                    "route_state": "planned",
+                    "dispatch_contract": {
+                        "namespace": "agents",
+                        "arguments": {
+                            "model": contract_model,
+                            "reasoning_effort": "high",
+                            "fork_turns": "none",
+                        },
+                    },
+                }
+            ],
+            "claims": {
+                "accepted": False,
+                "confirmed": False,
+                "catalog_live_readback_verified": live_verified,
+                "catalog_provenance_locally_consistent": True,
+            },
+        }
+        path.write_text(json.dumps(plan), encoding="utf-8")
+        return path
 
     def test_source_profiles_and_templates_are_valid_and_equal(self) -> None:
         result = validate_profile_set(ROOT)
@@ -119,6 +160,97 @@ class AgentProfileTests(unittest.TestCase):
                 )
                 self.assertNotEqual(disguised_result.returncode, 0)
                 self.assertIn("recursive self-skill binding", disguised_result.stderr)
+
+    def test_schema_consistent_route_plan_pins_only_selected_native_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "project" / ".codex" / "agents"
+            plan = self.write_route_plan(base / "route-plan.json")
+            result = self.run_installer(
+                "--target-root",
+                str(target),
+                "--route-plan",
+                str(plan),
+                "--json",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["route_state"], "configured-unverified")
+            self.assertEqual(
+                payload["route_plan_attestation"], "caller-asserted-unverified"
+            )
+            self.assertRegex(payload["route_plan_sha256"], r"^[0-9a-f]{64}$")
+            self.assertEqual(
+                payload["route_bindings"],
+                {
+                    "reviewer": {
+                        "model": "gpt-current-review",
+                        "model_reasoning_effort": "high",
+                    }
+                },
+            )
+            reviewer = parse_profile(target / "reviewer.toml")
+            self.assertEqual(reviewer["model"], "gpt-current-review")
+            self.assertEqual(reviewer["model_reasoning_effort"], "high")
+            researcher = parse_profile(target / "codebase-researcher.toml")
+            self.assertNotIn("model", researcher)
+            self.assertNotIn("model_reasoning_effort", researcher)
+
+    def test_route_plan_fails_closed_without_live_openai_contract(self) -> None:
+        mutations = (
+            {"live_verified": False},
+            {"provider": "claude"},
+            {"contract_model": "different-model"},
+        )
+        for index, options in enumerate(mutations):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                target = base / "project" / ".codex" / "agents"
+                plan = self.write_route_plan(base / f"route-{index}.json", **options)
+                result = self.run_installer(
+                    "--target-root",
+                    str(target),
+                    "--route-plan",
+                    str(plan),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(target.exists())
+
+    def test_route_plan_requires_absolute_single_link_regular_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            plan = self.write_route_plan(base / "route.json")
+            link = base / "route-link.json"
+            link.symlink_to(plan)
+            target = base / "project" / ".codex" / "agents"
+            linked = self.run_installer(
+                "--target-root",
+                str(target),
+                "--route-plan",
+                str(link),
+            )
+            self.assertNotEqual(linked.returncode, 0)
+            self.assertFalse(target.exists())
+
+            relative = self.run_installer(
+                "--target-root",
+                str(target),
+                "--route-plan",
+                "route.json",
+            )
+            self.assertNotEqual(relative.returncode, 0)
+            self.assertIn("absolute", relative.stderr)
+
+            fifo = base / "route.fifo"
+            os.mkfifo(fifo)
+            blocked = self.run_installer(
+                "--target-root",
+                str(target),
+                "--route-plan",
+                str(fifo),
+            )
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("single-link regular file", blocked.stderr)
 
     def test_conflict_fails_closed_and_force_replaces_only_managed_files(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

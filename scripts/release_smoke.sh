@@ -21,7 +21,7 @@ fi
 python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --json >"$TMP_ROOT/install.json"
 python3 scripts/install_skill.py --target-root "$TMP_ROOT/skills" --dry-run --json >"$TMP_ROOT/dry-run.json"
 
-PROFILE_NAMES=(codebase-researcher technical-architect developer reviewer test-debugger)
+PROFILE_NAMES=(codebase-researcher technical-architect developer writer reviewer test-debugger supervisor)
 PROFILE_SOURCES=(
   "$SOURCE_ROOT"
   "$TMP_ROOT/skills/agency-chief-of-staff"
@@ -55,6 +55,24 @@ for index in 0 1 2; do
   python3 "$profile_source/scripts/run_profile_compat.py" --help \
     >"$TMP_ROOT/profile-compat-help-$label.txt"
   grep -Fq "Run a bounded read-only profile" "$TMP_ROOT/profile-compat-help-$label.txt"
+  python3 "$profile_source/scripts/inspect_codex_models.py" --help \
+    >"$TMP_ROOT/model-catalog-help-$label.txt"
+  python3 "$profile_source/scripts/configure_native_routing.py" --help \
+    >"$TMP_ROOT/native-routing-help-$label.txt"
+  python3 "$profile_source/scripts/verify_role_route_receipt.py" --help \
+    >"$TMP_ROOT/route-receipt-help-$label.txt"
+  python3 "$profile_source/scripts/verify_native_task_receipt.py" --help \
+    >"$TMP_ROOT/native-task-receipt-help-$label.txt"
+  python3 "$profile_source/scripts/resolve_role_route.py" --help \
+    >"$TMP_ROOT/route-resolver-help-$label.txt"
+  python3 "$profile_source/scripts/validate_agent_profiles.py" --help \
+    >"$TMP_ROOT/profile-validator-help-$label.txt"
+  python3 "$profile_source/scripts/render_visualization.py" --help \
+    >"$TMP_ROOT/visualization-render-help-$label.txt"
+  if test "$label" != "source"; then
+    test -z "$(find "$profile_source" -name '*.pyc' -print -quit)"
+    test ! -d "$profile_source/scripts/__pycache__"
+  fi
 done
 
 if test -f "$SOURCE_ROOT/AGENTS.md"; then
@@ -97,8 +115,8 @@ for receipt in map(Path, sys.argv[1:]):
     result = json.loads(receipt.read_text(encoding="utf-8"))
     if result["status"] != "installed":
         raise SystemExit(f"unexpected agent install status: {result['status']}")
-    if len(result["profiles"]) != 5:
-        raise SystemExit("agent installer did not produce five bounded profiles")
+    if len(result["profiles"]) != 7:
+        raise SystemExit("agent installer did not produce seven bounded profiles")
     if result.get("agents_md_touched") is not False or result.get("self_skill_bindings") is not False:
         raise SystemExit("agent installer isolation contract failed")
 PY
