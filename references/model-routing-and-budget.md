@@ -97,6 +97,16 @@ catalog 缺失、provider 不明、模型不可用或 schema 不支持时，回�
 
 默认只告诉用户：采用节省/平衡/质量优先配置、安排了哪些工作、哪些工作留在主线程，以及路由是否真正核对。不要展示 model/provider/reasoning 参数、JSON、相对成本单位或 receipt；用户明确要求技术证据时再展开。
 
+## Execution Root 模型独立政策
+
+Efficient/Balanced/Judgment 只用于 Team Planner 已选 Subagent。新的 Execution Root 不进入这些成本档，单独读取 `assets/execution-model-policy.json` 并使用 `scripts/resolve_execution_model.py`：
+
+- 默认显示请求为 GPT-5.6 Sol，reasoning 为 ultra，provider 为 OpenAI。
+- 精确 ID 必须来自本次 live App Server catalog；显示名不是运行证明。
+- Ultra 不受支持时只给用户三项选择，不静默改成较低 effort。
+- Native spawn 后必须回读实际 provider/model/effort；不一致为 FAIL。
+- Root 解析不改变 Subagent 路由预算，也不要求所有角色使用 Ultra。
+
 后台状态对应的前台表达：
 
 - `planned`：已规划。

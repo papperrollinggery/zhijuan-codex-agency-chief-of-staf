@@ -24,10 +24,10 @@ from validate_agent_profiles import PROFILE_NAMES, validate_profile
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTING_MARKERS = (
-    "AGENTS_ROUTING_SNIPPET",
-    "BEGIN agency-chief-of-staff routing",
-    "BEGIN zhijuan-codex-agency-chief-of-staf routing",
-    "--agents-routing",
+    "AGENTS_" "ROUTING_SNIPPET",
+    "BEGIN " "agency-chief-of-staff routing",
+    "BEGIN " "zhijuan-codex-agency-chief-of-staf routing",
+    "--agents-" "routing",
 )
 
 

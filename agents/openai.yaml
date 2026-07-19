@@ -1,7 +1,7 @@
 interface:
   display_name: "Agency Chief of Staff · Codex 幕僚长"
-  short_description: "Codex Skill：按角色、模型与证据闭环推进复杂任务"
-  default_prompt: "使用 $agency-chief-of-staff，按目标、风险和当前 Codex 模型目录安排最少角色，并用真实验证与必要的可视化把任务推进到可交付。"
+  short_description: "讨论需求、建立执行清单、启动执行团队并沉淀长期资产"
+  default_prompt: "使用 $agency-chief-of-staff。先和我讨论需求；确认后建立任务执行清单，再创建独立执行对话推进任务、更新进度，完成后归档并沉淀长期资产。"
 
 policy:
   allow_implicit_invocation: true

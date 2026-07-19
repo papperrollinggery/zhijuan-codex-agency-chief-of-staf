@@ -4,7 +4,7 @@
 
 ## 结果所有权
 
-主线程始终是 outcome owner。先读取规则、`git status --short`、现有实现和测试，再决定是否派发。强耦合连续修改、核心架构取舍和最终整合留在主线程；只有隔离、并行或独立判断能带来明确收益时使用专业 Agent。
+Direct Mode 的主线程或项目生命周期的新 Execution Root 是 outcome owner。先读取规则、`git status --short`、现有实现和测试，再决定是否派发。强耦合连续修改、核心架构取舍和最终整合留在 outcome owner；只有隔离、并行或独立判断能带来明确收益时使用专业 Agent。
 
 ## 场景矩阵
 
@@ -18,6 +18,8 @@
 | 安全/发布 | 当前 artifact 与 fail-closed 证据 | 独立 `reviewer`，必要时领域安全 Skill | 当前 HEAD、完整门禁、安装 parity、残余风险 |
 
 ## 专业 Agent
+
+项目生命周期先由 `scripts/resolve_team_plan.py` 根据 Work Item 生成 position instance；本表只说明 Profile 能力，不要求调用方预先列角色。Direct Mode 仍按实际收益临时选择。
 
 - `codebase-researcher`：只读代码地图、复现路径、依赖和证据。
 - `technical-architect`：只读接口、数据流、约束、迁移和最小架构边界。
@@ -43,7 +45,7 @@ Worker packet 可以包含经过选择的领域 `$skill-slug`，但不得包含 
 
 ## 安装专业 Agent
 
-Skill 双入口安装不会默认写入任何 Agent 配置。只有用户或项目明确选择时，运行：
+Skill 双入口安装不会默认写入任何 Agent 配置。阶段三优先运行 `scripts/prepare_team_runtime.py`，只准备当前 `TEAM_PLAN.json` 选中的 Profile。以下全量 installer 命令保留兼容和维护用途，并且仍只在用户或项目明确选择时运行：
 
 ```bash
 python3 scripts/install_agent_profiles.py \

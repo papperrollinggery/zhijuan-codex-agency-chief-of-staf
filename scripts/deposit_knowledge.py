@@ -35,7 +35,7 @@ SECRET_RE = re.compile(
     re.I,
 )
 TEMPORARY_RE = re.compile(
-    r"(?:/tmp/|/var/folders/|\\Temp\\|\.agency/tasks/active/|\.codex/worktrees/|/Users/)|"
+    r"(?:/tmp/|/var/folders/|\\Temp\\|\.agency/tasks/active/|\.codex/worktrees/|/" r"Users/)|"
     r"\b(?:thread|task)[ _-]?id\s*[:=]\s*[0-9a-f-]{12,}|"
     r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b",
     re.I,
@@ -338,4 +338,3 @@ if __name__ == "__main__":
         main()
     except (OSError, ValueError) as exc:
         raise SystemExit(f"Knowledge deposit failed: {exc}")
-

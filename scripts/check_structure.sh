@@ -21,6 +21,17 @@ PYTHONPYCACHEPREFIX="$PYCACHE_ROOT" python3 -m py_compile \
   scripts/verify_native_task_receipt.py \
   scripts/verify_role_route_receipt.py \
   scripts/validate_visualization_data.py \
-  scripts/render_visualization.py
+  scripts/render_visualization.py \
+  scripts/agency_task.py \
+  scripts/validate_task_state.py \
+  scripts/resolve_team_plan.py \
+  scripts/prepare_team_runtime.py \
+  scripts/agency_doctor.py \
+  scripts/prepare_execution_launch.py \
+  scripts/resolve_execution_model.py \
+  scripts/update_task_progress.py \
+  scripts/archive_task.py \
+  scripts/deposit_knowledge.py \
+  scripts/validate_task_archive.py
 
 echo "Structure check passed."
