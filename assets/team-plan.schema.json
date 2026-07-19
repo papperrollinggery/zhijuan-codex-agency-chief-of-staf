@@ -32,6 +32,16 @@
       }
     },
     "waves": {"type": "array", "items": {"type": "object"}},
+    "write_conflicts": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {"type": "string"}
+      }
+    },
+    "root_owned_work_items": {"type": "array", "items": {"type": "string"}},
     "limits": {
       "type": "object",
       "required": ["max_active_positions", "max_parallel_positions", "max_parallel_writers", "default_cold_reviewers", "max_review_fix_rounds"],
