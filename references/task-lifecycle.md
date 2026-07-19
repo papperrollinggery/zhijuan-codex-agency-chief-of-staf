@@ -71,4 +71,3 @@ blocked → executing
 - Subagent 只返回自己范围内的产物与证据，不直接写全局状态。
 - 外部写入、发布、删除、支付、身份和隐私动作仍需原有授权。
 - 当前 Git 根是本 Skill 源码仓库时遵守仓库 `AGENTS.md` 的 Self-Maintenance Mode，不把源码维护本身变成 Agency Task。
-

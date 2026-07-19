@@ -2,7 +2,7 @@
 
 > Status: proposed metadata for the next authorized public update
 >
-> Verified public state: 2026-07-15
+> Release/tag readback: 2026-07-19; About metadata snapshot: 2026-07-15
 >
 > Read-only evidence: GitHub repository API fields `description`, `homepageUrl`, and `repositoryTopics`, plus the public Releases API for stable/prerelease tags; observed values are recorded below and may drift after this date.
 >
@@ -10,7 +10,7 @@
 
 ## Current public state
 
-Before this authorized update, the public GitHub repository reported no About description, website, or topics. Its latest stable release remains `v0.1.7`; this checkout is the reviewed `v0.2.0-rc.3` release source. Public description, topics, tag, and release still require post-write API readback before they count as published.
+At the recorded About-metadata snapshot, the public GitHub repository reported no About description, website, or topics. A fresh read-only tag readback on 2026-07-19 still found `v0.1.7` as the latest stable tag and `v0.2.0-rc.3` as the latest prerelease tag. This checkout is the unpublished `v0.3.0-rc.1` source candidate; public description, topics, tag, and release still require an authorized write plus post-write API readback before they count as published.
 
 GitHub documents topics as a discovery mechanism for finding repositories by purpose and subject. Topic names must use lowercase letters, numbers, and hyphens, be at most 50 characters, and a repository may have at most 20. Applying repository metadata is an external write and requires maintainer authorization and working GitHub authentication.
 

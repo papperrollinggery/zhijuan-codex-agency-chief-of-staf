@@ -53,4 +53,3 @@
 没有匹配文档或目录时写入 `docs/knowledge/<topic-slug>.md`。命中已有文档时只做最小追加，不新建重复文档、不改写原文、不复制完整任务计划。
 
 `deposit_knowledge.py` 默认输出计划；只有明确 `--apply` 才写文档。Archive 命令只有同时显式 `--deposit-knowledge` 时才在归档后执行写入。
-

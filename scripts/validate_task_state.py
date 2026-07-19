@@ -157,4 +157,3 @@ if __name__ == "__main__":
         main()
     except (OSError, ValueError, AssertionError) as exc:
         raise SystemExit(f"Task state validation failed: {exc}")
-

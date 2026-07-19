@@ -2,15 +2,15 @@
 
 > Status: Current documentation index
 >
-> As of: 2026-07-15
+> As of: 2026-07-19
 >
-> Reviewed baseline: `v0.2.0-rc.3`; later commits require fresh readback
+> Reviewed source candidate: `v0.3.0-rc.1`; unpublished and not an installed-state claim
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 
-`agency-chief-of-staff` is a Codex Desktop / Codex CLI host-scoped Skill for moving complex work from research and planning through execution, verification, independent review, and concise delivery.
+`agency-chief-of-staff` is a Codex Desktop / Codex CLI host-scoped Skill with a project lifecycle from requirements discussion through durable planning, a separate execution session, progress, verification, archive, and reusable knowledge. One-off work still uses Direct Mode.
 
-`agency-chief-of-staff` 是面向 Codex Desktop / Codex CLI 的结果负责型 Skill，用于把复杂任务从研究和规划推进到执行、验证、独立审核与简洁交付。
+`agency-chief-of-staff` 是面向 Codex Desktop / Codex CLI 的结果负责型 Skill：项目型请求可从需求讨论推进到持久化清单、独立执行对话、团队执行、验证、归档与长期知识；单次任务继续使用 Direct Mode。
 
 ## Start here
 
@@ -35,6 +35,12 @@ These files are loaded on demand by the Skill. They describe operating contracts
 - [Long-running work](../references/long-running-work.md)
 - [Historical task and thread audit](../references/history-audit.md)
 - [Model routing and budget](../references/model-routing-and-budget.md)
+- [Project task lifecycle](../references/task-lifecycle.md)
+- [Deterministic team orchestration](../references/team-orchestration.md)
+- [Execution session launch and recovery](../references/execution-session.md)
+- [Archive and knowledge deposition](../references/knowledge-archiving.md)
+
+The four-stage lifecycle is intent-gated. It does not restore a fixed organization, does not require every task to create a Thread, prepares only Team Plan selected Profiles, and keeps the Execution Root model request separate from Subagent routing.
 
 ## Design and historical records
 

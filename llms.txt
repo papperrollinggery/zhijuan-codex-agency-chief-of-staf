@@ -1,8 +1,8 @@
 # Agency Chief of Staff for Codex
 
-> An outcome-owned OpenAI Codex Desktop and Codex CLI Skill for moving complex work through research, planning, execution, dynamic role and model routing, verification, independent cold review, and concise delivery.
+> An outcome-owned OpenAI Codex Desktop and Codex CLI Skill for discussing project requirements, creating durable execution checklists, launching a separate Execution Root, planning a role-based team, tracking evidence-backed progress, archiving tasks, and depositing reusable knowledge. One-off work retains Direct Mode.
 
-Canonical Skill: `agency-chief-of-staff`. The legacy `zhijuan-codex-agency-chief-of-staf` slug is only an explicit compatibility entry. The core runtime uses OpenAI/Codex; Claude and Fable are optional advisor extension points that are disabled by default and are not dependencies. Common discovery terms include Codex agency, Codex multi-agent orchestration, Codex subagent routing, Codex model routing, Codex Skill, Codex 幕僚长, and Codex 多 Agent 编排.
+Canonical Skill: `agency-chief-of-staff`, with implicit invocation enabled for project-lifecycle intent. The legacy `zhijuan-codex-agency-chief-of-staf` slug is only an explicit compatibility entry. The core runtime uses OpenAI/Codex; Claude and Fable are optional advisor extension points that are disabled by default and are not dependencies. Common discovery terms include Codex agency, Codex multi-agent orchestration, requirements discussion, execution checklist, separate Codex task, task archive, knowledge deposition, Codex Skill, Codex 幕僚长, and Codex 多 Agent 编排.
 
 This is a curated inference-time documentation index following the emerging `llms.txt` proposal. It does not grant crawler permission, change the MIT license, prove model or host behavior, or imply that later checkout or `Unreleased` changes are published. Use the README version table, changelog, and GitHub Releases page together when answering release-status questions.
 
@@ -16,11 +16,17 @@ This is a curated inference-time documentation index following the emerging `llm
 ## Runtime Contracts
 
 - [Model routing and budget](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/model-routing-and-budget.md): Capability classes, current-host catalog readback, Codex-only routing, and evidence states.
+- [Project task lifecycle](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/task-lifecycle.md): Discussion, durable Plan, Execution, verification, completion, and archive state transitions.
+- [Team orchestration](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/team-orchestration.md): Deterministic Team Tier scoring, position instances, write-conflict limits, and dispatch waves.
+- [Execution session](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/execution-session.md): GPT-5.6 Sol Ultra Root resolution, Native readback, isolated worktree rules, and manual-launch fallback.
+- [Knowledge archiving](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/knowledge-archiving.md): Archive gates, manifests, candidate safety, deduplication, and minimal document patches.
 - [Real Codex tasks and threads](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/real-threads.md): When real tasks, isolated worktrees, receipts, and cleanup are required.
 - [User experience and visualization](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/user-experience.md): Chat-first interaction, data-gated visual surfaces, mount/readback, and fallback behavior.
 - [Delivery and independent review](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/references/delivery-review.md): Verification, cold review, repair, and release-readiness boundaries.
 
 ## Verification and Releases
+
+The `v0.3.0-rc.1` documentation describes an unpublished source candidate. v0.1's fixed heavy team is retired; v0.2 Direct Mode remains; the v0.3 lifecycle is project-intent-only, does not require every task to create a Thread, prepares Profiles Selected-only, and routes the Execution Root separately from Subagents.
 
 - [Changelog](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/CHANGELOG.md): `Unreleased` development changes and tagged-version history.
 - [GitHub Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases): Authoritative public release and tag surface.

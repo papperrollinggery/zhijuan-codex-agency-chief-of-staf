@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## v0.3.0-rc.1 - 2026-07-19 (source candidate, unpublished)
+
+- Added an opt-in project lifecycle: discussion without writes or dispatch, durable `plan_ready` execution checklists under `.agency`, independent execution-session launch, event-driven progress and verification, validated archive, and reusable knowledge deposition.
+- Rewrote Canonical activation metadata for natural lifecycle language while preserving `allow_implicit_invocation: true`; the Legacy bundle remains explicit-only, ordinary small work and valid worker packets remain excluded, and repository self-maintenance is governed by a non-runtime root `AGENTS.md` boundary.
+- Added deterministic Work Item team planning with `solo`, `lean_team`, `project_team`, and `program_team` tiers; position instances are separate from Profiles, same-Profile independent research lanes remain distinct, overlapping writes do not run in parallel, and the seven narrow Profiles remain an upper bound rather than a fixed organization.
+- Added Selected-only project Profile preparation and a read-only Agency Doctor. Default Skill installation still writes neither global Agent configuration nor project `AGENTS.md`.
+- Added a separate Execution Root model policy that resolves GPT-5.6 Sol and `ultra` from the live App Server catalog, requires exact provider/model/effort spawn readback, and stops for user choice instead of silently downgrading. Subagent Efficient/Balanced/Judgment routing remains separate.
+- Added strict `AGENCY_EXECUTION_SESSION: true` parsing, verified Native Task/Thread readback, isolated-worktree requirements for write sessions, and the standard `prefer_native -> manual_launch_prompt` fallback without pretending a same-thread or subagent session is a new conversation.
+- Added idempotent Root-owned progress events and current-state-first `PROGRESS.md`; Subagents return evidence but cannot update global Task State.
+- Added archive completion gates, manifest validation, archive indexing, verified-only knowledge candidates, secret/temporary-data rejection, duplicate/conflict detection, existing-document targeting, and `docs/knowledge` fallback.
+- Expanded the Runtime allowlist to 61 files with Canonical/Legacy manifest parity and excluded the repository `AGENTS.md`; installer dry runs now report `would-replace` without requiring or performing `--force`.
+- Added 35 offline behavior contracts and lifecycle model-smoke fixtures covering discussion, plan creation, Execution Session resume, team balance, progress, archive and knowledge patch. The cases are runnable evidence requirements, not a claim that Model/Native smoke has run for this source candidate.
+
+Migration: v0.1's fixed heavy team is retired; v0.2 Direct Mode remains for one-off work; v0.3 lifecycle activates only for project intent. Canonical implicit invocation stays enabled, Legacy stays explicit-only, not every task needs a Thread, Profiles are prepared Selected-only, and Root execution model routing is independent from Subagent routing.
+
 ## v0.2.0-rc.3 - 2026-07-15
 
 - Bind optional native `agents.spawn_agent` call/output evidence and its unique started activity to the exact child thread in heterogeneous route receipts, including exact model, reasoning effort, and `fork_turns=none` with ambiguity, FIFO, oversize, and drift rejection.

@@ -58,4 +58,3 @@ Root 使用独立的 `execution-model-policy.json`，不属于 Efficient/Balance
 ## Selected-only Profile
 
 `prepare_team_runtime.py` 只读取当前 `TEAM_PLAN.json` 中选中的 Profile；Execution Root 不生成 Profile，同 Profile 多实例只安装一份能力模板。默认 dry run，只有明确阶段三请求并追加 `--apply` 才写项目 `.codex/agents`。脚本不删除未选 Profile，不写用户全局 Agent 配置，也不读写项目 `AGENTS.md`。
-

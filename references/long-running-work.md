@@ -28,11 +28,12 @@ Goal 是当前任务的持续目标，不是扩大权限。不要为每个 worke
 
 ## Plan 与 Goal
 
-- 目标仍模糊：先研究或使用 Plan 形成可验证目标。
-- 目标已清晰且需要多轮持续推进：使用 Goal。
+- 用户明确要求先讨论且不要执行：进入 Discussion Mode，讨论是合法停止点，不创建 Goal、Task、Agent 或 Thread。
+- 目标仍模糊但用户已要求项目生命周期：先讨论，用户明确确认后再创建 `.agency` 执行清单；持久化 Task State 不冒充原生 Goal。
+- 目标已清晰且需要多轮持续推进：使用 Goal；若同时有 `.agency` Task，Goal 管长期停止条件，Task 记录 Work Item、进度、证据和归档，两者分别读回。
 - 单轮可完成：不用 Goal。
 
-不要只建议用户输入 `/plan` 或 `/goal` 后停止；当前工具能直接建立或推进时就执行。
+除 Discussion/Plan 的明确停止边界外，不要只建议用户输入 `/plan` 或 `/goal` 后停止；当前工具能直接建立或推进时就执行。Supervisor 只在长期 Goal、发布、复杂归档或证据闭环确有独立收益时加入，不作为固定岗位。
 
 ## Automation
 

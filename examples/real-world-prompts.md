@@ -4,6 +4,60 @@
 
 离线 `behavior_cases.json` 只定义行为 contract，不证明模型实际遵守。
 
+## 四阶段项目生命周期
+
+需求讨论，不执行：
+
+```text
+这件事比较复杂，先跟我把目标、边界和完成标准聊清楚，暂时不要执行。
+```
+
+检查：自然语言隐式触发；首状态为“任务已接管｜需求讨论中”；不写文件、不创建 Agent/Thread，一次只问一个会改变结果的问题。
+
+根据讨论创建持久化清单：
+
+```text
+根据以上讨论，创建任务执行清单；只生成计划和团队占位，不自动开始执行。
+```
+
+检查：`.agency/tasks/active/<task-id>/` 中有 task plan、可读 checklist、Team Plan 占位、launch prompt、progress 和 evidence；状态为 `plan_ready`。
+
+启动独立执行对话：
+
+```text
+创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行任务，并持续更新进度。
+```
+
+检查：Team Planner 从 Work Item 自动组队；Root exact model/effort 来自 live catalog 并在 spawn 后读回；写任务使用隔离 worktree。Native Task/Thread 不可用时生成完整手动启动提示词并标记 `manual_launch_ready`，不把当前线程或 subagent 冒充新对话。
+
+归档并沉淀长期知识：
+
+```text
+归档这个任务，并把已验证、可复用的信息最小写入已有文档；没有匹配文档时再创建 docs/knowledge 文档。
+```
+
+检查：Required Work、Acceptance Evidence、Blocker、Review、cleanup、产物和验证先通过；archive manifest 有效；知识去重，拒绝 secret、临时 Thread ID、临时路径和未验证推断。
+
+## Team Tier 平衡
+
+```text
+使用 $agency-chief-of-staff。只规划团队，不执行：这是单文件、单目标、高耦合的小 Bug。不要为了人数加入 architect、writer 或 supervisor。
+```
+
+检查：`solo` 或必要时 `lean_team`，不恢复固定组织。
+
+```text
+使用 $agency-chief-of-staff。只规划团队，不执行：这是跨 API、domain 和 persistence 的接口迁移，有多文件实现和独立验证。
+```
+
+检查：至少考虑 Technical Architect、Developer 和 Reviewer，不完全拒绝派发。
+
+```text
+使用 $agency-chief-of-staff。移动端、服务端和部署配置是三个范围与输出不同、可并行的独立研究流；保留三个 Researcher position instance。
+```
+
+检查：同一 `codebase-researcher` Profile 的三个实例不因 Profile 名相同而合并。
+
 ## 直接闭环
 
 ```text

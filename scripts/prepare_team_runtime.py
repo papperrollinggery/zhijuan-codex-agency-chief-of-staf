@@ -132,4 +132,3 @@ if __name__ == "__main__":
         main()
     except (OSError, RuntimeError, ValueError) as exc:
         raise SystemExit(f"Team runtime preparation failed: {exc}")
-

@@ -59,4 +59,3 @@ Wave 5：Supervisor 收口，仅在需要时
 ```
 
 Root 负责整合、验证和全局状态。Subagent 只返回范围内证据，不能改变 Task 生命周期或归档。
-

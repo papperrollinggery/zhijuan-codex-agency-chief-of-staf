@@ -3,19 +3,19 @@
 [![CI](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/actions/workflows/ci.yml/badge.svg)](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-一个结果负责型 Codex 多 Agent 编排 Skill：把复杂任务从目标澄清推进到研究、规划、执行、验证、独立审核和最终交付。它面向 Codex Desktop、Codex CLI、原生 subagents、Goal、隔离 worktree、动态角色模型路由和可验证发布流程。
+一个结果负责型 Codex 多 Agent 编排 Skill：项目型请求可以从需求讨论推进到持久化执行清单、新执行对话、角色化团队执行、事件进度、验证收口、任务归档和长期知识沉淀；普通单次任务仍保留轻量 Direct Mode。它面向 Codex Desktop、Codex CLI、原生 subagents、Goal、隔离 worktree、动态角色模型路由和可验证发布流程。
 
-它不靠堆角色或 receipt 证明自己工作；安装器和默认运行不会向用户配置、仓库主工作区或项目根 `AGENTS.md` 注入路由。主线程对结果负责；原生 subagents、Goal、真实 task/thread/worktree 都按任务需要使用。
+它不靠堆角色或 receipt 证明自己工作；安装器和默认运行不会向用户配置、仓库主工作区或项目根 `AGENTS.md` 注入路由。Direct Mode 的主线程或项目生命周期的新 Execution Root 对结果负责；原生 subagents、Goal、真实 task/thread/worktree 都按任务需要使用。
 
 ## 用户看到的交互
 
-聊天是产品前台，技术证据留在后台。Skill 默认用四种状态与用户沟通：任务接管、阶段进展、单一选择、最终交付。内部模式、角色、线程、哈希、JSON/YAML、命令回值和调试字段不会作为主要界面出现。
+聊天是产品前台，技术证据留在后台。项目生命周期显示需求讨论、创建执行清单、启动执行对话、团队执行、验证和归档；进度只在真实事件发生时更新，不发送虚构百分比或固定间隔空状态。内部 Profile、exact model ID、线程 schema、哈希、JSON/YAML、命令回值和调试字段不会作为主要界面出现。
 
 当文字不足以快速解释三个以上步骤、分支、依赖或对比项时，Skill 选择最小的 OpenAI visualization：阶段路径、方案对比、影响关系、验证清单、当前图片/页面审阅，或基于真实数值的趋势图。每个内建视图先经过数据门；文本按字段限制长度，NUL、C1 和非展示空白的 C0 控制字符 fail closed，展示字段中的换行与制表符压成单个空格。曲线必须含有限数值、单位、维度、来源、文字结论和缺失值说明；图片还要通过 64 MiB 上限、no-follow、单硬链接、路径身份、签名和 SHA-256 核验，renderer 再读回后把精确字节事务化复制为 verified image，fallback 不引用可变原路径。renderer 为六种内建 surface 全部生成确定性的同源 fallback 与 hash manifest，`task-stage` 与 `decision` 另生成宿主主题感知的纯 fragment；标题、goal 与 summary 留在 directive 外，fragment 只承载必要视觉和交互。输入通过 no-follow 文件描述符读取并拒绝 hardlink，输出目录以 dev/inode 固定并在 prepare、commit、返回前持续核对路径。输出先在同目录安全临时文件完成 flush/fsync，再以目录项替换提交，覆盖不会跟随已有 symlink/hardlink，异常会尽力恢复旧输出集；成功返回前还会从固定 dirfd 复核 no-follow identity/hash。decision 回传同时发送稳定 `choice_id` 与所选展示值；固定 prompt 把后者封装为不可信且不可执行的 JSON 数据，并将 `<`、`>`、U+2028、U+2029 转成 Unicode 转义，使下一轮能还原选择但展示值不能闭合数据分隔符或变成指令。动态解释、模拟、可调输入、地图、空间运动和复杂图表在宿主提供 `@visualize` 时遵循其当前安装版规范，本仓库 registry 不限制插件能力；否则使用 renderer 生成的可验证文字、表格、Mermaid 或图片审阅降级。只有宿主自己返回并绑定当前 thread、匹配 manifest 的 surface/file/hash、非空 mount id 且 `rendered=true`，才会说用户已看到视图。
 
 ## 一览
 
-| 项目 | 当前事实（2026-07-15） |
+| 项目 | 当前事实（2026-07-19） |
 | --- | --- |
 | Canonical Skill | `$agency-chief-of-staff` |
 | 兼容入口 | `$zhijuan-codex-agency-chief-of-staf`，仅显式调用 |
@@ -23,51 +23,66 @@
 | Python | 3.10+ |
 | 最新 stable tag | [`v0.1.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.1.7) |
 | 最新 prerelease tag | [`v0.2.0-rc.3`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.2.0-rc.3) |
-| 当前 checkout | `v0.2.0-rc.3` release source |
+| 当前 checkout | `v0.3.0-rc.1` 本地源码候选；未打 tag、未发布 |
 
 入口：[文档索引](docs/README.md) · [LLM 索引](llms.txt) · [发现性与发布元数据](docs/REPOSITORY_DISCOVERY.md) · [Changelog](CHANGELOG.md) · [示例](examples) · [贡献](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [行为规范](CODE_OF_CONDUCT.md) · [全部 Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases)
 
-本 README 正文描述 `v0.2.0-rc.3` release source。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
+本 README 正文描述 `v0.3.0-rc.1` 本地源码候选。它不是当前 GitHub Release，也不代表本机已安装 Skill 已更新。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
 
 | 版本线 | 能力边界 |
 | --- | --- |
 | `v0.1.7` stable | 历史稳定线；不包含本文的七角色、live catalog adapter、native routing configurator 或 fragment renderer |
 | `v0.2.0-rc.2` prerelease | 包含五角色 RC、旧 visualization/data contract 与 native-task receipt |
 | `v0.2.0-rc.3` prerelease | 七角色、current-catalog direct 路由/readback、可恢复 native routing 配置和 fragment/fallback/manifest 流程；named profile 与 host mount 仍按宿主能力 fail closed |
+| `v0.3.0-rc.1` 本地源码候选 | 新增 Discussion → Plan → Execution → Archive 项目生命周期、确定性 Team Planner、Execution Session、Sol Ultra Root 路由、事件进度和知识归档；尚未发布，真实 Model/Native 行为仍需单独 smoke |
+
+## v0.3 迁移
+
+- v0.1 的固定重型团队和 16 角色组织已废弃，不会恢复。
+- v0.2 的轻量主线程/Direct Mode 保留，继续服务单次、明确、可在一个闭环完成的任务。
+- v0.3 的四阶段生命周期只在项目型意图出现时启用；不要求所有任务创建 `.agency` 或 Thread。
+- Canonical 继续允许自然语言隐式调用；Legacy 只兼容旧显式 slug。
+- 专业 Profile 按当前 Team Plan 做 Selected-only 项目准备，不默认安装全部七个，也不写全局 Agent 配置。
+- Execution Root 模型政策与 Subagent 模型成本档完全分开；Root 可以请求 GPT-5.6 Sol Ultra，Subagent 继续按任务选择 Efficient/Balanced/Judgment。
 
 ## 适用场景
 
 - 明确调用 `$agency-chief-of-staff`。
 - 要求“幕僚长 / Codex Agency / 完整团队”负责复杂任务闭环。
+- 自然要求先把目标和边界聊清楚，再根据讨论创建执行清单。
+- 要求开一个独立新对话执行、持续更新进度、归档任务或沉淀长期资产。
 - 要求先研究，再规划、执行、验证和审核。
 - 长任务需要 Goal、checkpoint 和停止条件。
 - 需要并行探索、实现或独立 cold review。
 - 需要 release readiness、Skill hardening、多文件可靠性或客户交付质量审核。
 - 明确要求真实 Codex task/thread、隔离 worktree、thread id、receipt 或 cleanup 证明。
 
-普通小问题不应触发本 Skill，除非用户显式调用。
+单句翻译、普通问答、简单代码修改、单文件明确修复，以及只出现 `thread` / `release readiness` 字样但没有工作意图的文本，不应隐式触发本 Skill。合法 Worker Packet 和本 Skill 自身源码维护也排除在外。
 
 ## 核心工作流
 
+项目型请求使用四阶段生命周期：
+
 ```text
-目标与完成标准
-  → 当前事实研究
-  → 最小计划
-  → 主线程执行 + 按收益委派
-  → 真实验证
-  → 独立 cold review
-  → 修复与复验
-  → 简洁交付
+需求讨论
+  → 持久化任务执行清单
+  → 新执行对话中的角色化团队执行、事件进度与验证
+  → 任务归档与长期知识沉淀
 ```
+
+Discussion 可以合法停在讨论；Plan 只创建 `.agency/tasks/active/<task-id>/`，不会自动执行；Execution 优先真实 Codex Task/Thread，Native 创建面不可用时生成可复制的手动启动提示词；Archive 必须先通过完成、证据、Review、cleanup、产物与验证门禁。普通单次请求继续走 v0.2 的 Direct Mode，不创建 `.agency`，也不要求每次建 Thread。
 
 关键设计：
 
-- 主线程是 outcome owner，可以直接研究、编辑、测试、整合和交付。
-- 按收益使用最少必要的 subagent：提供 `codebase-researcher`、`technical-architect`、`developer`、`writer`、`reviewer`、`test-debugger`、`supervisor` 七个窄职责 profile，不恢复固定组织。
+- Direct Mode 主线程或项目 Execution Root 是 outcome owner，可以直接研究、编辑、测试、整合和交付。
+- Team Planner 根据 Work Item 的工作流数量、依赖深度、风险、不确定性、写冲突、专业需求、并行收益、独立审核和持续范围，确定 `solo` / `lean_team` / `project_team` / `program_team`；团队规模是上限，不是目标。
+- 按收益使用最少必要的 subagent：提供 `codebase-researcher`、`technical-architect`、`developer`、`writer`、`reviewer`、`test-debugger`、`supervisor` 七个窄职责 Profile，不恢复 v0.1 的固定 16 角色。同一 Profile 可以有多个不同 position instance，但必须对应不同 Work Item、范围与输出。
 - 宿主只有在确实暴露按名称选择 custom-agent 且运行身份可读回时，才可按名称运行 profile；当前 resolver 不把自报 loaded 配置变成可执行派发。接口或机械 attestor 缺失时，五个只读 profile 可走 Codex CLI 兼容通道，developer/writer 写入仍由主线程或隔离 worktree 完成。
 - 领域 Skill 可以显式绑定给专业 Agent；只禁止两个主控入口递归调用，不再一刀切禁止全部 `$slug`。
 - Goal 只用于明确的长期目标，不为短任务生成 Goal Ledger。
-- 真实 task/thread 只在用户明确要求真实独立执行面时使用。
+- 项目执行阶段只准备 Team Plan 选中的项目级 Profile，不默认安装全部七个，不写用户全局 Agent 配置。
+- 真实 task/thread 只在用户要求独立执行面时使用；普通任务不强制 Thread，工具不可用时不拿同线程或 subagent 冒充新对话。
+- Execution Root 的默认模型请求独立为 GPT-5.6 Sol + `ultra`；它不进入 Subagent 的 Efficient/Balanced/Judgment 成本档。exact ID 必须来自 live catalog，spawn 后必须读回实际 provider/model/effort，禁止静默降级。
 - 只有机器审计确实需要时才输出结构化 receipt。
 - 默认一次 cold review 加一次修复后的定向复核，避免无限 review wave。
 - 声称独立审核已完成时，必须能回查非空 reviewer/task id、与该 id 绑定的唯一终态，以及 reviewer 对当前 artifact 的直接读回；空 `wait`、主线程自审、或只声明 `none` / `fork_context:false` 均不算。工具未明确回显上下文隔离时，必须披露 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。
@@ -100,7 +115,7 @@ cd zhijuan-codex-agency-chief-of-staf
 python3 scripts/install_skill.py
 ```
 
-如需已发布 prerelease，把 tag 改为 `v0.2.0-rc.3`。仅在已审阅的源码 checkout 中开发或验证新增量时直接运行：
+如需已发布 prerelease，把 tag 改为 `v0.2.0-rc.3`。`v0.3.0-rc.1` 当前只存在于本地源码候选；仅在已审阅的源码 checkout 中开发或验证新增量时直接运行：
 
 ```bash
 python3 scripts/install_skill.py
@@ -123,20 +138,29 @@ python3 scripts/install_skill.py --force
 
 从准备交付的源码 checkout 独立读回安装态；只有 `status` 为
 `already-installed`，且 canonical/legacy 两个 `states_before` 都为 `current`，
-当前 README 的 `v0.2.0-rc.3` 能力才可归属于本机已安装 Skill。输出同时包含两套
+当前 checkout 的 Runtime 能力才可归属于本机已安装 Skill。输出同时包含两套
 runtime 的逐文件 SHA-256 manifest，不能只看目录存在或 Skill 名称：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/install_skill.py --dry-run --json
 ```
 
-若结果是 `different`、`missing` 或其他状态，先审阅差异，再显式执行
+Dry Run 不修改安装：缺失时返回 `would-install`，与源码不同且未传 `--force` 时返回 `would-replace`，两套都一致时返回 `already-installed`。先审阅差异，再显式执行
 `--force`，随后重复上述 dry-run；已发布 tag 的安装仍以对应 tag 自带的 README
 和 manifest 为准。
 
 安装器只复制运行时 allowlist，并把两个 bundle 作为一个可回滚的 pair transaction 更新；不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
 
-专业 Agent 模板随 runtime 分发，但不会默认写入任何项目或用户配置。只有显式选择目标项目时才安装：
+专业 Agent 模板随 runtime 分发，但不会默认写入任何项目或用户配置。项目生命周期阶段三默认依据 `TEAM_PLAN.json` 做 Selected-only 准备，并且只有显式 `--apply` 才写当前项目：
+
+```bash
+python3 scripts/prepare_team_runtime.py \
+  --project /absolute/project \
+  --team-plan /absolute/project/.agency/tasks/active/<task-id>/TEAM_PLAN.json \
+  --apply
+```
+
+以下全量安装命令只保留给维护、兼容或用户明确要求全部 Profile 的场景：
 
 ```bash
 python3 scripts/install_agent_profiles.py \
@@ -189,6 +213,30 @@ Packet 可从 [`examples/cli-profile-review.packet.txt`](examples/cli-profile-re
 使用 $agency-chief-of-staff 把这个任务做到可验证完成。
 ```
 
+需求讨论：
+
+```text
+这件事比较复杂，先跟我把目标和边界聊清楚，暂时不要执行。
+```
+
+创建执行清单：
+
+```text
+根据以上讨论，创建任务执行清单；先不要开始执行。
+```
+
+启动独立执行对话：
+
+```text
+创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行任务，并持续更新进度。
+```
+
+归档与沉淀：
+
+```text
+归档这个任务，并把已验证、可复用的信息最小写入已有文档；没有匹配文档时再创建知识文档。
+```
+
 长期目标：
 
 ```text
@@ -203,7 +251,9 @@ Packet 可从 [`examples/cli-profile-review.packet.txt`](examples/cli-profile-re
 
 ## 当前模型能力的使用方式
 
-Skill 为七个窄角色配置 `efficient`、`balanced`、`judgment` 能力档和三种预算模式，并在运行时从当前宿主 catalog 解析 exact model；仓库不维护会过期的模型排行榜或角色硬编码 model slug。
+Execution Root 与 Subagent 分开路由。Root 读取 `assets/execution-model-policy.json`，默认请求 GPT-5.6 Sol + `ultra`，使用 `scripts/resolve_execution_model.py` 从当前 App Server catalog 解析 exact ID；若 Sol 不存在、Ultra 不受支持或 spawn readback 不一致，就要求用户选择或 FAIL，不猜测、不静默降级。
+
+七个窄 Subagent Profile 继续使用 `efficient`、`balanced`、`judgment` 能力档和三种预算模式；它们不要求全部使用 Ultra。仓库不维护会过期的模型排行榜或角色硬编码 model slug。
 
 先读取当前 Codex App Server catalog，并从该 App Server 的规范状态库读回调用方指定线程的 root provider；调用方再显式绑定当前可见模型：
 
@@ -251,8 +301,8 @@ python3 scripts/resolve_role_route.py \
 
 验证名称必须诚实区分：
 
-1. `package/contract`：离线检查 frontmatter、runtime manifest、七个 Agent TOML、项目/模板 parity、领域 Skill 绑定、场景 schema 和安装行为；不声称证明模型行为。
-2. `model-smoke`：在无本项目 routing、禁用 plugins/apps、最小环境变量的临时仓库里真实调用当前 Codex 模型，保存 event JSONL 和最终输出；子集运行只会得到 `passed_partial`。
+1. `package/contract`：离线检查 frontmatter、四阶段 schema、Team Planner、Execution Session、进度/归档/知识、runtime manifest、七个 Agent TOML、项目/模板 parity、领域 Skill 绑定、行为 case 和安装事务；不声称证明模型行为。
+2. `model-smoke`：在无本项目 routing、禁用 plugins/apps、最小环境变量的临时仓库里真实调用当前 Codex 模型，检查真实文件、状态、Agent/Thread event、model readback、progress、archive 和 knowledge patch；子集运行只会得到 `passed_partial`。只有实际执行并保存 receipt 后才可标 PASS，离线 case schema 通过不算模型行为证明。
 3. `profile-compat-smoke`：当前 named custom-agent 接口不可用时，从已安装 canonical bundle 发起独立只读 CLI profile 会话，核验 state DB/rollout、直接 artifact read、严格 reviewer schema、AGENTS 不变和 cleanup。
 4. `native-task-smoke`：当前接口支持按名称选择并能读回角色时，从已安装 canonical bundle 发起真实 Codex Desktop task，核验 provider/model/effort、reviewer 绑定、安装 manifest 和 cleanup。
 5. `threadops-smoke`：只有发布目标明确要求真实 task/thread 证明时，使用 Codex Desktop 工具核验真实 id、readback、worktree 和 cleanup。
@@ -344,11 +394,23 @@ references/
   software-development.md
   user-experience.md
   model-routing-and-budget.md
+  task-lifecycle.md
+  team-orchestration.md
+  execution-session.md
+  knowledge-archiving.md
 assets/
   WORK_RECEIPT_TEMPLATE.yaml
   DELIVERY_EVIDENCE_TEMPLATE.yaml
   agent-routing.json
   role-model-policy.json
+  task-state.schema.json
+  task-execution-plan.schema.json
+  team-plan.schema.json
+  progress-event.schema.json
+  knowledge-deposit.schema.json
+  execution-session.schema.json
+  execution-model-policy.json
+  lifecycle-intents.json
   visualizations/*
   codex_agents/*.toml
 scripts/
@@ -357,6 +419,16 @@ scripts/
   inspect_codex_models.py
   configure_native_routing.py
   resolve_role_route.py
+  agency_task.py
+  resolve_team_plan.py
+  prepare_team_runtime.py
+  agency_doctor.py
+  prepare_execution_launch.py
+  resolve_execution_model.py
+  update_task_progress.py
+  archive_task.py
+  deposit_knowledge.py
+  validate_task_archive.py
   verify_role_route_receipt.py
   run_profile_compat.py
   render_visualization.py
