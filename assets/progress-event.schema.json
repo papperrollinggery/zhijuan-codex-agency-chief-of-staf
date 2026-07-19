@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agency/progress-event.schema.json",
+  "title": "Agency Progress Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "task_id", "work_id", "timestamp", "actor", "status_before", "status_after", "summary", "artifacts", "verification", "blockers"],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "work_id": {"type": ["string", "null"]},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "actor": {"type": "string", "minLength": 1},
+    "status_before": {"type": ["string", "null"]},
+    "status_after": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "artifacts": {"type": "array", "items": {"type": "string"}},
+    "verification": {"type": "array", "items": {"type": "string"}},
+    "blockers": {"type": "array", "items": {"type": "string"}}
+  }
+}

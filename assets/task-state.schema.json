@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agency/task-state.schema.json",
+  "title": "Agency Task State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "status", "updated_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,95}$"},
+    "status": {
+      "enum": [
+        "discussion",
+        "plan_ready",
+        "execution_ready",
+        "executing",
+        "verifying",
+        "completed",
+        "archived",
+        "cancelled",
+        "superseded",
+        "blocked"
+      ]
+    },
+    "updated_at": {"type": "string", "format": "date-time"},
+    "reason": {"type": ["string", "null"]},
+    "superseded_by": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,95}$"
+    }
+  },
+  "x-legal-transitions": {
+    "discussion": ["plan_ready", "cancelled"],
+    "plan_ready": ["execution_ready", "superseded"],
+    "execution_ready": ["executing", "superseded"],
+    "executing": ["verifying", "blocked"],
+    "verifying": ["completed"],
+    "completed": ["archived"],
+    "blocked": ["executing"]
+  }
+}
