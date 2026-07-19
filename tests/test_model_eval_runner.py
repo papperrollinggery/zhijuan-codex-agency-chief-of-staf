@@ -592,6 +592,54 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertTrue(any("manifest scope mismatch" in item for item in failures))
 
+    def test_fixture_scope_allows_only_allowlisted_lifecycle_prefixes(self) -> None:
+        baseline = {"README.md": "file:644:before"}
+        final = {
+            "README.md": "file:644:before",
+            ".agency": "directory:755",
+            ".agency/task-index.json": "file:644:index",
+            ".agency/tasks": "directory:755",
+            ".agency/tasks/active": "directory:755",
+            ".agency/tasks/active/task-smoke": "directory:755",
+            ".agency/tasks/active/task-smoke/task-plan.json": "file:644:plan",
+        }
+        failures, changed = runner.fixture_scope_failures(
+            baseline,
+            final,
+            "head",
+            "head",
+            None,
+            [".agency/"],
+        )
+        self.assertEqual(failures, [])
+        self.assertIn(".agency/tasks/active/task-smoke/task-plan.json", changed)
+        final["outside.txt"] = "file:644:escape"
+        failures, _changed = runner.fixture_scope_failures(
+            baseline,
+            final,
+            "head",
+            "head",
+            None,
+            [".agency/"],
+        )
+        self.assertTrue(any("outside.txt" in item for item in failures))
+
+    def test_lifecycle_fixture_setup_builds_completed_archive_preconditions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            (fixture / "README.md").write_text("# Fixture\n", encoding="utf-8")
+            runner.prepare_lifecycle_fixture(
+                fixture,
+                {"kind": "completed_archive", "task_id": "task-model-fixture"},
+            )
+            task_dir = fixture / ".agency/tasks/active/task-model-fixture"
+            plan = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
+            self.assertEqual(plan["status"], "completed")
+            self.assertEqual(plan["work_items"][0]["status"], "completed")
+            self.assertTrue((task_dir / "closure.json").is_file())
+            self.assertTrue((task_dir / "knowledge-candidates-input.json").is_file())
+            self.assertTrue((fixture / "docs/testing/lifecycle.md").is_file())
+
     def test_session_identity_cannot_be_assembled_across_journals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

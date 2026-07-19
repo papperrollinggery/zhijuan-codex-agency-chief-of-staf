@@ -72,6 +72,24 @@ class InstallSkillTests(unittest.TestCase):
             self.assertFalse(list(target_root.glob(".*.staging-*")))
             self.assertFalse(list(target_root.glob(".*.backup-*")))
 
+    def test_dry_run_reports_pair_replacement_without_force_or_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target_root = Path(tmp) / "skills"
+            first = self.run_installer("--target-root", str(target_root))
+            self.assertEqual(first.returncode, 0, first.stderr)
+            canonical = target_root / install_skill.CANONICAL_SKILL_NAME
+            stale = canonical / "stale.txt"
+            stale.write_text("USER SENTINEL\n", encoding="utf-8")
+
+            result = self.run_installer(
+                "--target-root", str(target_root), "--dry-run", "--json"
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "would-replace")
+            self.assertEqual(payload["states_before"][install_skill.CANONICAL_SKILL_NAME], "different")
+            self.assertEqual(stale.read_text(encoding="utf-8"), "USER SENTINEL\n")
+
     def test_installed_canonical_installer_is_safe_and_legacy_installer_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target_root = Path(tmp) / "skills"

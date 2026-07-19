@@ -28,6 +28,7 @@ from protocol_contract import (
 )
 from resolve_execution_model import live_catalog, resolve_execution_model
 from resolve_team_plan import resolve_team_plan, write_team_plan
+from update_task_progress import update_progress
 
 
 def choose_task(project: Path, task_id: str | None) -> str:
@@ -256,6 +257,24 @@ def prepare_execution_launch(
             transition_task(root, selected_task_id, "execution_ready")
         if session_status == "executing":
             transition_task(root, selected_task_id, "executing")
+        update_progress(
+            root,
+            task_id=selected_task_id,
+            event_type="team_plan_changed",
+            work_id=None,
+            actor="execution-root",
+            summary=(
+                "Execution session launched with verified native readback"
+                if session_status == "executing"
+                else "Execution session prepared; launch handoff is ready"
+            ),
+            artifacts=[
+                f".agency/tasks/active/{selected_task_id}/TEAM_PLAN.json",
+                f".agency/tasks/active/{selected_task_id}/execution-session.json",
+                f".agency/tasks/active/{selected_task_id}/EXECUTION_LAUNCH_PROMPT.md",
+            ],
+            idempotency_key=f"execution-launch:{session_status}",
+        )
     return {
         "status": session_status,
         "task_id": selected_task_id,

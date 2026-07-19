@@ -182,6 +182,7 @@ _SCRIPT_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
+from agency_task import atomic_write_json, create_task, transition_task
 from install_skill import RUNTIME_FILES, SKILL_NAME, copy_runtime, runtime_manifest
 from protocol_contract import REVIEW_FIELDS, parse_reviewer_terminal
 from resolve_role_route import verify_live_catalog
@@ -224,8 +225,29 @@ ALLOWED_COLLABORATION = {
     "native_subagents_optional",
     "real_task",
 }
-ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker"}
+ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker", "execution_session"}
 ALLOWED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
+ALLOWED_LIFECYCLE_PHASES = {
+    "direct",
+    "discussion",
+    "plan_ready",
+    "execution_launch",
+    "executing",
+    "archive",
+}
+ALLOWED_TEAM_EXPECTATIONS = {
+    "none",
+    "solo_or_lean",
+    "project_team",
+    "multiple_researcher_instances",
+    "root_owned",
+}
+ALLOWED_FIXTURE_SETUP_KINDS = {
+    "plan_ready",
+    "executing",
+    "completed_archive",
+    "small_bug",
+}
 EVALUATOR_DEPENDENCIES = (
     "scripts/install_skill.py",
     "scripts/validate_package.py",
@@ -306,6 +328,89 @@ REQUIRED_SMOKE_CONTRACT = {
         "mode": "structured",
         "collaboration": "native_subagents",
         "activation": "explicit",
+    },
+    "lifecycle-discussion-explicit": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "none",
+        "activation": "implicit",
+        "lifecycle_phase": "discussion",
+    },
+    "lifecycle-discussion-implicit": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "none",
+        "activation": "implicit",
+        "lifecycle_phase": "discussion",
+    },
+    "lifecycle-plan-creation": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "none",
+        "activation": "implicit",
+        "lifecycle_phase": "plan_ready",
+        "sandbox": "workspace-write",
+    },
+    "lifecycle-execution-launch": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "real_task",
+        "activation": "implicit",
+        "lifecycle_phase": "execution_launch",
+        "sandbox": "workspace-write",
+    },
+    "lifecycle-execution-session-resume": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents_optional",
+        "activation": "execution_session",
+        "lifecycle_phase": "executing",
+        "sandbox": "workspace-write",
+    },
+    "lifecycle-team-small-bug": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "none",
+        "activation": "explicit",
+        "lifecycle_phase": "plan_ready",
+    },
+    "lifecycle-team-cross-module": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents_optional",
+        "activation": "explicit",
+        "lifecycle_phase": "plan_ready",
+    },
+    "lifecycle-team-research-instances": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents_optional",
+        "activation": "explicit",
+        "lifecycle_phase": "plan_ready",
+    },
+    "lifecycle-progress-update": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "none",
+        "activation": "explicit",
+        "lifecycle_phase": "executing",
+        "sandbox": "workspace-write",
+    },
+    "lifecycle-archive-knowledge": {
+        "should_trigger": True,
+        "mode": "structured",
+        "collaboration": "native_subagents_optional",
+        "activation": "implicit",
+        "lifecycle_phase": "archive",
+        "sandbox": "workspace-write",
+    },
+    "lifecycle-small-task-exclusion": {
+        "should_trigger": False,
+        "mode": "direct",
+        "collaboration": "none",
+        "activation": "ordinary",
+        "lifecycle_phase": "direct",
+        "sandbox": "workspace-write",
     },
 }
 SAFE_ENV_KEYS = {
@@ -391,6 +496,166 @@ def sha256_regular_nofollow(path: Path) -> str:
         return digest.hexdigest()
     finally:
         os.close(descriptor)
+
+
+def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> None:
+    """Create trusted baseline state for lifecycle model cases before Git init."""
+    if setup is None:
+        return
+    kind = setup["kind"]
+    task_id = setup["task_id"]
+    if kind == "small_bug":
+        (fixture / "utils.py").write_text('LABEL = "teh"\n', encoding="utf-8")
+        (fixture / "test_utils.py").write_text(
+            "import unittest\nimport utils\n\n"
+            "class UtilsTest(unittest.TestCase):\n"
+            "    def test_label(self):\n"
+            "        self.assertEqual(utils.LABEL, \"the\")\n",
+            encoding="utf-8",
+        )
+        return
+    plan = {
+        "schema_version": "1.0",
+        "task_id": task_id,
+        "title": "Lifecycle model smoke task",
+        "objective": "Read the fixture README and preserve current evidence",
+        "source_discussion": {
+            "summary": "The objective and boundaries were confirmed.",
+            "accepted_decisions": ["Use the durable lifecycle"],
+            "constraints": ["Do not change README"],
+            "assumptions": [],
+            "open_questions": [],
+        },
+        "acceptance_criteria": ["README was read and current evidence was recorded"],
+        "out_of_scope": ["Remote publication"],
+        "execution_model_request": {
+            "display_request": "GPT-5.6 Sol",
+            "reasoning_request": "ultra",
+            "resolved_model_id": None,
+            "resolution_status": "pending",
+        },
+        "work_items": [
+            {
+                "work_id": "W-01",
+                "title": "Read fixture evidence",
+                "outcome": "Repository name is verified from README",
+                "work_type": "research",
+                "dependencies": [],
+                "read_scope": ["README.md"],
+                "write_scope": [],
+                "verification": ["Read README.md"],
+                "risk": "low",
+                "uncertainty": "low",
+                "context_coupling": "low",
+                "parallelizable": False,
+                "isolated_worktree_required": False,
+                "accountable_position": "",
+                "profile": None,
+                "review_profile": None,
+                "status": "pending",
+                "evidence_refs": [],
+                "blockers": [],
+                "required": True,
+            }
+        ],
+        "status": "plan_ready",
+    }
+    created = create_task(fixture, plan)
+    task_dir = Path(created["task_dir"])
+    if kind == "executing":
+        transition_task(fixture, task_id, "execution_ready")
+        transition_task(fixture, task_id, "executing")
+        atomic_write_json(
+            task_dir / "TEAM_PLAN.json",
+            {
+                "schema_version": "1.0",
+                "task_id": task_id,
+                "status": "ready",
+                "team_tier": "solo",
+                "positions": [
+                    {
+                        "position_id": "execution-root",
+                        "title": "项目总负责人",
+                        "profile": "execution-root",
+                        "work_items": ["W-01"],
+                        "instance": 1,
+                        "read_scope": ["README.md"],
+                        "write_scope": [],
+                        "wave": 0,
+                        "isolated_worktree_required": False,
+                    }
+                ],
+                "waves": [],
+                "write_conflicts": [],
+                "root_owned_work_items": ["W-01"],
+                "limits": {
+                    "max_active_positions": 5,
+                    "max_parallel_positions": 3,
+                    "max_parallel_writers": 2,
+                    "default_cold_reviewers": 1,
+                    "max_review_fix_rounds": 2,
+                },
+            },
+        )
+        return
+    if kind != "completed_archive":
+        return
+    completed = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
+    completed["status"] = "completed"
+    completed["work_items"][0]["status"] = "completed"
+    completed["work_items"][0]["evidence_refs"] = ["README.md"]
+    completed["acceptance_evidence"] = {
+        completed["acceptance_criteria"][0]: ["README.md readback"]
+    }
+    atomic_write_json(task_dir / "task-plan.json", completed)
+    atomic_write_json(
+        task_dir / "TEAM_PLAN.json",
+        {
+            "schema_version": "1.0",
+            "task_id": task_id,
+            "status": "ready",
+            "positions": [
+                {"profile": "execution-root"},
+                {"profile": "reviewer"},
+            ],
+        },
+    )
+    closure = {
+        "schema_version": "1.0",
+        "review": {"status": "handled", "evidence_refs": ["review PASS"]},
+        "execution_cleanup": {
+            "status": "not_applicable",
+            "evidence_refs": [],
+            "blocker": None,
+        },
+        "validation_results": [
+            {
+                "status": "passed",
+                "summary": "README readback passed",
+                "evidence_refs": ["README.md readback"],
+            }
+        ],
+        "artifacts": ["README.md"],
+    }
+    atomic_write_json(task_dir / "closure.json", closure)
+    candidates = [
+        {
+            "knowledge_id": "knowledge-lifecycle-smoke-001",
+            "category": "testing",
+            "statement": "Lifecycle smoke tests use a committed isolated fixture.",
+            "applicability": "Future lifecycle model evaluations",
+            "evidence_refs": ["README.md readback"],
+            "source_task_id": task_id,
+            "confidence": "verified",
+            "sensitivity": "internal",
+            "recommended_target": "docs/testing/lifecycle.md",
+            "status": "candidate",
+        }
+    ]
+    atomic_write_json(task_dir / "knowledge-candidates-input.json", candidates)
+    testing_doc = fixture / "docs" / "testing" / "lifecycle.md"
+    testing_doc.parent.mkdir(parents=True)
+    testing_doc.write_text("# Lifecycle Testing\n", encoding="utf-8")
 
 
 def source_git_state(root: Path) -> dict[str, object]:
@@ -762,6 +1027,18 @@ def safe_relative_artifact(value: object, case_id: str) -> PurePosixPath:
     return path
 
 
+def safe_artifact_glob(value: object, case_id: str) -> str:
+    if not isinstance(value, str) or not value or "\\" in value:
+        raise RuntimeError(f"case {case_id} artifact glob is unsafe")
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in {"", ".", "..", "**"} for part in path.parts):
+        raise RuntimeError(f"case {case_id} artifact glob escapes the fixture")
+    for part in path.parts:
+        if part != "*" and re.fullmatch(r"[A-Za-z0-9._-]+", part) is None:
+            raise RuntimeError(f"case {case_id} artifact glob has an unsafe component")
+    return value
+
+
 def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, object]:
     expected_cwd = str(fixture.resolve())
     models: set[str] = set()
@@ -967,6 +1244,54 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} has unsupported collaboration")
     if case["activation"] not in ALLOWED_ACTIVATION:
         raise RuntimeError(f"case {case_id} has unsupported activation")
+    if "lifecycle_phase" in case and case["lifecycle_phase"] not in ALLOWED_LIFECYCLE_PHASES:
+        raise RuntimeError(f"case {case_id} has unsupported lifecycle_phase")
+    if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
+        raise RuntimeError(f"case {case_id} has unsupported team_expectation")
+    for key in ("no_write", "no_thread", "require_progress", "require_archive", "require_knowledge_patch"):
+        if key in case and type(case[key]) is not bool:
+            raise RuntimeError(f"case {case_id} {key} must be boolean")
+    setup = case.get("fixture_setup")
+    if setup is not None:
+        if not isinstance(setup, dict) or set(setup) != {"kind", "task_id"}:
+            raise RuntimeError(f"case {case_id} fixture_setup is invalid")
+        if setup["kind"] not in ALLOWED_FIXTURE_SETUP_KINDS:
+            raise RuntimeError(f"case {case_id} fixture_setup kind is unsupported")
+        if not isinstance(setup["task_id"], str) or re.fullmatch(
+            r"[a-z0-9][a-z0-9._-]{2,95}", setup["task_id"]
+        ) is None:
+            raise RuntimeError(f"case {case_id} fixture_setup task_id is unsafe")
+    prefixes = case.get("allowed_changed_prefixes", [])
+    if not isinstance(prefixes, list) or any(
+        not isinstance(prefix, str) or prefix not in {".agency/", "docs/"}
+        for prefix in prefixes
+    ):
+        raise RuntimeError(f"case {case_id} changed prefix is not allowlisted")
+    absent = case.get("expected_absent_artifacts", [])
+    if not isinstance(absent, list):
+        raise RuntimeError(f"case {case_id} expected_absent_artifacts must be a list")
+    for pattern in absent:
+        safe_artifact_glob(pattern, case_id)
+    artifacts = case.get("expected_artifacts", [])
+    if not isinstance(artifacts, list):
+        raise RuntimeError(f"case {case_id} expected_artifacts must be a list")
+    for artifact in artifacts:
+        expected_keys = {"path_glob", "must_contain", "must_contain_any", "must_not_contain"}
+        if not isinstance(artifact, dict) or set(artifact) != expected_keys:
+            raise RuntimeError(f"case {case_id} expected artifact contract is invalid")
+        safe_artifact_glob(artifact["path_glob"], case_id)
+        for key in ("must_contain", "must_contain_any", "must_not_contain"):
+            values = artifact[key]
+            if not isinstance(values, list) or any(
+                not isinstance(value, str) or not value for value in values
+            ):
+                raise RuntimeError(f"case {case_id} artifact {key} is invalid")
+        if not artifact["must_contain"] and not artifact["must_contain_any"]:
+            raise RuntimeError(f"case {case_id} artifact lacks a positive assertion")
+    if case.get("no_write") and (
+        case.get("expected_file") or artifacts or prefixes
+    ):
+        raise RuntimeError(f"case {case_id} no_write conflicts with artifact changes")
     sandbox = case.get("sandbox", "read-only")
     if sandbox not in ALLOWED_SANDBOXES:
         raise RuntimeError(f"case {case_id} requests unsafe sandbox {sandbox!r}")
@@ -1629,6 +1954,7 @@ def fixture_scope_failures(
     baseline_head: object,
     final_head: object,
     expected_file: str | None,
+    allowed_prefixes: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
     changed = sorted(
         path
@@ -1648,11 +1974,21 @@ def fixture_scope_failures(
                 and str(final_manifest.get(parent_text, "")).startswith("directory:")
             ):
                 allowed_paths.add(parent_text)
+    prefixes = allowed_prefixes or []
     allowed = sorted(allowed_paths)
     failures: list[str] = []
-    if changed != allowed:
+    unexpected = [
+        path
+        for path in changed
+        if path not in allowed_paths
+        and not any(path == prefix.rstrip("/") or path.startswith(prefix) for prefix in prefixes)
+    ]
+    missing_exact = sorted(allowed_paths - set(changed))
+    if unexpected or missing_exact:
         failures.append(
-            f"fixture manifest scope mismatch: expected {allowed!r}, observed {changed!r}"
+            "fixture manifest scope mismatch: "
+            f"expected_exact={allowed!r}, allowed_prefixes={prefixes!r}, "
+            f"missing_exact={missing_exact!r}, unexpected={unexpected!r}, observed={changed!r}"
         )
     if final_head != baseline_head:
         failures.append("fixture HEAD changed during model execution")
@@ -1750,7 +2086,7 @@ def run_case(
         command.extend(["--model", model])
     if reasoning_effort:
         command.extend(["-c", f"model_reasoning_effort={json.dumps(reasoning_effort)}"])
-    command.append(str(case["prompt"]))
+    command.append(str(case["prompt"]).replace("__FIXTURE_ROOT__", str(fixture.resolve())))
 
     completed, timed_out = run_evaluated_codex(
         command,
@@ -1823,6 +2159,7 @@ def run_case(
         baseline_git["head"],
         final_git["head"],
         expected_manifest_file,
+        list(case.get("allowed_changed_prefixes", [])),
     )
     failures.extend(scope_failures)
     if completed.returncode != 0:
@@ -1837,6 +2174,8 @@ def run_case(
             failures.append(f"assistant output unexpectedly contains {marker!r}")
     if case.get("require_tool_event") and parsed["tool_events"] == 0:
         failures.append("no completed tool event observed")
+    if case.get("no_thread") and parsed["collaboration_event_indexes"]:
+        failures.append("discussion case attempted a collaboration or task/thread action")
     if events_leak or stderr_leak or final_leak:
         failures.append("exact auth value appeared in model output and was redacted")
 
@@ -1905,6 +2244,57 @@ def run_case(
         )
         if diff_check.returncode != 0:
             failures.append("git diff --check failed for expected artifact")
+
+    observed_artifact_paths: list[str] = []
+    for artifact_contract in case.get("expected_artifacts", []):
+        assert isinstance(artifact_contract, dict)
+        pattern = safe_artifact_glob(
+            artifact_contract["path_glob"], str(case["id"])
+        )
+        matches = sorted(
+            path
+            for path in fixture.glob(pattern)
+            if path.is_file() and not path.is_symlink()
+        )
+        if not matches:
+            failures.append(f"expected artifact glob had no file: {pattern}")
+            continue
+        for artifact in matches:
+            relative = artifact.relative_to(fixture).as_posix()
+            observed_artifact_paths.append(relative)
+            raw_text = artifact.read_text(encoding="utf-8", errors="replace")
+            artifact_text, artifact_secret = redact_exact_auth_values(raw_text, auth_secrets)
+            if artifact_secret:
+                failures.append(f"exact auth value appeared in lifecycle artifact: {relative}")
+            for marker in artifact_contract["must_contain"]:
+                if marker not in artifact_text:
+                    failures.append(f"lifecycle artifact {relative} missing {marker!r}")
+            any_markers = artifact_contract["must_contain_any"]
+            if any_markers and not any(marker in artifact_text for marker in any_markers):
+                failures.append(
+                    f"lifecycle artifact {relative} lacks every allowed marker: {any_markers!r}"
+                )
+            for marker in artifact_contract["must_not_contain"]:
+                if marker in artifact_text:
+                    failures.append(
+                        f"lifecycle artifact {relative} unexpectedly contains {marker!r}"
+                    )
+    for pattern_value in case.get("expected_absent_artifacts", []):
+        pattern = safe_artifact_glob(pattern_value, str(case["id"]))
+        if any(fixture.glob(pattern)):
+            failures.append(f"artifact expected to be absent still exists: {pattern}")
+    if case.get("require_progress") and not any(
+        path.endswith("progress.jsonl") for path in observed_artifact_paths
+    ):
+        failures.append("progress-required case did not prove progress.jsonl")
+    if case.get("require_archive") and not any(
+        path.endswith("archive-manifest.json") for path in observed_artifact_paths
+    ):
+        failures.append("archive-required case did not prove archive-manifest.json")
+    if case.get("require_knowledge_patch") and not any(
+        path.startswith("docs/") for path in observed_artifact_paths
+    ):
+        failures.append("knowledge-required case did not prove a docs patch")
 
     completed_reviews = parsed["reviews_completed"]
     assert isinstance(completed_reviews, dict)
@@ -2241,6 +2631,7 @@ def main() -> None:
             copy_runtime(runtime_snapshot, skill_target)
             if runtime_manifest(skill_target) != snapshot_manifest:
                 raise RuntimeError(f"fixture runtime manifest mismatch for case {case_id}")
+            prepare_lifecycle_fixture(fixture, case.get("fixture_setup"))
             initialize_fixture_repository(fixture)
             env = build_isolated_env(fixture_home, isolated_codex_home)
             results.append(

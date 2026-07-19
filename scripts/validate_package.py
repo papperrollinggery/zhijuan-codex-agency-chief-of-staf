@@ -105,8 +105,29 @@ ALLOWED_COLLABORATION = {
     "native_subagents_optional",
     "real_task",
 }
-ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker"}
+ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker", "execution_session"}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
+ALLOWED_LIFECYCLE_PHASES = {
+    "direct",
+    "discussion",
+    "plan_ready",
+    "execution_launch",
+    "executing",
+    "archive",
+}
+ALLOWED_TEAM_EXPECTATIONS = {
+    "none",
+    "solo_or_lean",
+    "project_team",
+    "multiple_researcher_instances",
+    "root_owned",
+}
+ALLOWED_FIXTURE_SETUP_KINDS = {
+    "plan_ready",
+    "executing",
+    "completed_archive",
+    "small_bug",
+}
 REQUIRED_PUBLIC_FILES = {
     "README.md",
     "CHANGELOG.md",
@@ -140,6 +161,17 @@ REQUIRED_MODEL_SMOKE_IDS = {
     "ordinary-rescue-phrase",
     "role-model-balanced-budget",
     "role-model-route-unavailable",
+    "lifecycle-discussion-explicit",
+    "lifecycle-discussion-implicit",
+    "lifecycle-plan-creation",
+    "lifecycle-execution-launch",
+    "lifecycle-execution-session-resume",
+    "lifecycle-team-small-bug",
+    "lifecycle-team-cross-module",
+    "lifecycle-team-research-instances",
+    "lifecycle-progress-update",
+    "lifecycle-archive-knowledge",
+    "lifecycle-small-task-exclusion",
 }
 REQUIRED_VISUAL_SURFACES = {
     "task-stage",
@@ -523,6 +555,79 @@ def validate_relative_artifact_path(value: object, case_id: str) -> None:
         fail(f"behavior case {case_id} expected_file must stay inside the fixture")
 
 
+def validate_artifact_glob(value: object, case_id: str) -> None:
+    if not isinstance(value, str) or not value or "\\" in value:
+        fail(f"behavior case {case_id} artifact glob must be a safe non-empty string")
+    path = PurePosixPath(value)
+    if path.is_absolute() or any(part in {"", ".", "..", "**"} for part in path.parts):
+        fail(f"behavior case {case_id} artifact glob must stay inside the fixture")
+    for part in path.parts:
+        if part != "*" and not re.fullmatch(r"[A-Za-z0-9._-]+", part):
+            fail(f"behavior case {case_id} artifact glob has an unsafe component")
+
+
+def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
+    if "lifecycle_phase" in case and case["lifecycle_phase"] not in ALLOWED_LIFECYCLE_PHASES:
+        fail(f"behavior case {case_id} lifecycle_phase is unsupported")
+    if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
+        fail(f"behavior case {case_id} team_expectation is unsupported")
+    for key in ("no_write", "no_thread", "require_progress", "require_archive", "require_knowledge_patch"):
+        if key in case and type(case[key]) is not bool:
+            fail(f"behavior case {case_id} {key} must be boolean")
+    setup = case.get("fixture_setup")
+    if setup is not None:
+        if not isinstance(setup, dict) or set(setup) != {"kind", "task_id"}:
+            fail(f"behavior case {case_id} fixture_setup is invalid")
+        if setup["kind"] not in ALLOWED_FIXTURE_SETUP_KINDS:
+            fail(f"behavior case {case_id} fixture_setup kind is unsupported")
+        if not isinstance(setup["task_id"], str) or not re.fullmatch(
+            r"[a-z0-9][a-z0-9._-]{2,95}", setup["task_id"]
+        ):
+            fail(f"behavior case {case_id} fixture_setup task_id is unsafe")
+    validate_string_list(case, "allowed_changed_prefixes", case_id)
+    for prefix in case.get("allowed_changed_prefixes", []):
+        if prefix not in {".agency/", "docs/"}:
+            fail(f"behavior case {case_id} changed prefix is not allowlisted")
+    validate_string_list(case, "expected_absent_artifacts", case_id)
+    for pattern in case.get("expected_absent_artifacts", []):
+        validate_artifact_glob(pattern, case_id)
+    artifacts = case.get("expected_artifacts", [])
+    if not isinstance(artifacts, list):
+        fail(f"behavior case {case_id} expected_artifacts must be a list")
+    for artifact in artifacts:
+        expected_keys = {"path_glob", "must_contain", "must_contain_any", "must_not_contain"}
+        if not isinstance(artifact, dict) or set(artifact) != expected_keys:
+            fail(f"behavior case {case_id} expected artifact contract is invalid")
+        validate_artifact_glob(artifact["path_glob"], case_id)
+        for key in ("must_contain", "must_contain_any", "must_not_contain"):
+            value = artifact[key]
+            if not isinstance(value, list) or any(
+                not isinstance(item, str) or not item for item in value
+            ):
+                fail(f"behavior case {case_id} artifact {key} is invalid")
+        if not artifact["must_contain"] and not artifact["must_contain_any"]:
+            fail(f"behavior case {case_id} artifact needs a positive assertion")
+    if case.get("no_write") and (
+        case.get("expected_file")
+        or artifacts
+        or case.get("allowed_changed_prefixes")
+    ):
+        fail(f"behavior case {case_id} no_write conflicts with artifact changes")
+    artifact_patterns = [artifact["path_glob"] for artifact in artifacts]
+    if case.get("require_progress") and not any(
+        pattern.endswith("progress.jsonl") for pattern in artifact_patterns
+    ):
+        fail(f"behavior case {case_id} requires progress without a progress artifact")
+    if case.get("require_archive") and not any(
+        pattern.endswith("archive-manifest.json") for pattern in artifact_patterns
+    ):
+        fail(f"behavior case {case_id} requires archive without a manifest artifact")
+    if case.get("require_knowledge_patch") and not any(
+        pattern.startswith("docs/") for pattern in artifact_patterns
+    ):
+        fail(f"behavior case {case_id} requires knowledge without a docs artifact")
+
+
 def validate_string_list(case: dict[str, object], key: str, case_id: str) -> None:
     if key not in case:
         return
@@ -571,6 +676,7 @@ def validate_behavior_cases(path: Path) -> int:
             )
         if case["activation"] not in ALLOWED_ACTIVATION:
             fail(f"behavior case {case_id} has unsupported activation: {case['activation']!r}")
+        validate_lifecycle_case(case, case_id)
         if "model_smoke" in case and type(case["model_smoke"]) is not bool:
             fail(f"behavior case {case_id} model_smoke must be boolean")
         sandbox = case.get("sandbox", "read-only")

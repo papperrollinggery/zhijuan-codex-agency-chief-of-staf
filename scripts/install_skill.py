@@ -330,6 +330,8 @@ def main() -> None:
 
     if all(state == "current" for state in states.values()):
         status = "already-installed"
+    elif args.dry_run:
+        status = "would-install" if all(v == "missing" for v in states.values()) else "would-replace"
     elif any(state != "missing" for state in states.values()) and not args.force:
         result = {
             "source": str(source),
@@ -341,8 +343,6 @@ def main() -> None:
         }
         emit(result, args.json)
         raise SystemExit(1)
-    elif args.dry_run:
-        status = "would-install" if all(v == "missing" for v in states.values()) else "would-replace"
     else:
         status = "installed" if all(v == "missing" for v in states.values()) else "replaced"
         replace_many_from_staging(source, targets)

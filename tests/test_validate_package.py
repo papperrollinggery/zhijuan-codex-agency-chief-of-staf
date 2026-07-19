@@ -32,10 +32,12 @@ class ValidatePackageMutationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = self.make_copy(Path(tmp))
             path = root / "SKILL.md"
-            text = path.read_text(encoding="utf-8")
-            text = text.replace('description: "', "description: ", 1)
-            text = text.replace('true."\n---', "true.\n---", 1)
-            path.write_text(text, encoding="utf-8")
+            lines = path.read_text(encoding="utf-8").splitlines()
+            description_index = next(
+                index for index, line in enumerate(lines) if line.startswith('description: "')
+            )
+            lines[description_index] = "description: unquoted: value"
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
             result = self.validate(root)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("YAML-quoted", result.stderr)

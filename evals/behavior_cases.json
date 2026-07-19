@@ -290,5 +290,281 @@
     "mode": "worker",
     "collaboration": "none",
     "activation": "worker"
+  },
+  {
+    "id": "lifecycle-discussion-explicit",
+    "prompt": "我们先讨论这个项目的需求，暂时不要执行。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "none",
+    "activation": "implicit",
+    "lifecycle_phase": "discussion",
+    "team_expectation": "none",
+    "model_smoke": true,
+    "must_contain": ["任务已接管｜需求讨论中"],
+    "must_not_contain": ["task-plan.json", "已创建执行对话", "TOOL_BLOCKED"],
+    "no_write": true,
+    "no_thread": true
+  },
+  {
+    "id": "lifecycle-discussion-implicit",
+    "prompt": "这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "none",
+    "activation": "implicit",
+    "lifecycle_phase": "discussion",
+    "team_expectation": "none",
+    "model_smoke": true,
+    "must_contain": ["任务已接管｜需求讨论中"],
+    "must_not_contain": ["执行已开始", "已创建 Thread", "TOOL_BLOCKED"],
+    "no_write": true,
+    "no_thread": true
+  },
+  {
+    "id": "lifecycle-plan-creation",
+    "prompt": "前面的讨论已经确认：目标是验证 README 中的仓库名称；约束是不修改 README、不发布远端；完成标准是生成可读且可验证的项目执行清单。根据以上讨论，创建任务执行清单，任务 ID 使用 task-model-smoke-plan。只创建清单，不开始执行。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "none",
+    "activation": "implicit",
+    "lifecycle_phase": "plan_ready",
+    "team_expectation": "none",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "must_contain": ["任务已接管｜正在创建执行清单"],
+    "must_not_contain": ["团队执行中", "已创建新对话", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "allowed_changed_prefixes": [".agency/"],
+    "expected_artifacts": [
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/task-plan.json",
+        "must_contain": ["\"task_id\": \"task-model-smoke-plan\"", "\"status\": \"plan_ready\""],
+        "must_contain_any": [],
+        "must_not_contain": ["\"status\": \"executing\""]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/TASK_EXECUTION_CHECKLIST.md",
+        "must_contain": ["完成标准", "不会自动开始执行"],
+        "must_contain_any": [],
+        "must_not_contain": ["100%"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/TEAM_PLAN.json",
+        "must_contain": ["\"status\": \"pending\""],
+        "must_contain_any": [],
+        "must_not_contain": ["16"]
+      }
+    ],
+    "expected_absent_artifacts": [
+      ".agency/tasks/active/task-model-smoke-plan/execution-session.json"
+    ]
+  },
+  {
+    "id": "lifecycle-execution-launch",
+    "prompt": "创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单，执行任务，并更新进度。当前活动任务是 task-model-smoke-launch；真实 Native Task 不可用时按标准生成手动启动提示词，不要假装已创建对话。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "real_task",
+    "activation": "implicit",
+    "lifecycle_phase": "execution_launch",
+    "team_expectation": "solo_or_lean",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "fixture_setup": {"kind": "plan_ready", "task_id": "task-model-smoke-launch"},
+    "must_contain": ["任务已接管｜正在启动执行对话"],
+    "must_not_contain": ["模型已运行（未读回）", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_progress": true,
+    "allowed_changed_prefixes": [".agency/"],
+    "expected_artifacts": [
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-launch/execution-session.json",
+        "must_contain": ["\"display_model_request\": \"GPT-5.6 Sol\"", "\"reasoning_request\": \"ultra\""],
+        "must_contain_any": ["manual_launch_ready", "native_launch_ready", "executing"],
+        "must_not_contain": ["same-thread"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-launch/EXECUTION_LAUNCH_PROMPT.md",
+        "must_contain": ["AGENCY_EXECUTION_SESSION: true", "推理强度请求：ultra"],
+        "must_contain_any": [],
+        "must_not_contain": ["AGENCY_WORKER: true"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-launch/progress.jsonl",
+        "must_contain": ["execution-session.json"],
+        "must_contain_any": ["Execution session prepared", "Execution session launched"],
+        "must_not_contain": ["percentage"]
+      }
+    ],
+    "expected_absent_artifacts": []
+  },
+  {
+    "id": "lifecycle-execution-session-resume",
+    "prompt": "AGENCY_EXECUTION_SESSION: true\n任务 ID：task-model-smoke-resume\n项目根目录：__FIXTURE_ROOT__\n任务清单：.agency/tasks/active/task-model-smoke-resume/task-plan.json\n团队计划：.agency/tasks/active/task-model-smoke-resume/TEAM_PLAN.json\n进度文件：.agency/tasks/active/task-model-smoke-resume/PROGRESS.md\n执行模型请求：GPT-5.6 Sol\n推理强度请求：ultra\n执行职责：作为本任务 Execution Root，按清单执行、调度、验证并更新进度。\n停止条件：全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents_optional",
+    "activation": "execution_session",
+    "lifecycle_phase": "executing",
+    "team_expectation": "root_owned",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "fixture_setup": {"kind": "executing", "task_id": "task-model-smoke-resume"},
+    "must_contain": ["任务已接管｜团队执行中"],
+    "must_not_contain": ["重新讨论需求", "重新创建任务清单", "另一个 Execution Root", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_progress": true,
+    "allowed_changed_prefixes": [".agency/"],
+    "expected_artifacts": [
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-resume/progress.jsonl",
+        "must_contain": ["\"status_after\":\"in_progress\"", "\"status_after\":\"completed\""],
+        "must_contain_any": ["README.md", "readback"],
+        "must_not_contain": ["fake", "percentage"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-resume/PROGRESS.md",
+        "must_contain": ["当前阶段", "验证状态"],
+        "must_contain_any": ["verifying", "completed", "executing"],
+        "must_not_contain": ["100%"]
+      }
+    ],
+    "expected_absent_artifacts": []
+  },
+  {
+    "id": "lifecycle-team-small-bug",
+    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：一个高耦合、单文件、单目标的小 Bug 应该用哪个 Team Tier、安排哪些岗位？不要为了人数加入 architect、writer 或 supervisor。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "none",
+    "activation": "explicit",
+    "lifecycle_phase": "plan_ready",
+    "team_expectation": "solo_or_lean",
+    "model_smoke": true,
+    "must_contain": ["Solo", "项目总负责人"],
+    "must_not_contain": ["技术架构负责人", "文档与交付负责人", "收口审计负责人", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "no_write": true,
+    "no_thread": true
+  },
+  {
+    "id": "lifecycle-team-cross-module",
+    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：这是一个跨 API、domain 和 persistence 的接口迁移，有多文件实现和独立验证。给出最小 Team Tier 与职位安排。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents_optional",
+    "activation": "explicit",
+    "lifecycle_phase": "plan_ready",
+    "team_expectation": "project_team",
+    "model_smoke": true,
+    "must_contain": ["技术架构负责人", "实施负责人", "独立质量负责人"],
+    "must_not_contain": ["固定 16", "全部七个", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "no_write": true
+  },
+  {
+    "id": "lifecycle-team-research-instances",
+    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：移动端、服务端和部署配置是三个读取范围、输出都不同且可并行的独立研究流。保留三个 Researcher position instance，不要按 Profile 名去重。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents_optional",
+    "activation": "explicit",
+    "lifecycle_phase": "plan_ready",
+    "team_expectation": "multiple_researcher_instances",
+    "model_smoke": true,
+    "must_contain": ["研究负责人", "实例 1", "实例 2", "实例 3"],
+    "must_not_contain": ["合并为一个", "固定最低人数", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "no_write": true
+  },
+  {
+    "id": "lifecycle-progress-update",
+    "prompt": "使用 $agency-chief-of-staff。你是 task-model-smoke-progress 的 Execution Root。读取现有清单，把 W-01 依次记录为开始和完成，读取 README 作为产物与验证证据，并更新事件日志和 PROGRESS.md；不要使用百分比。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "none",
+    "activation": "explicit",
+    "lifecycle_phase": "executing",
+    "team_expectation": "root_owned",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "fixture_setup": {"kind": "executing", "task_id": "task-model-smoke-progress"},
+    "must_contain": ["任务已接管｜团队执行中"],
+    "must_not_contain": ["100%", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_progress": true,
+    "allowed_changed_prefixes": [".agency/"],
+    "expected_artifacts": [
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-progress/progress.jsonl",
+        "must_contain": ["\"status_after\":\"in_progress\"", "\"status_after\":\"completed\"", "README.md"],
+        "must_contain_any": [],
+        "must_not_contain": ["percent", "100%"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-progress/PROGRESS.md",
+        "must_contain": ["已完成", "下一步", "验证状态"],
+        "must_contain_any": [],
+        "must_not_contain": ["100%"]
+      }
+    ],
+    "expected_absent_artifacts": []
+  },
+  {
+    "id": "lifecycle-archive-knowledge",
+    "prompt": "归档 task-model-smoke-archive 的任务执行清单，并把已验证、可复用的 knowledge-candidates-input.json 沉淀到已有 docs/testing/lifecycle.md。使用任务目录中的 closure.json；必须验证完成门禁、生成 archive manifest、从 active 移除并去重知识。",
+    "should_trigger": true,
+    "mode": "structured",
+    "collaboration": "native_subagents_optional",
+    "activation": "implicit",
+    "lifecycle_phase": "archive",
+    "team_expectation": "solo_or_lean",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "fixture_setup": {"kind": "completed_archive", "task_id": "task-model-smoke-archive"},
+    "must_contain": ["任务已接管｜正在归档"],
+    "must_not_contain": ["未验证知识已沉淀", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "require_archive": true,
+    "require_knowledge_patch": true,
+    "allowed_changed_prefixes": [".agency/", "docs/"],
+    "expected_artifacts": [
+      {
+        "path_glob": ".agency/tasks/archive/*/*/task-model-smoke-archive/archive-manifest.json",
+        "must_contain": ["\"final_status\": \"archived\"", "\"archive_disposition\": \"completed\""],
+        "must_contain_any": [],
+        "must_not_contain": ["pending"]
+      },
+      {
+        "path_glob": "docs/testing/lifecycle.md",
+        "must_contain": ["Knowledge ID: `knowledge-lifecycle-smoke-001`", "Source Task: `task-model-smoke-archive`"],
+        "must_contain_any": [],
+        "must_not_contain": ["Thread ID", "/tmp/"]
+      }
+    ],
+    "expected_absent_artifacts": [
+      ".agency/tasks/active/task-model-smoke-archive/task-plan.json"
+    ]
+  },
+  {
+    "id": "lifecycle-small-task-exclusion",
+    "prompt": "修复 utils.py 的一个拼写错误并跑测试。",
+    "should_trigger": false,
+    "mode": "direct",
+    "collaboration": "none",
+    "activation": "ordinary",
+    "lifecycle_phase": "direct",
+    "team_expectation": "none",
+    "model_smoke": true,
+    "sandbox": "workspace-write",
+    "fixture_setup": {"kind": "small_bug", "task_id": "task-small-bug-unused"},
+    "must_contain": [],
+    "must_not_contain": ["任务已接管", "TEAM_PLAN", "Execution Root", "TOOL_BLOCKED"],
+    "require_tool_event": true,
+    "expected_file": "utils.py",
+    "expected_text": "LABEL = \"the\"",
+    "expected_file_content": "LABEL = \"the\"\n",
+    "forbidden_file_texts": ["teh"]
   }
 ]
