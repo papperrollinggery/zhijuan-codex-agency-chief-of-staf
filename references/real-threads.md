@@ -17,13 +17,19 @@
 3. 写任务使用隔离 worktree；只读任务可共享目录。
 4. 先检查是否已有同目标任务，避免重复派发。
 
-如果工具不可用：
+项目生命周期中的 Execution Launch 默认允许标准降级：
+
+```text
+prefer_native → manual_launch_prompt
+```
+
+此时生成完整 `EXECUTION_LAUNCH_PROMPT.md`，session 状态写 `manual_launch_ready`，不声称已创建对话，不用同一主线程或普通 Subagent 冒充新对话。只有用户明确写“必须自动创建真实新对话，不接受手动启动”时才返回：
 
 ```text
 TOOL_BLOCKED：缺少真实 Codex task/thread 或 isolated worktree 能力；未用 subagent 或同线程模拟替代。
 ```
 
-用户明确要求真实线程而工具不可用时，停止并请求新的执行面。只有用户同时明确授权无真实线程 fallback 时，才可继续普通工作；不得自行把 subagent 当作等价替代。
+上述生命周期降级不改变其他明确要求真实 Thread/receipt 的任务：如果请求不接受手动启动，就停止并请求新的执行面。
 
 ## 派发与身份
 

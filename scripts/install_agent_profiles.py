@@ -208,18 +208,29 @@ def install_profiles(
     dry_run: bool,
     routes: dict[str, tuple[str, str]] | None = None,
     route_plan_sha256: str | None = None,
+    selected_profiles: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
     if target_root.is_symlink() or (target_root.exists() and not target_root.is_dir()):
         raise ValueError("agent target root must be a non-symlink directory")
     templates = source_root / "assets" / "codex_agents"
     routes = routes or {}
+    selected = tuple(PROFILE_NAMES) if selected_profiles is None else selected_profiles
+    if not selected or len(selected) != len(set(selected)):
+        raise ValueError("selected agent profiles must be a non-empty unique list")
+    unknown = sorted(set(selected) - set(PROFILE_NAMES))
+    if unknown:
+        raise ValueError(f"unknown selected agent profiles: {', '.join(unknown)}")
+    if any(role not in selected for role in routes):
+        raise ValueError("route bindings must be limited to selected profiles")
+    if any(role not in selected for role in bindings):
+        raise ValueError("skill bindings must be limited to selected profiles")
     rendered = {
         name: rendered_profile(
             templates / f"{name}.toml",
             bindings.get(name, []),
             routes.get(name),
         )
-        for name in PROFILE_NAMES
+        for name in selected
     }
     states: dict[str, str] = {}
     for name, content in rendered.items():
@@ -255,13 +266,13 @@ def install_profiles(
                     allow_bindings=True,
                     expected_route=routes.get(name),
                 )
-            for name in PROFILE_NAMES:
+            for name in selected:
                 target = target_root / f"{name}.toml"
                 if target.exists():
                     backup = target_root / f".{name}.toml.backup-{uuid.uuid4().hex}"
                     target.rename(backup)
                     backups[name] = backup
-            for name in PROFILE_NAMES:
+            for name in selected:
                 target = target_root / f"{name}.toml"
                 (staging / f"{name}.toml").rename(target)
                 promoted.add(name)
@@ -273,7 +284,7 @@ def install_profiles(
                 )
         except Exception as exc:
             recovery_errors: list[str] = []
-            for name in reversed(PROFILE_NAMES):
+            for name in reversed(selected):
                 target = target_root / f"{name}.toml"
                 if name in promoted and target.exists():
                     if not best_effort_remove(target):
@@ -305,7 +316,8 @@ def install_profiles(
         "status": status,
         "target_root": str(target_root),
         "states_before": states,
-        "profiles": list(PROFILE_NAMES),
+        "profiles": list(selected),
+        "selected_only": selected_profiles is not None,
         "skill_bindings": {
             role: [str(path) for path in paths] for role, paths in bindings.items()
         },

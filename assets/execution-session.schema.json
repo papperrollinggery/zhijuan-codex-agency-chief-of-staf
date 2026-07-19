@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/agency/execution-session.schema.json",
+  "title": "Agency Execution Session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "project_root",
+    "task_plan",
+    "team_plan",
+    "progress_file",
+    "display_model_request",
+    "reasoning_request",
+    "resolved_model_id",
+    "model_resolution_status",
+    "launch_policy",
+    "session_status",
+    "native_task_id",
+    "native_readback",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "task_id": {"type": "string", "minLength": 1},
+    "project_root": {"type": "string", "minLength": 1},
+    "task_plan": {"type": "string", "minLength": 1},
+    "team_plan": {"type": "string", "minLength": 1},
+    "progress_file": {"type": "string", "minLength": 1},
+    "display_model_request": {"const": "GPT-5.6 Sol"},
+    "reasoning_request": {"const": "ultra"},
+    "resolved_model_id": {"type": ["string", "null"]},
+    "model_resolution_status": {
+      "enum": ["resolved", "user_choice_required", "unavailable", "readback_mismatch"]
+    },
+    "launch_policy": {"enum": ["prefer_native", "require_native"]},
+    "session_status": {
+      "enum": [
+        "native_launch_ready",
+        "manual_launch_ready",
+        "executing",
+        "user_choice_required",
+        "TOOL_BLOCKED",
+        "readback_mismatch"
+      ]
+    },
+    "native_task_id": {"type": ["string", "null"]},
+    "native_readback": {"type": ["object", "null"]},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}
