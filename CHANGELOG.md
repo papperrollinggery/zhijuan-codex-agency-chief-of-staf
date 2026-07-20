@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## v0.3.0-rc.3 - 2026-07-21 (source candidate, unpublished)
+
+- Accepted the exact `<codex_delegation>` transport envelope emitted by native `create_thread` while keeping raw Execution Session markers strict and Worker recursion fail closed; standalone malformed transport tags cannot fall back to ordinary activation, the source must be a user-owned Root in App Server and canonical state, and legacy v1.0 raw readbacks are backfilled only after fresh mechanical verification.
+
 ## v0.3.0-rc.2 - 2026-07-21 (source candidate, unpublished)
 
 - Reframed the runtime around content-first execution. Direct and Focused work no longer require a takeover receipt, eager UX/visualization loading, `.agency` state, Model Catalog lookup, a team, or Cold Review; each control action must unlock judgment, coordinate real parallelism, or prove a current result.

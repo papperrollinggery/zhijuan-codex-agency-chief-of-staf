@@ -27,7 +27,7 @@ This is a curated inference-time documentation index following the emerging `llm
 
 ## Verification and Releases
 
-The `v0.3.0-rc.2` documentation describes an unpublished content-first source candidate. v0.1's fixed heavy team is retired; v0.2 Direct Mode remains; the v0.3 lifecycle is project-intent-only, lazily materializes durable state, does not require every task to create a Thread, prepares Profiles Selected-only, and routes the Execution Root separately from Subagents.
+The `v0.3.0-rc.3` documentation describes an unpublished content-first source candidate. v0.1's fixed heavy team is retired; v0.2 Direct Mode remains; the v0.3 lifecycle is project-intent-only, lazily materializes durable state, does not require every task to create a Thread, prepares Profiles Selected-only, and routes the Execution Root separately from Subagents. Native `create_thread` transport is fail-closed and bound only to a mechanically verified user-owned source task.
 
 - [Changelog](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/CHANGELOG.md): `Unreleased` development changes and tagged-version history.
 - [GitHub Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases): Authoritative public release and tag surface.

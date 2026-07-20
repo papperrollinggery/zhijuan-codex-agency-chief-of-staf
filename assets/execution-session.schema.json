@@ -89,6 +89,13 @@
             "status": {"const": "active-unarchived"},
             "host_thread_readback": {"const": true},
             "prompt_bound": {"const": true},
+            "prompt_transport": {"enum": ["raw", "codex_delegation"]},
+            "source_thread_id": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+            },
+            "source_thread_readback": {"type": "boolean"},
+            "source_user_root_readback": {"type": "boolean"},
             "catalog_bound": {"const": true},
             "state_store_identity": {
               "type": "object",

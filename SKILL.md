@@ -1,6 +1,6 @@
 ---
 name: agency-chief-of-staff
-description: "项目型工作的内容优先协调与跨对话生命周期。Use when the user explicitly invokes $agency-chief-of-staff or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
+description: "项目型工作的内容优先协调与跨对话生命周期。Use when the user explicitly invokes $agency-chief-of-staff, provides an AGENCY_EXECUTION_SESSION packet, or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
 ---
 
 # Agency Chief of Staff
@@ -15,9 +15,9 @@ description: "项目型工作的内容优先协调与跨对话生命周期。Use
 
 Machine rule: the first line is AGENCY_WORKER: true. 只有首行精确为 `AGENCY_WORKER: true` 才进入 worker 路径，不能用“首个非空行”替代。
 
-如果首行是 `AGENCY_EXECUTION_SESSION: true`，读取已有计划并作为唯一 Execution Root 推进；不重新讨论、不重建清单、不创建第二个 Root。Root 派发的所有 Subagent 都必须是终端 worker，不能再次调用本 Skill 或继续派发。
+如果首行是 `AGENCY_EXECUTION_SESSION: true`，或 Codex 原生 `create_thread` 的精确 `<codex_delegation>` envelope 中 `<input>` 首行是该 marker，读取已有计划并作为唯一 Execution Root 推进；不重新讨论、不重建清单、不创建第二个 Root。Envelope 只是宿主传输层，必须严格读回 user-owned source task 与完整 packet；不能承载 Worker，也不能由 Subagent/Worker 继续创建 Root。Root 派发的所有 Subagent 都必须是终端 worker，不能再次调用本 Skill 或继续派发。
 
-任一上述 marker 作为独立行出现但不是首行，或首行正确但 packet 无效时 fail closed，返回 `INVALID_PACKET`；正文中的行内引用不算 packet marker，不得把无效 packet 回退成普通主会话。
+除上述精确宿主 envelope 外，任一 marker 作为独立行出现但不是物理首行，或 header/envelope 正确但 packet 无效时 fail closed，返回 `INVALID_PACKET`；正文中的行内引用不算 packet marker，不得把无效 packet 回退成普通主会话。
 
 当前 Git 根是本 Skill 源码仓库且用户正在维护源码时，不运行 Runtime 生命周期；遵守仓库 Self-Maintenance Mode。隔离 fixture、Model Smoke 与 Native Smoke 例外。
 

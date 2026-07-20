@@ -1,6 +1,6 @@
 # Content-first runtime design
 
-> Status: `v0.3.0-rc.2` source-candidate design record
+> Status: `v0.3.0-rc.3` source-candidate design record
 >
 > Runtime boundary: this file is maintainer evidence and is not installed in either Skill bundle.
 
@@ -57,7 +57,7 @@ Durable state is normalized at script boundaries so compact plans and full v1.0 
 
 Team, session, launch prompt, progress, evidence, closure, archive, and knowledge assets materialize when their phase first needs them. `complete_task.py` is the single guarded completion path: it requires current acceptance evidence, validation, review when required, and native cleanup/readback before producing a reusable closure, and restores every managed file if any completion write fails. Execution preparation and proof are deliberately separate: `prepare_execution_launch.py` never claims a task exists, while `bind_execution_session.py` internally reads App Server, canonical state, live catalog, and rollout turn context before entering `executing`.
 
-Reserved worker and execution-session markers fail closed. Execution Root has orchestration depth zero; its terminal workers cannot invoke this Skill or spawn another layer. Root execution-model resolution remains separate from Subagent cost routing and cannot silently downgrade a requested effort.
+Reserved worker and execution-session markers fail closed. Native `create_thread` may transport an Execution Session inside an exact `<codex_delegation>` envelope; the Runtime unwraps only that host form, rejects Worker/malformed transports, and requires the source to be a user-owned Root in both App Server and canonical state before binding. Legacy v1.0 raw readbacks remain readable and gain transport fields only after a fresh mechanical recheck. Execution Root has orchestration depth zero; its terminal workers cannot invoke this Skill or spawn another layer. Root execution-model resolution remains separate from Subagent cost routing and cannot silently downgrade a requested effort.
 
 ## What was deliberately not adopted
 

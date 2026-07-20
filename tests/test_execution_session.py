@@ -22,10 +22,13 @@ from bind_execution_session import (  # noqa: E402
     bind_execution_session,
     validate_bound_execution_session,
 )
-from agency_task import utc_now  # noqa: E402
+from agency_task import atomic_write_json, utc_now  # noqa: E402
 from prepare_execution_launch import execution_packet, prepare_execution_launch  # noqa: E402
 from prepare_team_runtime import prepare_team_runtime  # noqa: E402
-from protocol_contract import parse_execution_session_packet  # noqa: E402
+from protocol_contract import (  # noqa: E402
+    match_execution_session_transport,
+    parse_execution_session_packet,
+)
 
 try:
     import jsonschema
@@ -48,6 +51,10 @@ def trusted_readback(project: Path, task_id: str) -> dict[str, object]:
         "status": "active-unarchived",
         "host_thread_readback": True,
         "prompt_bound": True,
+        "prompt_transport": "raw",
+        "source_thread_id": None,
+        "source_thread_readback": False,
+        "source_user_root_readback": False,
         "catalog_bound": True,
         "state_store_identity": {
             "device": 1,
@@ -78,6 +85,24 @@ class ExecutionSessionTests(unittest.TestCase):
             self.assertNotIn("AGENCY_WORKER: true", packet)
             with self.assertRaises(ValueError):
                 parse_execution_session_packet("\n" + packet.rstrip("\n"))
+
+    def test_execution_prompt_match_accepts_exact_codex_delegation_transport(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            packet = execution_packet(Path(raw), "task-session-001")
+            source = "019f7a4e-f1be-7771-9f67-38fcde417f49"
+            envelope = (
+                "<codex_delegation>\n"
+                f"  <source_thread_id>{source}</source_thread_id>\n"
+                f"  <input>{packet}</input>\n"
+                "</codex_delegation>"
+            )
+            self.assertEqual(
+                match_execution_session_transport(envelope, packet),
+                {
+                    "prompt_transport": "codex_delegation",
+                    "source_thread_id": source,
+                },
+            )
 
     def test_unavailable_native_surface_generates_manual_launch_without_claiming_thread(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -190,16 +215,31 @@ class ExecutionSessionTests(unittest.TestCase):
             jsonschema.Draft202012Validator(schema).validate(forged)
             validate_bound_execution_session(forged, plan, project)
 
+            partial_transport = copy.deepcopy(forged)
+            partial_transport["native_readback"].pop("source_thread_id")
+            jsonschema.Draft202012Validator(schema).validate(partial_transport)
+            with self.assertRaisesRegex(ValueError, "transport_fields"):
+                validate_bound_execution_session(partial_transport, plan, project)
+
             mutations = {
                 "nested task": ("native_readback", "native_task_id", "029f7a4e-f1be-7771-9f67-38fcde417f48"),
                 "model": ("native_readback", "actual_model_id", "different-model"),
                 "effort": ("native_readback", "actual_reasoning_effort", "xhigh"),
                 "provider": ("native_readback", "provider", "external"),
                 "cwd": ("native_readback", "cwd", "/tmp/other-project"),
+                "self source": (
+                    "native_readback",
+                    "source_thread_id",
+                    NATIVE_TASK_ID,
+                ),
             }
             for label, (container, field, value) in mutations.items():
                 inconsistent = copy.deepcopy(forged)
                 inconsistent[container][field] = value
+                if label == "self source":
+                    inconsistent[container]["prompt_transport"] = "codex_delegation"
+                    inconsistent[container]["source_thread_readback"] = True
+                    inconsistent[container]["source_user_root_readback"] = True
                 with self.subTest(label=label):
                     with self.assertRaisesRegex(ValueError, "inconsistent"):
                         validate_bound_execution_session(inconsistent, plan, project)
@@ -240,6 +280,76 @@ class ExecutionSessionTests(unittest.TestCase):
             self.assertEqual(session["native_readback"], observation)
             self.assertEqual(session["native_readback_attestation"], MECHANICAL_ATTESTATION)
             self.assertIn("mechanically read back", (task_dir / "progress.jsonl").read_text())
+
+    @unittest.skipIf(jsonschema is None, "jsonschema is unavailable")
+    def test_legacy_raw_executing_session_is_compatible_and_backfilled(self) -> None:
+        schema = json.loads(
+            (ROOT / "assets/execution-session.schema.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw).resolve()
+            task_id, task_dir = create_fixture_task(
+                project,
+                "task-bind-legacy-001",
+                items=[work_item("W-01", work_type="research", read_scope=["src/"])],
+            )
+            prepare_execution_launch(
+                project,
+                task_id=task_id,
+                catalog=live_catalog(),
+                native_capabilities={"task_thread_create": True},
+                catalog_mechanically_verified=True,
+            )
+            observation = trusted_readback(project, task_id)
+            with mock.patch.object(
+                bind_execution_session_module,
+                "_mechanical_readback",
+                return_value=observation,
+            ):
+                bind_execution_session(
+                    project,
+                    task_id=task_id,
+                    native_task_id=NATIVE_TASK_ID,
+                    apply=True,
+                )
+            session_path = task_dir / "execution-session.json"
+            legacy_session = read_json(session_path)
+            for field in bind_execution_session_module.TRANSPORT_READBACK_FIELDS:
+                legacy_session["native_readback"].pop(field)
+            atomic_write_json(session_path, legacy_session)
+            plan = read_json(task_dir / "task-plan.json")
+            jsonschema.Draft202012Validator(schema).validate(legacy_session)
+            validate_bound_execution_session(legacy_session, plan, project)
+
+            with mock.patch.object(
+                bind_execution_session_module,
+                "_mechanical_readback",
+                return_value=observation,
+            ):
+                dry_run = bind_execution_session(
+                    project,
+                    task_id=task_id,
+                    native_task_id=NATIVE_TASK_ID,
+                    apply=False,
+                )
+                self.assertEqual(
+                    dry_run["status"], "would-backfill-legacy-transport-readback"
+                )
+                self.assertNotIn(
+                    "prompt_transport", read_json(session_path)["native_readback"]
+                )
+                applied = bind_execution_session(
+                    project,
+                    task_id=task_id,
+                    native_task_id=NATIVE_TASK_ID,
+                    apply=True,
+                )
+            self.assertEqual(applied["status"], "backfilled-legacy-transport-readback")
+            stored = read_json(session_path)
+            self.assertEqual(stored["native_readback"]["prompt_transport"], "raw")
+            self.assertFalse(stored["native_readback"]["source_user_root_readback"])
+            jsonschema.Draft202012Validator(schema).validate(stored)
+            validate_bound_execution_session(stored, plan, project)
 
     def test_binding_transition_failure_restores_session_and_task(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -289,6 +399,13 @@ class ExecutionSessionTests(unittest.TestCase):
             plan["execution_model_request"]["resolved_model_id"] = "gpt-5.6-sol"
             plan["execution_model_request"]["resolution_status"] = "resolved"
             packet = execution_packet(project, task_id)
+            source_thread_id = "019f7a4e-f1be-7771-9f67-38fcde417f49"
+            transported_packet = (
+                "<codex_delegation>\n"
+                f"  <source_thread_id>{source_thread_id}</source_thread_id>\n"
+                f"  <input>{packet}</input>\n"
+                "</codex_delegation>"
+            )
             rollout = project / "rollout.jsonl"
             rollout.write_text(
                 "\n".join(
@@ -323,12 +440,13 @@ class ExecutionSessionTests(unittest.TestCase):
                 CREATE TABLE threads (
                     id TEXT, rollout_path TEXT, source TEXT, model_provider TEXT,
                     model TEXT, reasoning_effort TEXT, cwd TEXT, archived INTEGER,
-                    first_user_message TEXT, agent_role TEXT, created_at_ms INTEGER
+                    first_user_message TEXT, agent_role TEXT, created_at_ms INTEGER,
+                    thread_source TEXT
                 )
                 """
             )
             database.execute(
-                "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     NATIVE_TASK_ID,
                     str(rollout),
@@ -338,15 +456,36 @@ class ExecutionSessionTests(unittest.TestCase):
                     "ultra",
                     str(project),
                     0,
-                    packet,
+                    transported_packet,
                     None,
                     1_784_592_001_000,
+                    "subagent",
                 ),
+            )
+            source_row_values = (
+                source_thread_id,
+                str(rollout),
+                "appServer",
+                "openai",
+                "gpt-5.6-sol",
+                "ultra",
+                str(project),
+                0,
+                "source task",
+                None,
+                1_784_592_000_000,
+                "user",
+            )
+            database.execute(
+                "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                source_row_values,
             )
             database.commit()
 
             class FakeApp:
                 codex_home = project
+                source_available = True
+                omit_source_parent = False
 
                 def __enter__(self):
                     return self
@@ -356,17 +495,27 @@ class ExecutionSessionTests(unittest.TestCase):
 
                 def request(self, method, params):
                     self.assert_request(method, params)
-                    return {
-                        "thread": {
-                            "id": NATIVE_TASK_ID,
-                            "parentThreadId": None,
-                            "preview": packet,
-                        }
+                    if params["threadId"] == source_thread_id and not self.source_available:
+                        return {"thread": None}
+                    thread = {
+                        "id": params["threadId"],
+                        "parentThreadId": None,
+                        "preview": (
+                            transported_packet
+                            if params["threadId"] == NATIVE_TASK_ID
+                            else "source task"
+                        ),
                     }
+                    if params["threadId"] == source_thread_id and self.omit_source_parent:
+                        thread.pop("parentThreadId")
+                    return {"thread": thread}
 
                 @staticmethod
                 def assert_request(method, params):
-                    if method != "thread/read" or params.get("threadId") != NATIVE_TASK_ID:
+                    if method != "thread/read" or params.get("threadId") not in {
+                        NATIVE_TASK_ID,
+                        source_thread_id,
+                    }:
                         raise AssertionError("unexpected App Server request")
 
             @contextmanager
@@ -390,10 +539,11 @@ class ExecutionSessionTests(unittest.TestCase):
                 "available": True,
                 "supportedReasoningEfforts": [{"reasoningEffort": "ultra"}],
             }
+            fake_app = FakeApp()
             with mock.patch.object(
                 bind_execution_session_module, "resolve_executable", return_value=Path("/bin/true")
             ), mock.patch.object(
-                bind_execution_session_module, "CodexAppServer", return_value=FakeApp()
+                bind_execution_session_module, "CodexAppServer", return_value=fake_app
             ), mock.patch.object(
                 bind_execution_session_module, "collect_model_items", return_value=[model]
             ), mock.patch.object(
@@ -411,12 +561,112 @@ class ExecutionSessionTests(unittest.TestCase):
                     state_db=None,
                     timeout_seconds=20,
                 )
+                database.execute("DELETE FROM threads WHERE id = ?", (source_thread_id,))
+                database.commit()
+                with self.assertRaisesRegex(ValueError, "absent from canonical"):
+                    bind_execution_session_module._mechanical_readback(
+                        project,
+                        plan,
+                        session,
+                        NATIVE_TASK_ID,
+                        codex_bin="codex",
+                        codex_home=None,
+                        state_db=None,
+                        timeout_seconds=20,
+                    )
+                database.execute(
+                    "INSERT INTO threads VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    source_row_values,
+                )
+                database.commit()
+                database.execute(
+                    "UPDATE threads SET thread_source = 'subagent' WHERE id = ?",
+                    (source_thread_id,),
+                )
+                database.commit()
+                with self.assertRaisesRegex(ValueError, "not a canonical user root"):
+                    bind_execution_session_module._mechanical_readback(
+                        project,
+                        plan,
+                        session,
+                        NATIVE_TASK_ID,
+                        codex_bin="codex",
+                        codex_home=None,
+                        state_db=None,
+                        timeout_seconds=20,
+                    )
+                database.execute(
+                    "UPDATE threads SET thread_source = 'user' WHERE id = ?",
+                    (source_thread_id,),
+                )
+                database.commit()
+                worker_packet = "\n".join(
+                    (
+                        "AGENCY_WORKER: true",
+                        "委派目标：读取 README",
+                        "读取范围：README.md",
+                        "写入范围：无",
+                        "期望产物：WORKER_RESULT，均填实际读回值",
+                        "验证要求：读取当前 README 并回传",
+                        "停止条件：返回唯一终态；不启动、不派发。",
+                    )
+                )
+                database.execute(
+                    "UPDATE threads SET first_user_message = ? WHERE id = ?",
+                    (worker_packet, source_thread_id),
+                )
+                database.commit()
+                with self.assertRaisesRegex(ValueError, "reserved protocol session"):
+                    bind_execution_session_module._mechanical_readback(
+                        project,
+                        plan,
+                        session,
+                        NATIVE_TASK_ID,
+                        codex_bin="codex",
+                        codex_home=None,
+                        state_db=None,
+                        timeout_seconds=20,
+                    )
+                database.execute(
+                    "UPDATE threads SET first_user_message = 'source task' WHERE id = ?",
+                    (source_thread_id,),
+                )
+                database.commit()
+                fake_app.omit_source_parent = True
+                with self.assertRaisesRegex(ValueError, "not a user-owned root"):
+                    bind_execution_session_module._mechanical_readback(
+                        project,
+                        plan,
+                        session,
+                        NATIVE_TASK_ID,
+                        codex_bin="codex",
+                        codex_home=None,
+                        state_db=None,
+                        timeout_seconds=20,
+                    )
+                fake_app.omit_source_parent = False
+                fake_app.source_available = False
+                with self.assertRaisesRegex(ValueError, "did not read back the transport source"):
+                    bind_execution_session_module._mechanical_readback(
+                        project,
+                        plan,
+                        session,
+                        NATIVE_TASK_ID,
+                        codex_bin="codex",
+                        codex_home=None,
+                        state_db=None,
+                        timeout_seconds=20,
+                    )
             database.close()
             self.assertEqual(observed["native_task_id"], NATIVE_TASK_ID)
             self.assertEqual(observed["actual_model_id"], "gpt-5.6-sol")
             self.assertEqual(observed["actual_reasoning_effort"], "ultra")
             self.assertEqual(observed["status"], "active-unarchived")
             self.assertEqual(observed["model_turns_observed"], 1)
+            self.assertEqual(observed["prompt_transport"], "codex_delegation")
+            self.assertEqual(observed["source_thread_id"], source_thread_id)
+            self.assertTrue(observed["source_thread_readback"])
+            self.assertTrue(observed["source_user_root_readback"])
 
     def test_native_model_mismatch_fails_without_executing_transition(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -4,7 +4,7 @@
 >
 > As of: 2026-07-21
 >
-> Reviewed source candidate: `v0.3.0-rc.2`; unpublished and not an installed-state claim
+> Reviewed source candidate: `v0.3.0-rc.3`; unpublished and not an installed-state claim
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 

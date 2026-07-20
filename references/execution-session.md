@@ -14,8 +14,9 @@
 6. 按执行面优先级准备所需 Profile：Native Direct Route → 已读回 Named Custom Agent → 项目 selected-only Profile → Generic Native Subagent + Role Packet → CLI read-only compat → Root 直接执行。
 7. `prepare_execution_launch.py` 只生成 Execution Session Packet 和 `execution-session.json`，状态最多到 `native_launch_ready` 或 `manual_launch_ready`；它不会把调用方 JSON 当成创建证明。
 8. 宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。
-9. 宿主创建后运行 `bind_execution_session.py`；该脚本不接收调用方 readback JSON，而是连接当前 App Server 的 `thread/read`、live model catalog 与 `codexHome/state_5.sqlite`，再核对 rollout turn context。
-10. 只有 Task ID、Root 身份、完整 packet、provider、model、reasoning、cwd/worktree、未归档状态与 rollout 实际 turn 全部机械一致，才从 `execution_ready` 进入 `executing`，写入 `native_task_id` 并更新进度；整个绑定可回滚。
+9. `create_thread` 可能把首条提示词放进精确的 `<codex_delegation>` transport envelope。该 envelope 只允许承载 Execution Session；Runtime 严格解出 source task ID 与 `<input>` 中的原始 packet，并从 App Server 与 canonical state 证明 source 是非自引用的 user-owned Root。Worker/Subagent source 和任意畸形/嵌套 envelope 均 fail closed。
+10. 宿主创建后运行 `bind_execution_session.py`；该脚本不接收调用方 readback JSON，而是连接当前 App Server 的 `thread/read`、live model catalog 与 `codexHome/state_5.sqlite`，再核对 rollout turn context。
+11. 只有 Task ID、Root 身份、完整 packet、transport/source task、provider、model、reasoning、cwd/worktree、未归档状态与 rollout 实际 turn 全部机械一致，才从 `execution_ready` 进入 `executing`，写入 `native_task_id` 并更新进度；整个绑定可回滚。
 
 ## Execution Session Packet
 
@@ -41,6 +42,7 @@ AGENCY_EXECUTION_SESSION: true
 - 只有 Root 更新全局 Task State、验证证据和归档。
 - `编排深度` 必须为 `0`；worker 固定为终端深度 `1`，不存在深度 `2`。
 - 首行是保留 marker 但 packet 无效时返回 `INVALID_PACKET`，不得按普通主会话重新激活。
+- Raw Packet 仍要求物理首行 marker；唯一例外是 Codex `create_thread` 的精确 transport envelope。Envelope 不改变 packet 语义，也不能用来承载 Worker 或增加编排深度。
 
 ## Root 模型政策
 
@@ -53,6 +55,7 @@ Root 使用独立的 `execution-model-policy.json`，不属于 Efficient/Balance
 - Native spawn 后必须读回实际 provider/model/effort；不一致为 FAIL，不能进入 executing。
 - 单独传给准备 helper 的 `native_readback` 只返回 `fields_consistent_unverified` 诊断；不会写入 session，也不能产生证明。没有机械绑定时，`new_conversation_created` 必须保持 `false`。
 - `session_status=executing` 的 schema 只负责结构约束，不能把固定字符串变成宿主证明。唯一公共写入路径是 `bind_execution_session.py`：它内部读取 App Server、canonical state 与 rollout，校验顶层/嵌套 Task、模型、Effort、CWD 和 packet 语义一致后写入 `app-server-canonical-state-mechanically-bound`。调用方不能上传一个 JSON 来替代该读取。
+- 早期 v1.0 raw session 可继续读取；下次 binder 机械重验 raw prompt 后才会原子回填 transport 字段。部分字段、envelope 伪装或无当前 readback 均不迁移。
 - canonical state 没有稳定的“当前正在采样”字段，绑定状态精确写为 `active-unarchived`，不把未归档误报为正在运行。任务完成或清理仍需后续 readback 证据。
 - Subagent 仍按原有能力档路由，不要求全部使用 Ultra。
 

@@ -38,6 +38,44 @@ class ProtocolRecursionTests(unittest.TestCase):
         self.assertIsNotNone(fields)
         self.assertEqual(fields["编排深度"], "0")
 
+    def test_exact_codex_delegation_envelope_carries_execution_root(self) -> None:
+        source = "019f7a4e-f1be-7771-9f67-38fcde417f49"
+        kind, fields = classify_agency_packet(
+            self.codex_envelope(self.execution_packet(depth="0"), source=source)
+        )
+        self.assertEqual(kind, "execution_session")
+        self.assertEqual(fields["任务 ID"], "task-recursion-001")
+
+    def test_codex_delegation_envelope_fails_closed_when_malformed(self) -> None:
+        valid = self.execution_packet(depth="0")
+        invalid_envelopes = (
+            self.codex_envelope(valid, source="not-a-task-id"),
+            " " + self.codex_envelope(valid),
+            "\n" + self.codex_envelope(valid),
+            "transport follows\n" + self.codex_envelope(valid),
+            self.codex_envelope(valid).replace(
+                "<codex_delegation>", '<codex_delegation version="1">', 1
+            ),
+            self.codex_envelope(valid).replace(
+                "<codex_delegation>", "<codex_delegation >", 1
+            ),
+            self.codex_envelope(valid).replace(
+                "<codex_delegation>", "<codex_delegation/>", 1
+            ),
+            self.codex_envelope(valid).replace("<codex_delegation>\n", "<codex_delegation"),
+            self.codex_envelope(valid).replace("\n", "\r\n"),
+            self.codex_envelope(valid + "\n</input>"),
+            self.codex_envelope(
+                "AGENCY_WORKER: true\n委派目标：x\n读取范围：x\n"
+                "期望产物：ROLE、SUMMARY、ARTIFACTS、VERIFICATION、BLOCKERS\n"
+                "验证要求：读取当前结果\n停止条件：返回证据后停止，不得继续派发。"
+            ),
+        )
+        for envelope in invalid_envelopes:
+            with self.subTest(envelope=envelope[:80]):
+                with self.assertRaises(InvalidAgencyPacket):
+                    classify_agency_packet(envelope)
+
     def test_ordinary_text_does_not_enter_packet_parser(self) -> None:
         self.assertEqual(classify_agency_packet("请分析项目内容。"), ("ordinary", None))
 
@@ -105,6 +143,19 @@ class ProtocolRecursionTests(unittest.TestCase):
                 f"执行职责：{EXECUTION_SESSION_DUTY}",
                 f"停止条件：{EXECUTION_SESSION_STOP}",
             ]
+        )
+
+    @staticmethod
+    def codex_envelope(
+        packet: str,
+        *,
+        source: str = "019f7a4e-f1be-7771-9f67-38fcde417f49",
+    ) -> str:
+        return (
+            "<codex_delegation>\n"
+            f"  <source_thread_id>{source}</source_thread_id>\n"
+            f"  <input>{packet}</input>\n"
+            "</codex_delegation>"
         )
 
 

@@ -33,6 +33,11 @@ from inspect_codex_models import (
     resolve_executable,
 )
 from prepare_execution_launch import _writes_required, execution_packet
+from protocol_contract import (
+    InvalidAgencyPacket,
+    classify_agency_packet,
+    match_execution_session_transport,
+)
 from resolve_execution_model import _effort_fields
 from update_task_progress import update_progress
 
@@ -40,6 +45,12 @@ from update_task_progress import update_progress
 THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 MECHANICAL_ATTESTATION = "app-server-canonical-state-mechanically-bound"
 READY_SESSION_STATUSES = frozenset({"native_launch_ready", "manual_launch_ready"})
+TRANSPORT_READBACK_FIELDS = (
+    "prompt_transport",
+    "source_thread_id",
+    "source_thread_readback",
+    "source_user_root_readback",
+)
 
 
 def _snapshot(path: Path) -> tuple[bool, str]:
@@ -82,12 +93,6 @@ def _iso_milliseconds(value: object) -> int:
     if parsed.tzinfo is None:
         raise ValueError("prepared execution session created_at needs a timezone")
     return int(parsed.astimezone(timezone.utc).timestamp() * 1000)
-
-
-def _same_packet(observed: object, expected: str) -> bool:
-    if not isinstance(observed, str):
-        return False
-    return observed.rstrip("\n") == expected.rstrip("\n")
 
 
 def _git_identity(path: Path) -> tuple[Path, Path]:
@@ -218,11 +223,26 @@ def _mechanical_readback(
         ).get("thread")
         if not isinstance(host, dict) or host.get("id") != native_task_id:
             raise ValueError("App Server did not read back the requested native task")
-        if host.get("parentThreadId") is not None:
+        if "parentThreadId" not in host or host.get("parentThreadId") is not None:
             raise ValueError("native execution root is a subagent, not a user-owned task")
         expected_packet = execution_packet(project, plan["task_id"])
-        if not _same_packet(host.get("preview"), expected_packet):
+        host_prompt = match_execution_session_transport(host.get("preview"), expected_packet)
+        if host_prompt is None:
             raise ValueError("App Server task preview does not match the execution packet")
+        source_thread_id = host_prompt.get("source_thread_id")
+        if source_thread_id == native_task_id:
+            raise ValueError("native execution transport source is self-referential")
+        if source_thread_id is not None:
+            source_host = app.request(
+                "thread/read", {"threadId": source_thread_id, "includeTurns": False}
+            ).get("thread")
+            if not isinstance(source_host, dict) or source_host.get("id") != source_thread_id:
+                raise ValueError("App Server did not read back the transport source task")
+            if (
+                "parentThreadId" not in source_host
+                or source_host.get("parentThreadId") is not None
+            ):
+                raise ValueError("transport source task is not a user-owned root")
         items = collect_model_items(app)
         database_path = state_db or (app.codex_home / "state_5.sqlite")
         with canonical_state_connection(database_path, app.codex_home) as (
@@ -242,6 +262,26 @@ def _mechanical_readback(
             if row is None:
                 raise ValueError("native task is absent from canonical Codex state")
             observed = dict(row)
+            if source_thread_id is not None:
+                source_row = database.execute(
+                    "SELECT id, thread_source, agent_role, first_user_message "
+                    "FROM threads WHERE id = ?",
+                    (source_thread_id,),
+                ).fetchone()
+                if source_row is None:
+                    raise ValueError("transport source task is absent from canonical Codex state")
+                if source_row[1] != "user" or source_row[2] not in {None, ""}:
+                    raise ValueError("transport source task is not a canonical user root")
+                if not isinstance(source_row[3], str) or not source_row[3]:
+                    raise ValueError("transport source task has no canonical first prompt")
+                try:
+                    source_packet_kind, _ = classify_agency_packet(source_row[3])
+                except InvalidAgencyPacket as exc:
+                    raise ValueError(
+                        "transport source task contains an invalid reserved packet"
+                    ) from exc
+                if source_packet_kind != "ordinary":
+                    raise ValueError("transport source task is a reserved protocol session")
 
     expected_model = session.get("resolved_model_id")
     expected_effort = session.get("reasoning_request")
@@ -253,8 +293,13 @@ def _mechanical_readback(
         raise ValueError("native task is already archived")
     if observed.get("agent_role") not in {None, ""}:
         raise ValueError("native execution root has a subagent role")
-    if not _same_packet(observed.get("first_user_message"), expected_packet):
+    state_prompt = match_execution_session_transport(
+        observed.get("first_user_message"), expected_packet
+    )
+    if state_prompt is None:
         raise ValueError("canonical task prompt does not match the execution packet")
+    if state_prompt != host_prompt:
+        raise ValueError("App Server and canonical state disagree on prompt transport")
     created_at_ms = observed.get("created_at_ms")
     if not isinstance(created_at_ms, int) or created_at_ms < _iso_milliseconds(
         session.get("created_at")
@@ -291,6 +336,9 @@ def _mechanical_readback(
         "status": "active-unarchived",
         "host_thread_readback": True,
         "prompt_bound": True,
+        **host_prompt,
+        "source_thread_readback": source_thread_id is not None,
+        "source_user_root_readback": source_thread_id is not None,
         "catalog_bound": True,
         "state_store_identity": state_identity,
         "state_source": state_source,
@@ -361,6 +409,66 @@ def validate_bound_execution_session(
         str(session.get("native_task_id"))
     ):
         mismatches["native_task_id"] = {"expected": "Codex UUID", "actual": session.get("native_task_id")}
+    present_transport_fields = {
+        field for field in TRANSPORT_READBACK_FIELDS if field in readback
+    }
+    legacy_raw_readback = not present_transport_fields
+    if present_transport_fields and present_transport_fields != set(
+        TRANSPORT_READBACK_FIELDS
+    ):
+        mismatches["native_readback.transport_fields"] = {
+            "expected": "all transport fields or legacy raw omission",
+            "actual": sorted(present_transport_fields),
+        }
+    prompt_transport = readback.get(
+        "prompt_transport", "raw" if legacy_raw_readback else None
+    )
+    source_thread_id = readback.get("source_thread_id")
+    source_thread_readback = readback.get(
+        "source_thread_readback", False if legacy_raw_readback else None
+    )
+    source_user_root_readback = readback.get(
+        "source_user_root_readback", False if legacy_raw_readback else None
+    )
+    if prompt_transport == "raw":
+        if (
+            source_thread_id is not None
+            or source_thread_readback is not False
+            or source_user_root_readback is not False
+        ):
+            mismatches["native_readback.source_thread_id"] = {
+                "expected": {
+                    "source_thread_id": None,
+                    "source_thread_readback": False,
+                    "source_user_root_readback": False,
+                },
+                "actual": {
+                    "source_thread_id": source_thread_id,
+                    "source_thread_readback": source_thread_readback,
+                    "source_user_root_readback": source_user_root_readback,
+                },
+            }
+    elif prompt_transport == "codex_delegation":
+        if (
+            not isinstance(source_thread_id, str)
+            or not THREAD_ID_RE.fullmatch(source_thread_id)
+            or source_thread_id == session.get("native_task_id")
+            or source_thread_readback is not True
+            or source_user_root_readback is not True
+        ):
+            mismatches["native_readback.source_thread_id"] = {
+                "expected": "distinct, mechanically read Codex source UUID",
+                "actual": {
+                    "source_thread_id": source_thread_id,
+                    "source_thread_readback": source_thread_readback,
+                    "source_user_root_readback": source_user_root_readback,
+                },
+            }
+    else:
+        mismatches["native_readback.prompt_transport"] = {
+            "expected": "raw or codex_delegation",
+            "actual": prompt_transport,
+        }
     if _writes_required(plan):
         if readback.get("isolated_worktree") is not True or readback.get(
             "worktree_path"
@@ -496,6 +604,10 @@ def bind_execution_session(
     validate_bound_execution_session(bound, executing_plan, root)
     if session.get("session_status") == "executing":
         validate_bound_execution_session(session, plan, root)
+        stored_readback = session["native_readback"]
+        legacy_raw_readback = not any(
+            field in stored_readback for field in TRANSPORT_READBACK_FIELDS
+        )
         stable_fields = (
             "native_task_id",
             "provider",
@@ -508,10 +620,44 @@ def bind_execution_session(
             "prompt_sha256",
         )
         if any(
-            session["native_readback"].get(field) != observed.get(field)
+            stored_readback.get(field) != observed.get(field)
             for field in stable_fields
         ):
             raise ValueError("existing executing session does not match current host readback")
+        if legacy_raw_readback:
+            expected_raw_transport = {
+                "prompt_transport": "raw",
+                "source_thread_id": None,
+                "source_thread_readback": False,
+                "source_user_root_readback": False,
+            }
+            if any(
+                observed.get(field) != expected
+                for field, expected in expected_raw_transport.items()
+            ):
+                raise ValueError("legacy executing session is not a raw prompt binding")
+            result = {
+                "status": "would-backfill-legacy-transport-readback",
+                "task_id": task_id,
+                "native_task_id": native_task_id,
+                "lifecycle_status": plan["status"],
+                "native_readback": observed,
+                "new_conversation_created": True,
+            }
+            if not apply:
+                return result
+            session_snapshot = _snapshot(session_path)
+            try:
+                atomic_write_json(session_path, bound)
+            except Exception as exc:
+                _rollback({session_path: session_snapshot}, exc)
+                raise
+            return {**result, "status": "backfilled-legacy-transport-readback"}
+        if any(
+            stored_readback.get(field) != observed.get(field)
+            for field in TRANSPORT_READBACK_FIELDS
+        ):
+            raise ValueError("existing executing session transport readback has drifted")
         return {
             "status": "already-bound-currently-reverified",
             "task_id": task_id,
