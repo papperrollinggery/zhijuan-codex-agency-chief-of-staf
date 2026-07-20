@@ -8,9 +8,15 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from agency_task import atomic_write_json, atomic_write_text, safe_project_root, utc_now
+from agency_task import (
+    atomic_write_json,
+    atomic_write_text,
+    read_regular_text,
+    safe_project_root,
+    utc_now,
+)
 
 
 CATEGORIES = frozenset(
@@ -54,8 +60,8 @@ def slug(value: str) -> str:
 
 def load_candidates(path: Path) -> list[dict[str, Any]]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        value = json.loads(read_regular_text(path))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError("knowledge candidates must be valid UTF-8 JSON") from exc
     if not isinstance(value, list):
         raise ValueError("knowledge candidates must be a JSON list")
@@ -147,17 +153,50 @@ def safe_target(project: Path, relative: str) -> Path:
 
 
 def _relevant_existing(candidate: dict[str, Any], documents: list[Path]) -> Path | None:
-    tokens = {
-        token
-        for token in re.findall(r"[a-z0-9]{3,}", normalized_text(candidate["statement"]))
-    }
+    tokens = semantic_tokens(candidate["statement"])
     best: tuple[int, Path] | None = None
     for path in documents:
-        path_tokens = set(re.findall(r"[a-z0-9]{3,}", path.stem.casefold()))
+        headings = " ".join(
+            line.lstrip("# ").strip()
+            for line in read_regular_text(path).splitlines()
+            if line.startswith("#")
+        )
+        path_tokens = semantic_tokens(f"{path.stem} {headings}")
         score = len(tokens & path_tokens)
-        if score and (best is None or score > best[0]):
+        if score >= 2 and (best is None or score > best[0]):
             best = (score, path)
     return best[1] if best else None
+
+
+def semantic_tokens(value: str) -> set[str]:
+    """Return stable Latin words and CJK n-grams for filename/heading matching."""
+    normalized = normalized_text(value)
+    tokens = set(re.findall(r"[a-z0-9]{3,}", normalized))
+    for run in re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff]+", normalized):
+        for width in (2, 3, 4):
+            tokens.update(run[index : index + width] for index in range(len(run) - width + 1))
+    return tokens
+
+
+def validate_candidate_provenance(
+    candidates: list[dict[str, Any]],
+    *,
+    source_task_id: str,
+    allowed_evidence_refs: set[str],
+) -> None:
+    """Bind archive candidates to the task and evidence that actually closed it."""
+    for candidate in candidates:
+        knowledge_id = candidate["knowledge_id"]
+        if candidate["source_task_id"] != source_task_id:
+            raise ValueError(
+                f"knowledge candidate {knowledge_id} is not bound to task {source_task_id}"
+            )
+        unknown = sorted(set(candidate["evidence_refs"]) - allowed_evidence_refs)
+        if unknown:
+            raise ValueError(
+                f"knowledge candidate {knowledge_id} references evidence outside the closure: "
+                + ", ".join(unknown)
+            )
 
 
 def _next_adr(directory: Path, topic: str) -> Path:
@@ -212,9 +251,10 @@ def candidate_fragment(candidate: dict[str, Any]) -> str:
 
 
 def plan_deposits(project: Path, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    documents = knowledge_documents(project)
+    root = safe_project_root(project)
+    documents = knowledge_documents(root)
     document_text = {
-        path: path.read_text(encoding="utf-8", errors="replace") for path in documents
+        path: read_regular_text(path) for path in documents
     }
     all_text = "\n".join(document_text.values())
     normalized_all = normalized_text(all_text)
@@ -244,8 +284,8 @@ def plan_deposits(project: Path, candidates: list[dict[str, Any]]) -> list[dict[
             raise ValueError(
                 f"knowledge id conflicts with an existing different statement: {candidate['knowledge_id']}"
             )
-        target = choose_target(project, candidate, documents)
-        relative = str(target.relative_to(project))
+        target = choose_target(root, candidate, documents)
+        relative = str(target.relative_to(root))
         if candidate["sensitivity"] != "public" and relative == "README.md":
             raise ValueError("internal or restricted knowledge cannot be deposited in README.md")
         actions.append(
@@ -261,23 +301,118 @@ def plan_deposits(project: Path, candidates: list[dict[str, Any]]) -> list[dict[
     return actions
 
 
-def apply_deposits(project: Path, actions: list[dict[str, Any]]) -> None:
+def apply_deposits(
+    project: Path,
+    actions: list[dict[str, Any]],
+    *,
+    finalize: Callable[[], None] | None = None,
+) -> None:
+    root = safe_project_root(project)
     updates: dict[Path, str] = {}
+    originals: dict[Path, tuple[bool, str]] = {}
+    missing_directories: set[Path] = set()
     for action in actions:
         if action["action"] not in {"append", "create"}:
             continue
-        target = safe_target(project, action["target"])
+        target = safe_target(root, action["target"])
         existing = updates.get(target)
         if existing is None:
-            existing = target.read_text(encoding="utf-8") if target.exists() else ""
+            existed = target.exists()
+            existing = read_regular_text(target) if existed else ""
+            originals[target] = (existed, existing)
+            parent = target.parent
+            while parent != root and not parent.exists():
+                missing_directories.add(parent)
+                parent = parent.parent
         fragment = action["fragment"]
         if existing:
             updates[target] = existing.rstrip() + "\n\n" + fragment
         else:
             title = target.stem.replace("-", " ").title()
             updates[target] = f"# {title}\n\n{fragment}"
-    for target, content in updates.items():
-        atomic_write_text(target, content.rstrip() + "\n")
+    attempted: list[Path] = []
+    try:
+        for target, content in updates.items():
+            attempted.append(target)
+            atomic_write_text(target, content.rstrip() + "\n")
+        if finalize is not None:
+            finalize()
+    except (OSError, RuntimeError, ValueError) as exc:
+        rollback_errors: list[str] = []
+        for target in reversed(attempted):
+            existed, original = originals[target]
+            try:
+                if existed:
+                    atomic_write_text(target, original)
+                elif target.exists() and not target.is_symlink():
+                    target.unlink()
+            except (OSError, ValueError) as rollback_exc:
+                rollback_errors.append(f"{target}: {rollback_exc}")
+        for directory in sorted(missing_directories, key=lambda path: len(path.parts), reverse=True):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        detail = f"knowledge deposit write failed: {exc}"
+        if rollback_errors:
+            detail += "; rollback incomplete: " + "; ".join(rollback_errors)
+        raise RuntimeError(detail) from exc
+
+
+def _safe_report_path(project: Path, supplied: Path) -> Path:
+    root = safe_project_root(project)
+    candidate = supplied.expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    candidate = candidate.absolute()
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("knowledge report must stay inside the project") from exc
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.exists() and current.is_symlink():
+            raise ValueError("knowledge report path traverses a symlink")
+    if candidate.exists() and not candidate.is_file():
+        raise ValueError("knowledge report path must be a regular file")
+    return candidate
+
+
+def _write_report_with_rollback(
+    project: Path, report_path: Path, report: dict[str, Any]
+) -> None:
+    root = safe_project_root(project)
+    path = _safe_report_path(root, report_path)
+    existed = path.exists()
+    original = read_regular_text(path) if existed else ""
+    missing_directories: list[Path] = []
+    parent = path.parent
+    while parent != root and not parent.exists():
+        missing_directories.append(parent)
+        parent = parent.parent
+    try:
+        atomic_write_json(path, report)
+    except (OSError, ValueError) as exc:
+        rollback_errors: list[str] = []
+        try:
+            if existed:
+                atomic_write_text(path, original)
+            elif path.exists() and not path.is_symlink() and path.is_file():
+                path.unlink()
+        except (OSError, ValueError) as rollback_exc:
+            rollback_errors.append(str(rollback_exc))
+        for directory in missing_directories:
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        if rollback_errors:
+            raise RuntimeError(
+                "knowledge report write failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
 
 
 def deposit_knowledge(
@@ -286,12 +421,18 @@ def deposit_knowledge(
     *,
     apply: bool,
     report_path: Path | None = None,
+    expected_source_task_id: str | None = None,
+    allowed_evidence_refs: set[str] | None = None,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     candidates = load_candidates(candidates_path)
+    if expected_source_task_id is not None:
+        validate_candidate_provenance(
+            candidates,
+            source_task_id=expected_source_task_id,
+            allowed_evidence_refs=allowed_evidence_refs or set(),
+        )
     actions = plan_deposits(root, candidates)
-    if apply:
-        apply_deposits(root, actions)
     report = {
         "schema_version": "1.0",
         "status": "applied" if apply else "planned",
@@ -311,8 +452,18 @@ def deposit_knowledge(
         ),
         "generated_at": utc_now(),
     }
-    if report_path is not None:
-        atomic_write_json(report_path, report)
+    if apply:
+        apply_deposits(
+            root,
+            actions,
+            finalize=(
+                lambda: _write_report_with_rollback(root, report_path, report)
+                if report_path is not None
+                else None
+            ),
+        )
+    elif report_path is not None:
+        _write_report_with_rollback(root, report_path, report)
     return report
 
 

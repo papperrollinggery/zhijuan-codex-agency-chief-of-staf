@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a new Execution Root session and verify native launch readback."""
+"""Prepare a new Execution Root session without claiming a host launch."""
 
 from __future__ import annotations
 
@@ -52,6 +52,7 @@ def execution_packet(project: Path, task_id: str) -> str:
         [
             EXECUTION_SESSION_HEADER,
             f"任务 ID：{task_id}",
+            "编排深度：0",
             f"项目根目录：{project}",
             f"任务清单：{base}/task-plan.json",
             f"团队计划：{base}/TEAM_PLAN.json",
@@ -70,7 +71,7 @@ def _writes_required(plan: dict[str, Any]) -> bool:
     return any(item["write_scope"] for item in plan["work_items"])
 
 
-def verify_native_environment_readback(
+def inspect_native_environment_fields(
     project: Path,
     plan: dict[str, Any],
     resolution: dict[str, Any],
@@ -105,6 +106,7 @@ def verify_native_environment_readback(
             ],
         },
         spawn_readback=readback,
+        catalog_mechanically_verified=True,
     )
     if model_result.get("status") == "FAIL":
         return model_result
@@ -159,12 +161,12 @@ def verify_native_environment_readback(
             "reason": "read-only native task cwd does not match the project",
         }
     return {
-        "status": "verified",
+        "status": "fields_consistent_unverified",
         "resolution_status": "resolved",
         "native_task_id": native_task_id,
-        "model_readback_verified": True,
-        "cwd_readback_verified": True,
-        "worktree_readback_verified": not _writes_required(plan)
+        "model_fields_consistent": True,
+        "cwd_fields_consistent": True,
+        "worktree_fields_consistent": not _writes_required(plan)
         or readback.get("isolated_worktree") is True,
     }
 
@@ -177,6 +179,7 @@ def prepare_execution_launch(
     native_capabilities: dict[str, Any] | None = None,
     native_readback: dict[str, Any] | None = None,
     require_native: bool = False,
+    catalog_mechanically_verified: bool = False,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     selected_task_id = choose_task(root, task_id)
@@ -191,11 +194,23 @@ def prepare_execution_launch(
     plan = validate_task_plan(
         load_json(task_dir / "task-plan.json"), expected_task_id=selected_task_id
     )
-    resolution = resolve_execution_model(catalog)
-    plan["execution_model_request"]["resolved_model_id"] = resolution.get(
+    resolution = resolve_execution_model(
+        catalog,
+        catalog_mechanically_verified=catalog_mechanically_verified,
+    )
+    model_request = plan.setdefault(
+        "execution_model_request",
+        {
+            "display_request": "GPT-5.6 Sol",
+            "reasoning_request": "ultra",
+            "resolved_model_id": None,
+            "resolution_status": "pending",
+        },
+    )
+    model_request["resolved_model_id"] = resolution.get(
         "resolved_model_id"
     )
-    plan["execution_model_request"]["resolution_status"] = resolution[
+    model_request["resolution_status"] = resolution[
         "resolution_status"
     ]
     atomic_write_json(task_dir / "task-plan.json", plan)
@@ -205,7 +220,7 @@ def prepare_execution_launch(
     launch_policy = "require_native" if require_native else "prefer_native"
     session_status: str
     native_task_id: str | None = None
-    verified_readback: dict[str, Any] | None = None
+    readback_consistency: dict[str, Any] | None = None
     if not resolution["launch_allowed"]:
         session_status = "user_choice_required"
     else:
@@ -214,17 +229,22 @@ def prepare_execution_launch(
         if _writes_required(plan) and capabilities.get("isolated_worktree") is not True:
             native_available = False
         if native_readback is not None:
-            native_available = True
-            verified_readback = verify_native_environment_readback(
+            readback_consistency = inspect_native_environment_fields(
                 root, plan, resolution, native_readback
             )
-            if verified_readback["status"] != "verified":
+            if readback_consistency["status"] != "fields_consistent_unverified":
                 session_status = "readback_mismatch"
-                plan["execution_model_request"]["resolution_status"] = "readback_mismatch"
+                model_request["resolution_status"] = "readback_mismatch"
                 atomic_write_json(task_dir / "task-plan.json", plan)
+            elif native_available:
+                # A caller-provided JSON object can prove field consistency only.
+                # It cannot prove that the host actually emitted a create event or
+                # bound that event to this packet/current task.
+                session_status = "native_launch_ready"
+            elif require_native:
+                session_status = "TOOL_BLOCKED"
             else:
-                native_task_id = str(verified_readback["native_task_id"])
-                session_status = "executing"
+                session_status = "manual_launch_ready"
         elif native_available:
             session_status = "native_launch_ready"
         elif require_native:
@@ -235,6 +255,7 @@ def prepare_execution_launch(
     session = {
         "schema_version": SCHEMA_VERSION,
         "task_id": selected_task_id,
+        "orchestration_depth": 0,
         "project_root": str(root),
         "task_plan": f".agency/tasks/active/{selected_task_id}/task-plan.json",
         "team_plan": f".agency/tasks/active/{selected_task_id}/TEAM_PLAN.json",
@@ -246,8 +267,13 @@ def prepare_execution_launch(
         "launch_policy": launch_policy,
         "session_status": session_status,
         "native_task_id": native_task_id,
-        "native_readback": native_readback,
+        # Caller JSON is diagnostic input only and is never persisted as a
+        # native-session receipt. bind_execution_session.py is the only public
+        # path that can populate these fields and enter executing.
+        "native_readback": None,
+        "native_readback_attestation": None,
         "created_at": utc_now(),
+        "bound_at": None,
     }
     atomic_write_json(task_dir / "execution-session.json", session)
 
@@ -255,8 +281,6 @@ def prepare_execution_launch(
         current = validate_task_plan(load_json(task_dir / "task-plan.json"))["status"]
         if current == "plan_ready":
             transition_task(root, selected_task_id, "execution_ready")
-        if session_status == "executing":
-            transition_task(root, selected_task_id, "executing")
         update_progress(
             root,
             task_id=selected_task_id,
@@ -264,9 +288,7 @@ def prepare_execution_launch(
             work_id=None,
             actor="execution-root",
             summary=(
-                "Execution session launched with verified native readback"
-                if session_status == "executing"
-                else "Execution session prepared; launch handoff is ready"
+                "Execution session prepared; launch handoff is ready"
             ),
             artifacts=[
                 f".agency/tasks/active/{selected_task_id}/TEAM_PLAN.json",
@@ -288,10 +310,10 @@ def prepare_execution_launch(
             }
         ),
         "model_resolution": resolution,
-        "native_readback_verification": verified_readback,
+        "native_readback_consistency": readback_consistency,
         "execution_session": str(task_dir / "execution-session.json"),
         "manual_launch_prompt": str(task_dir / "EXECUTION_LAUNCH_PROMPT.md"),
-        "new_conversation_created": session_status == "executing",
+        "new_conversation_created": False,
     }
 
 
@@ -309,17 +331,18 @@ def main() -> None:
     parser.add_argument("--require-native", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    catalog = (
-        load_json(args.catalog)
-        if args.catalog
-        else live_catalog(
+    if args.catalog:
+        catalog = load_json(args.catalog)
+        catalog_mechanically_verified = False
+    else:
+        catalog = live_catalog(
             codex_bin=args.codex_bin,
             project=args.project,
             codex_home=args.codex_home,
             state_db=args.state_db,
             thread_id=args.thread_id,
         )
-    )
+        catalog_mechanically_verified = True
     result = prepare_execution_launch(
         args.project,
         task_id=args.task_id,
@@ -329,6 +352,7 @@ def main() -> None:
         ),
         native_readback=load_json(args.native_readback) if args.native_readback else None,
         require_native=args.require_native,
+        catalog_mechanically_verified=catalog_mechanically_verified,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else result)
     if result["status"] in {"TOOL_BLOCKED", "readback_mismatch"}:

@@ -73,8 +73,10 @@ RUNTIME_FILES = (
     "scripts/prepare_team_runtime.py",
     "scripts/agency_doctor.py",
     "scripts/prepare_execution_launch.py",
+    "scripts/bind_execution_session.py",
     "scripts/resolve_execution_model.py",
     "scripts/update_task_progress.py",
+    "scripts/complete_task.py",
     "scripts/archive_task.py",
     "scripts/deposit_knowledge.py",
     "scripts/validate_task_archive.py",
@@ -136,13 +138,20 @@ def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> 
                 lines[index] = "description: " + json.dumps(description)
         text = "\n".join(lines) + "\n"
     elif rel == "agents/openai.yaml":
+        lines = text.splitlines()
+        replacements = {
+            "display_name:": '  display_name: "Zhijuan Codex 幕僚长（旧入口兼容）"',
+            "short_description:": (
+                '  short_description: "旧显式调用兼容入口；新任务请使用 agency-chief-of-staff"'
+            ),
+        }
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            for key, replacement in replacements.items():
+                if stripped.startswith(key):
+                    lines[index] = replacement
+        text = "\n".join(lines) + "\n"
         text = text.replace(
-            'display_name: "Agency Chief of Staff · Codex 幕僚长"',
-            'display_name: "Zhijuan Codex 幕僚长（旧入口兼容）"',
-        ).replace(
-            'short_description: "讨论需求、建立执行清单、启动执行团队并沉淀长期资产"',
-            'short_description: "旧显式调用兼容入口；新任务请使用 agency-chief-of-staff"',
-        ).replace(
             f'default_prompt: "使用 ${CANONICAL_SKILL_NAME}',
             f'default_prompt: "使用 ${LEGACY_SKILL_NAME}',
         ).replace("allow_implicit_invocation: true", "allow_implicit_invocation: false")

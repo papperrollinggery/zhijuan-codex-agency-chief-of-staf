@@ -12,16 +12,17 @@
 4. 从当前 Codex App Server live catalog 按显示名查找 GPT-5.6 Sol 的精确 ID。
 5. 验证该 ID 支持 `ultra`；不支持或不存在时停止并给用户唯一模型选择，不静默降级。
 6. 按执行面优先级准备所需 Profile：Native Direct Route → 已读回 Named Custom Agent → 项目 selected-only Profile → Generic Native Subagent + Role Packet → CLI read-only compat → Root 直接执行。
-7. 生成 Execution Session Packet 和 `execution-session.json`。
-8. 优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。
-9. 读回真实 Task ID、provider、model、reasoning、cwd/worktree 和状态。
-10. 只有读回一致才从 `execution_ready` 进入 `executing`，并更新进度。
+7. `prepare_execution_launch.py` 只生成 Execution Session Packet 和 `execution-session.json`，状态最多到 `native_launch_ready` 或 `manual_launch_ready`；它不会把调用方 JSON 当成创建证明。
+8. 宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。
+9. 宿主创建后运行 `bind_execution_session.py`；该脚本不接收调用方 readback JSON，而是连接当前 App Server 的 `thread/read`、live model catalog 与 `codexHome/state_5.sqlite`，再核对 rollout turn context。
+10. 只有 Task ID、Root 身份、完整 packet、provider、model、reasoning、cwd/worktree、未归档状态与 rollout 实际 turn 全部机械一致，才从 `execution_ready` 进入 `executing`，写入 `native_task_id` 并更新进度；整个绑定可回滚。
 
 ## Execution Session Packet
 
 ```text
 AGENCY_EXECUTION_SESSION: true
 任务 ID：<task-id>
+编排深度：0
 项目根目录：<absolute-project-root>
 任务清单：<project-relative-task-plan>
 团队计划：<project-relative-team-plan>
@@ -38,15 +39,21 @@ AGENCY_EXECUTION_SESSION: true
 - 不重新讨论，不重新规划，不创建另一个 Root。
 - Root 可以按 Team Plan 派发 Subagent；Subagent 不得递归调用 Chief of Staff。
 - 只有 Root 更新全局 Task State、验证证据和归档。
+- `编排深度` 必须为 `0`；worker 固定为终端深度 `1`，不存在深度 `2`。
+- 首行是保留 marker 但 packet 无效时返回 `INVALID_PACKET`，不得按普通主会话重新激活。
 
 ## Root 模型政策
 
 Root 使用独立的 `execution-model-policy.json`，不属于 Efficient/Balanced/Judgment 子代理成本档。显示名、精确 ID、reasoning 与实际运行是四层不同证据：
 
 - 只从 live App Server catalog 解析精确 ID，不从字符串或文档猜测。
+- 从 `--catalog` 读取的序列化 JSON 一律是 `caller-asserted-unverified`，即使自称 `live_readback_verified` 也不能启动；只有同一调用机械连接 App Server 得到的目录才可解析为 launchable。
 - catalog 中存在 Sol 但没有 `ultra` 时，用户选择当前 Sol 最高 Effort、替代模型或暂不启动。
 - Sol 不存在时不猜 ID。
 - Native spawn 后必须读回实际 provider/model/effort；不一致为 FAIL，不能进入 executing。
+- 单独传给准备 helper 的 `native_readback` 只返回 `fields_consistent_unverified` 诊断；不会写入 session，也不能产生证明。没有机械绑定时，`new_conversation_created` 必须保持 `false`。
+- `session_status=executing` 的 schema 只负责结构约束，不能把固定字符串变成宿主证明。唯一公共写入路径是 `bind_execution_session.py`：它内部读取 App Server、canonical state 与 rollout，校验顶层/嵌套 Task、模型、Effort、CWD 和 packet 语义一致后写入 `app-server-canonical-state-mechanically-bound`。调用方不能上传一个 JSON 来替代该读取。
+- canonical state 没有稳定的“当前正在采样”字段，绑定状态精确写为 `active-unarchived`，不把未归档误报为正在运行。任务完成或清理仍需后续 readback 证据。
 - Subagent 仍按原有能力档路由，不要求全部使用 Ultra。
 
 ## Native 不可用时

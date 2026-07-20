@@ -6,11 +6,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import stat
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from agency_task import SCHEMA_VERSION, atomic_write_json, load_json, validate_task_plan
+from agency_task import (
+    SCHEMA_VERSION,
+    atomic_write_json,
+    load_json,
+    read_regular_text,
+    validate_task_plan,
+)
 
 
 ARCHIVE_DISPOSITIONS = frozenset({"completed", "cancelled", "superseded"})
@@ -25,12 +32,42 @@ def safe_artifact(project: Path, raw: str) -> Path:
     candidate = Path(raw)
     if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
         raise ValueError(f"archive artifact path is unsafe: {raw}")
-    resolved = (project / candidate).resolve()
-    if not resolved.is_relative_to(project.resolve()):
+    root = project.resolve(strict=True)
+    current = root
+    for index, part in enumerate(candidate.parts):
+        current = current / part
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            raise ValueError(f"archive artifact is missing or unsafe: {raw}") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"archive artifact is missing or a symlink: {raw}")
+        if index < len(candidate.parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"archive artifact parent is not a directory: {raw}")
+    resolved = current.resolve(strict=True)
+    if not resolved.is_relative_to(root):
         raise ValueError(f"archive artifact escapes project: {raw}")
-    if resolved.is_symlink() or not resolved.exists():
-        raise ValueError(f"archive artifact is missing or a symlink: {raw}")
     return resolved
+
+
+def _safe_archive_entry(root: Path, relative: Path) -> Path:
+    """Resolve one manifest entry while rejecting every in-archive symlink."""
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError("archive manifest file path is unsafe")
+    current = root
+    for index, part in enumerate(relative.parts):
+        current = current / part
+        try:
+            info = current.lstat()
+        except OSError as exc:
+            raise ValueError(f"archived file is missing or unsafe: {relative}") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"archived file is missing or unsafe: {relative}")
+        if index < len(relative.parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            raise ValueError(f"archived file parent is unsafe: {relative}")
+    if not stat.S_ISREG(current.lstat().st_mode):
+        raise ValueError(f"archived file is missing or unsafe: {relative}")
+    return current
 
 
 def _string_list(value: object, label: str, *, nonempty: bool = False) -> list[str]:
@@ -41,7 +78,12 @@ def _string_list(value: object, label: str, *, nonempty: bool = False) -> list[s
     return [item.strip() for item in value]
 
 
-def validate_closure(closure: dict[str, Any], *, reviewer_required: bool) -> dict[str, Any]:
+def validate_closure(
+    closure: dict[str, Any],
+    *,
+    reviewer_required: bool,
+    completion_evidence_required: bool = True,
+) -> dict[str, Any]:
     if closure.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("archive closure schema_version is invalid")
     review = closure.get("review")
@@ -63,21 +105,42 @@ def validate_closure(closure: dict[str, Any], *, reviewer_required: bool) -> dic
         raise ValueError("execution cleanup blocker must be a non-empty string or null")
     if cleanup["status"] == "cleanup_blocked" and not blocker:
         raise ValueError("cleanup_blocked requires an explicit blocker")
-    if not isinstance(validations, list) or not validations:
-        raise ValueError("archive requires current validation results")
+    if not isinstance(validations, list) or (completion_evidence_required and not validations):
+        raise ValueError("completed archive requires current validation results")
     for index, result in enumerate(validations):
         if not isinstance(result, dict) or result.get("status") != "passed":
             raise ValueError(f"validation result {index} is not passed")
         if not isinstance(result.get("summary"), str) or not result["summary"].strip():
             raise ValueError(f"validation result {index} has no summary")
         _string_list(result.get("evidence_refs"), f"validation result {index} evidence", nonempty=True)
-    artifact_list = _string_list(artifacts, "archive artifacts", nonempty=True)
+    artifact_list = _string_list(
+        artifacts,
+        "archive artifacts",
+        nonempty=completion_evidence_required,
+    )
     return {
         **closure,
         "review": {**review, "evidence_refs": review_refs},
         "execution_cleanup": {**cleanup, "evidence_refs": cleanup_refs},
         "artifacts": artifact_list,
     }
+
+
+def task_requires_reviewer(plan: dict[str, Any], task_dir: Path) -> bool:
+    """Derive the review gate from task risk as well as the generated team plan."""
+    team_path = task_dir / "TEAM_PLAN.json"
+    team = load_json(team_path) if team_path.is_file() else {}
+    positions = team.get("positions", [])
+    selected = any(
+        isinstance(position, dict) and position.get("profile") == "reviewer"
+        for position in positions
+    )
+    risk_required = any(
+        item.get("risk") in {"high", "critical"}
+        or item.get("work_type") in {"review", "release"}
+        for item in plan["work_items"]
+    )
+    return selected or risk_required
 
 
 def validate_archive_readiness(
@@ -106,14 +169,15 @@ def validate_archive_readiness(
     ]
     if disposition == "completed" and open_required:
         raise ValueError("required work remains open: " + ", ".join(open_required))
-    for item in plan["work_items"]:
-        if item["status"] == "waived" and (
-            not isinstance(item.get("waiver_reason"), str) or not item["waiver_reason"].strip()
-        ):
-            raise ValueError(f"waived work has no explicit reason: {item['work_id']}")
-        if item["blockers"]:
-            raise ValueError(f"unresolved work blocker: {item['work_id']}")
     if disposition == "completed":
+        for item in plan["work_items"]:
+            if item["status"] == "waived" and (
+                not isinstance(item.get("waiver_reason"), str)
+                or not item["waiver_reason"].strip()
+            ):
+                raise ValueError(f"waived work has no explicit reason: {item['work_id']}")
+            if item["blockers"]:
+                raise ValueError(f"unresolved work blocker: {item['work_id']}")
         evidence = plan.get("acceptance_evidence")
         if not isinstance(evidence, dict):
             raise ValueError("acceptance evidence map is missing")
@@ -124,22 +188,21 @@ def validate_archive_readiness(
                 nonempty=True,
             )
 
-    team_path = task_dir / "TEAM_PLAN.json"
-    team = load_json(team_path) if team_path.is_file() else {}
-    positions = team.get("positions", [])
-    reviewer_required = any(
-        isinstance(position, dict) and position.get("profile") == "reviewer"
-        for position in positions
+    reviewer_required = disposition == "completed" and task_requires_reviewer(plan, task_dir)
+    normalized_closure = validate_closure(
+        closure,
+        reviewer_required=reviewer_required,
+        completion_evidence_required=disposition == "completed",
     )
-    normalized_closure = validate_closure(closure, reviewer_required=reviewer_required)
     session_path = task_dir / "execution-session.json"
     if session_path.is_file():
         session = load_json(session_path)
-        if session.get("native_task_id") and normalized_closure["execution_cleanup"]["status"] not in {
-            "closed",
-            "cleanup_blocked",
-        }:
-            raise ValueError("native task/thread lacks closed or cleanup_blocked evidence")
+        if session.get("native_task_id"):
+            cleanup = normalized_closure["execution_cleanup"]
+            if cleanup["status"] not in {"closed", "cleanup_blocked"}:
+                raise ValueError("native task/thread lacks closed or cleanup_blocked evidence")
+            if cleanup["status"] == "closed" and not cleanup["evidence_refs"]:
+                raise ValueError("closed native task/thread requires cleanup readback evidence")
     resolved_artifacts = [safe_artifact(root, raw) for raw in normalized_closure["artifacts"]]
     return {
         "status": "ready",
@@ -157,15 +220,29 @@ def validate_archive_readiness(
 
 
 def validate_archive_directory(archive_dir: Path) -> dict[str, Any]:
-    root = archive_dir.resolve()
-    if not root.is_dir() or root.is_symlink():
+    supplied = archive_dir.expanduser().absolute()
+    try:
+        supplied_info = supplied.lstat()
+    except OSError as exc:
+        raise ValueError("archive directory is missing or unsafe") from exc
+    if stat.S_ISLNK(supplied_info.st_mode) or not stat.S_ISDIR(supplied_info.st_mode):
         raise ValueError("archive directory is missing or unsafe")
+    root = supplied.resolve(strict=True)
     required = {
         "task-plan.json",
         "ARCHIVE_REPORT.md",
         "archive-manifest.json",
         "knowledge-candidates.json",
     }
+    unsafe_entries = [
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_symlink()
+    ]
+    if unsafe_entries:
+        raise ValueError(
+            "archive contains symlinks: " + ", ".join(map(str, unsafe_entries))
+        )
     missing = sorted(name for name in required if not (root / name).is_file())
     if missing:
         raise ValueError("archive is missing files: " + ", ".join(missing))
@@ -176,29 +253,117 @@ def validate_archive_directory(archive_dir: Path) -> dict[str, Any]:
     if not isinstance(files, list):
         raise ValueError("archive manifest files must be a list")
     checked = 0
+    declared_paths: set[str] = set()
     for entry in files:
         if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
             raise ValueError("archive manifest file entry is invalid")
         relative = Path(entry["path"])
-        if relative.is_absolute() or ".." in relative.parts:
-            raise ValueError("archive manifest file path is unsafe")
-        path = root / relative
-        if not path.is_file() or path.is_symlink():
-            raise ValueError(f"archived file is missing or unsafe: {relative}")
+        relative_text = str(relative)
+        if relative_text in declared_paths:
+            raise ValueError(f"archive manifest contains duplicate file: {relative}")
+        declared_paths.add(relative_text)
+        path = _safe_archive_entry(root, relative)
         if entry.get("sha256") != sha256(path) or entry.get("bytes") != path.stat().st_size:
             raise ValueError(f"archived file manifest mismatch: {relative}")
         checked += 1
+    actual_paths = {
+        str(path.relative_to(root))
+        for path in root.rglob("*")
+        if path.is_file() and path.name != "archive-manifest.json"
+    }
+    if declared_paths != actual_paths:
+        missing_from_manifest = sorted(actual_paths - declared_paths)
+        missing_from_archive = sorted(declared_paths - actual_paths)
+        raise ValueError(
+            "archive manifest coverage mismatch "
+            f"(unlisted={missing_from_manifest}, missing={missing_from_archive})"
+        )
     plan = validate_task_plan(load_json(root / "task-plan.json"))
     if plan["status"] not in {"archived", "cancelled", "superseded"}:
         raise ValueError("archived task plan has an active status")
-    candidates = json.loads((root / "knowledge-candidates.json").read_text(encoding="utf-8"))
-    if not isinstance(candidates, list):
-        raise ValueError("knowledge-candidates.json must contain a list")
+    if manifest.get("task_id") != plan["task_id"]:
+        raise ValueError("archive manifest task_id does not match task plan")
+    disposition = manifest.get("archive_disposition")
+    source_status = manifest.get("source_status")
+    final_status = manifest.get("final_status")
+    if plan["status"] == "archived":
+        if (disposition, source_status, final_status) != (
+            "completed",
+            "completed",
+            "archived",
+        ):
+            raise ValueError("completed archive disposition/status fields are inconsistent")
+    elif (disposition, source_status, final_status) != (
+        plan["status"],
+        plan["status"],
+        plan["status"],
+    ):
+        raise ValueError("noncompleted archive disposition/status fields are inconsistent")
+    expected_reason = plan.get("status_reason") if plan["status"] != "archived" else None
+    if manifest.get("disposition_reason") != expected_reason:
+        raise ValueError("archive disposition reason does not match task plan")
+    expected_blockers = [
+        {"work_id": item["work_id"], "blockers": item["blockers"]}
+        for item in plan["work_items"]
+        if item["blockers"]
+    ]
+    if manifest.get("unresolved_blockers") != expected_blockers:
+        raise ValueError("archive blocker summary does not match task plan")
+    if manifest.get("acceptance_evidence") != plan.get("acceptance_evidence", {}):
+        raise ValueError("archive acceptance evidence does not match task plan")
+    closure = manifest.get("closure")
+    normalized_closure = validate_closure(
+        closure,
+        reviewer_required=plan["status"] == "archived"
+        and task_requires_reviewer(plan, root),
+        completion_evidence_required=plan["status"] == "archived",
+    )
+    if manifest.get("artifacts") != normalized_closure["artifacts"]:
+        raise ValueError("archive artifacts do not match closure")
+    try:
+        candidates = json.loads(read_regular_text(root / "knowledge-candidates.json"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("knowledge-candidates.json must contain valid JSON") from exc
+    from deposit_knowledge import (
+        validate_candidate_provenance,
+        validate_knowledge_candidates,
+    )
+
+    normalized_candidates = validate_knowledge_candidates(candidates)
+    closure = normalized_closure
+    evidence_refs = {
+        reference
+        for item in plan["work_items"]
+        for reference in item["evidence_refs"]
+    }
+    for references in manifest.get("acceptance_evidence", {}).values():
+        if isinstance(references, list):
+            evidence_refs.update(item for item in references if isinstance(item, str))
+    if isinstance(closure, dict):
+        for section in ("review", "execution_cleanup"):
+            value = closure.get(section, {})
+            if isinstance(value, dict) and isinstance(value.get("evidence_refs"), list):
+                evidence_refs.update(
+                    item for item in value["evidence_refs"] if isinstance(item, str)
+                )
+        for result in closure.get("validation_results", []):
+            if isinstance(result, dict) and isinstance(result.get("evidence_refs"), list):
+                evidence_refs.update(
+                    item for item in result["evidence_refs"] if isinstance(item, str)
+                )
+        artifacts = closure.get("artifacts", [])
+        if isinstance(artifacts, list):
+            evidence_refs.update(item for item in artifacts if isinstance(item, str))
+    validate_candidate_provenance(
+        normalized_candidates,
+        source_task_id=plan["task_id"],
+        allowed_evidence_refs=evidence_refs,
+    )
     return {
         "status": "valid",
         "task_id": plan["task_id"],
         "files_checked": checked,
-        "knowledge_candidates": len(candidates),
+        "knowledge_candidates": len(normalized_candidates),
     }
 
 
@@ -264,7 +429,19 @@ def run_self_test() -> dict[str, Any]:
             files.append({"path": name, "sha256": sha256(path), "bytes": path.stat().st_size})
         atomic_write_json(
             archive_dir / "archive-manifest.json",
-            {"schema_version": SCHEMA_VERSION, "task_id": plan["task_id"], "files": files},
+            {
+                "schema_version": SCHEMA_VERSION,
+                "task_id": plan["task_id"],
+                "archive_disposition": "completed",
+                "source_status": "completed",
+                "final_status": "archived",
+                "disposition_reason": None,
+                "unresolved_blockers": [],
+                "closure": closure,
+                "acceptance_evidence": plan["acceptance_evidence"],
+                "artifacts": closure["artifacts"],
+                "files": files,
+            },
         )
         archive_validation = validate_archive_directory(archive_dir)
     return {

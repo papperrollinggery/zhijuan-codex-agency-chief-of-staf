@@ -52,10 +52,11 @@ AGENCY_WORKER: true
 ## 读回与收敛
 
 1. 用 task/thread readback 检查真实状态、cwd/worktree、最新活动和产物。
-2. 根据工具活动判断等待，不使用写死的三次轮询或固定 60 秒间隔。
-3. worker 无进展时先发一次定向 follow-up；仍不收敛再 replacement/rescue。
-4. receipt 的 id 必须等于工具读回的 worker id；不一致时拒绝该证据。
-5. 主线程独立核验 artifact 和验证命令后，记录 `adopted`、`partially_adopted` 或 `rejected`。
+2. Durable Execution Root 必须用 `bind_execution_session.py` 从 App Server、canonical state 与 rollout 机械绑定；序列化 JSON、自报字符串或 schema 通过都不算创建/模型证明。
+3. 根据工具活动判断等待，不使用写死的三次轮询或固定 60 秒间隔。
+4. worker 无进展时先发一次定向 follow-up；仍不收敛再 replacement/rescue。
+5. receipt 的 id 必须等于工具读回的 worker id；不一致时拒绝该证据。
+6. 主线程独立核验 artifact 和验证命令后，记录 `adopted`、`partially_adopted` 或 `rejected`。
 
 若 cwd/worktree 已不存在：停止向该 worker 发消息，标记 `thread_cwd_missing`，拒绝旧自述作为当前完成证据；工作仍需继续时创建新的合法执行面。
 

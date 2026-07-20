@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import fcntl
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +17,12 @@ from agency_task import (
     active_task_dir,
     atomic_write_json,
     atomic_write_text,
+    _transition_guarded_terminal,
+    load_or_initialize_index,
     load_json,
+    read_regular_text,
     render_checklist,
     safe_project_root,
-    transition_task,
     utc_now,
     validate_task_plan,
 )
@@ -37,6 +42,9 @@ EVENT_TYPES = frozenset(
         "task_archived",
     }
 )
+TERMINAL_EVENTS = frozenset({"task_completed", "task_archived"})
+PUBLIC_EVENT_TYPES = EVENT_TYPES - TERMINAL_EVENTS
+_TERMINAL_EVENT_AUTHORITY = object()
 WORK_EVENTS = frozenset(
     {
         "work_started",
@@ -86,10 +94,12 @@ def event_id_for(
 
 
 def load_events(path: Path) -> list[dict[str, Any]]:
+    if path.is_symlink():
+        raise ValueError("progress event log must not be a symlink")
     if not path.exists():
         return []
     result: list[dict[str, Any]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    for number, line in enumerate(read_regular_text(path).splitlines(), 1):
         if not line:
             continue
         try:
@@ -104,26 +114,67 @@ def load_events(path: Path) -> list[dict[str, Any]]:
 
 def append_event(path: Path, event: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        handle.seek(0)
-        existing = [
-            json.loads(line)
-            for line in handle.read().splitlines()
-            if line.strip()
-        ]
-        duplicate = next(
-            (item for item in existing if item.get("event_id") == event["event_id"]), None
-        )
-        if duplicate is not None:
-            comparable = dict(event)
-            comparable["timestamp"] = duplicate.get("timestamp")
-            if duplicate != comparable:
-                raise ValueError("progress event id collides with different content")
-            return
-        handle.seek(0, 2)
-        handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
-        handle.flush()
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("progress event log must not traverse a symlink")
+    flags = os.O_RDWR | os.O_APPEND | os.O_CREAT
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags, 0o600)
+    except OSError as exc:
+        raise ValueError("progress event log must be a regular non-symlink file") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise ValueError("progress event log must be a single regular file")
+        with os.fdopen(descriptor, "r+", encoding="utf-8", closefd=False) as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            handle.seek(0)
+            existing = [
+                json.loads(line)
+                for line in handle.read().splitlines()
+                if line.strip()
+            ]
+            duplicate = next(
+                (item for item in existing if item.get("event_id") == event["event_id"]), None
+            )
+            if duplicate is not None:
+                comparable = dict(event)
+                comparable["timestamp"] = duplicate.get("timestamp")
+                if duplicate != comparable:
+                    raise ValueError("progress event id collides with different content")
+                return
+            handle.seek(0, 2)
+            handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        current = path.lstat()
+        if (
+            stat.S_ISLNK(current.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino)
+        ):
+            raise ValueError("progress event log changed while it was written")
+    finally:
+        os.close(descriptor)
+
+
+def _optional_text_snapshot(path: Path) -> tuple[bool, str]:
+    if path.is_symlink():
+        raise ValueError("managed progress output must not be a symlink")
+    return (True, read_regular_text(path)) if path.exists() else (False, "")
+
+
+def _restore_optional_text(path: Path, snapshot: tuple[bool, str]) -> None:
+    existed, text = snapshot
+    if existed:
+        atomic_write_text(path, text)
+    elif path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("cannot remove unsafe progress output during rollback")
+        path.unlink()
 
 
 def _work_by_id(plan: dict[str, Any], work_id: str) -> dict[str, Any]:
@@ -263,10 +314,15 @@ def update_progress(
     verification: list[str] | None = None,
     blockers: list[str] | None = None,
     idempotency_key: str | None = None,
+    _terminal_authority: object | None = None,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     if event_type not in EVENT_TYPES:
         raise ValueError(f"unsupported progress event type: {event_type}")
+    if event_type in TERMINAL_EVENTS and _terminal_authority is not _TERMINAL_EVENT_AUTHORITY:
+        raise ValueError(
+            "terminal task events are guarded; use complete_task.py or archive_task.py"
+        )
     if actor not in ROOT_ACTORS:
         raise ValueError("only the Execution Root may update global task progress")
     if not isinstance(summary, str) or not summary.strip():
@@ -282,7 +338,13 @@ def update_progress(
     task_dir = active_task_dir(root, task_id)
     plan_path = task_dir / "task-plan.json"
     plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)
+    original_plan = copy.deepcopy(plan)
+    checklist_path = task_dir / "TASK_EXECUTION_CHECKLIST.md"
+    original_checklist = read_regular_text(checklist_path)
     progress_path = task_dir / "progress.jsonl"
+    progress_snapshot = _optional_text_snapshot(progress_path)
+    progress_markdown_path = task_dir / "PROGRESS.md"
+    progress_markdown_snapshot = _optional_text_snapshot(progress_markdown_path)
     identifier = event_id_for(
         task_id=task_id,
         event_type=event_type,
@@ -306,20 +368,6 @@ def update_progress(
         }
 
     status_before, status_after = _status_for_event(plan, event_type, work_id)
-    if event_type in WORK_EVENTS and work_id is not None:
-        item = _work_by_id(plan, work_id)
-        item["status"] = status_after
-        for blocker in blockers:
-            if blocker not in item["blockers"]:
-                item["blockers"].append(blocker)
-        for reference in artifacts + verification:
-            if reference not in item["evidence_refs"]:
-                item["evidence_refs"].append(reference)
-        if event_type == "work_started" and status_before == "blocked":
-            item["blockers"] = []
-        atomic_write_json(plan_path, plan)
-        atomic_write_text(task_dir / "TASK_EXECUTION_CHECKLIST.md", render_checklist(plan))
-
     event = {
         "event_id": identifier,
         "task_id": task_id,
@@ -333,12 +381,68 @@ def update_progress(
         "verification": verification,
         "blockers": blockers,
     }
-    append_event(progress_path, event)
-    if event_type == "task_completed":
-        transition_task(root, task_id, "completed")
-        plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)
-    events = load_events(progress_path)
-    atomic_write_text(task_dir / "PROGRESS.md", render_progress(plan, events))
+    original_index = (
+        copy.deepcopy(load_or_initialize_index(root))
+        if event_type == "task_completed"
+        else None
+    )
+    try:
+        if event_type in WORK_EVENTS and work_id is not None:
+            item = _work_by_id(plan, work_id)
+            item["status"] = status_after
+            for blocker in blockers:
+                if blocker not in item["blockers"]:
+                    item["blockers"].append(blocker)
+            for reference in artifacts + verification:
+                if reference not in item["evidence_refs"]:
+                    item["evidence_refs"].append(reference)
+            if event_type == "work_started" and status_before == "blocked":
+                item["blockers"] = []
+            atomic_write_json(plan_path, plan)
+            atomic_write_text(checklist_path, render_checklist(plan))
+
+        append_event(progress_path, event)
+        if event_type == "task_completed":
+            _transition_guarded_terminal(root, task_id, "completed")
+            plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)
+        events = load_events(progress_path)
+        atomic_write_text(progress_markdown_path, render_progress(plan, events))
+    except Exception as exc:
+        rollback_errors: list[str] = []
+        restores = [
+            ("task plan", lambda: atomic_write_json(plan_path, original_plan)),
+            ("checklist", lambda: atomic_write_text(checklist_path, original_checklist)),
+            (
+                "progress log",
+                lambda: _restore_optional_text(progress_path, progress_snapshot),
+            ),
+            (
+                "progress view",
+                lambda: _restore_optional_text(
+                    progress_markdown_path, progress_markdown_snapshot
+                ),
+            ),
+        ]
+        if original_index is not None:
+            restores.append(
+                (
+                    "task index",
+                    lambda: atomic_write_json(
+                        root / ".agency/task-index.json", original_index
+                    ),
+                )
+            )
+        for label, restore in restores:
+            try:
+                restore()
+            except (OSError, ValueError) as rollback_exc:
+                rollback_errors.append(f"{label}: {rollback_exc}")
+        if rollback_errors:
+            raise RuntimeError(
+                "progress update failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
     return {
         "status": "recorded",
         "event_id": identifier,
@@ -350,11 +454,40 @@ def update_progress(
     }
 
 
+def record_terminal_progress(
+    project: Path,
+    *,
+    task_id: str,
+    event_type: str,
+    actor: str,
+    summary: str,
+    artifacts: list[str] | None = None,
+    verification: list[str] | None = None,
+    blockers: list[str] | None = None,
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    if event_type not in TERMINAL_EVENTS:
+        raise ValueError("record_terminal_progress only accepts terminal task events")
+    return update_progress(
+        project,
+        task_id=task_id,
+        event_type=event_type,
+        work_id=None,
+        actor=actor,
+        summary=summary,
+        artifacts=artifacts,
+        verification=verification,
+        blockers=blockers,
+        idempotency_key=idempotency_key,
+        _terminal_authority=_TERMINAL_EVENT_AUTHORITY,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Record an event-driven Agency progress update.")
     parser.add_argument("--project", type=Path, default=Path.cwd())
     parser.add_argument("--task-id", required=True)
-    parser.add_argument("--event-type", required=True, choices=sorted(EVENT_TYPES))
+    parser.add_argument("--event-type", required=True, choices=sorted(PUBLIC_EVENT_TYPES))
     parser.add_argument("--work-id")
     parser.add_argument("--actor", default="execution-root")
     parser.add_argument("--summary", required=True)

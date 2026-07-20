@@ -7,6 +7,7 @@
   "required": [
     "schema_version",
     "task_id",
+    "orchestration_depth",
     "project_root",
     "task_plan",
     "team_plan",
@@ -19,11 +20,14 @@
     "session_status",
     "native_task_id",
     "native_readback",
-    "created_at"
+    "native_readback_attestation",
+    "created_at",
+    "bound_at"
   ],
   "properties": {
     "schema_version": {"const": "1.0"},
     "task_id": {"type": "string", "minLength": 1},
+    "orchestration_depth": {"const": 0},
     "project_root": {"type": "string", "minLength": 1},
     "task_plan": {"type": "string", "minLength": 1},
     "team_plan": {"type": "string", "minLength": 1},
@@ -46,7 +50,138 @@
       ]
     },
     "native_task_id": {"type": ["string", "null"]},
-    "native_readback": {"type": ["object", "null"]},
-    "created_at": {"type": "string", "format": "date-time"}
-  }
+    "native_readback": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "native_task_id",
+            "provider",
+            "actual_model_id",
+            "actual_reasoning_effort",
+            "cwd",
+            "isolated_worktree",
+            "worktree_path",
+            "status",
+            "host_thread_readback",
+            "prompt_bound",
+            "catalog_bound",
+            "state_store_identity",
+            "state_source",
+            "prompt_sha256",
+            "rollout_sha256",
+            "model_turns_observed",
+            "observed_at"
+          ],
+          "properties": {
+            "native_task_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+            },
+            "provider": {"const": "openai"},
+            "actual_model_id": {"type": "string", "minLength": 1},
+            "actual_reasoning_effort": {"const": "ultra"},
+            "cwd": {"type": "string", "minLength": 1},
+            "isolated_worktree": {"type": "boolean"},
+            "worktree_path": {"type": ["string", "null"]},
+            "status": {"const": "active-unarchived"},
+            "host_thread_readback": {"const": true},
+            "prompt_bound": {"const": true},
+            "catalog_bound": {"const": true},
+            "state_store_identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "device",
+                "inode",
+                "identity_guarded",
+                "wal_aware",
+                "readonly_transaction"
+              ],
+              "properties": {
+                "device": {"type": "integer", "minimum": 0},
+                "inode": {"type": "integer", "minimum": 0},
+                "identity_guarded": {"const": true},
+                "wal_aware": {"const": true},
+                "readonly_transaction": {"const": true}
+              }
+            },
+            "state_source": {"type": "string", "minLength": 1},
+            "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "rollout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "model_turns_observed": {"type": "integer", "minimum": 1},
+            "observed_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      ]
+    },
+    "native_readback_attestation": {
+      "type": ["string", "null"],
+      "enum": [
+        "app-server-canonical-state-mechanically-bound",
+        null
+      ]
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "bound_at": {"type": ["string", "null"], "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"session_status": {"const": "executing"}},
+        "required": ["session_status"]
+      },
+      "then": {
+        "properties": {
+          "resolved_model_id": {"type": "string", "minLength": 1},
+          "model_resolution_status": {"const": "resolved"},
+          "native_task_id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"
+          },
+          "native_readback": {
+            "type": "object",
+            "required": [
+              "native_task_id",
+              "provider",
+              "actual_model_id",
+              "actual_reasoning_effort",
+              "cwd",
+              "status"
+            ]
+          },
+          "native_readback_attestation": {
+            "const": "app-server-canonical-state-mechanically-bound"
+          },
+          "bound_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "session_status": {
+            "enum": [
+              "native_launch_ready",
+              "manual_launch_ready",
+              "user_choice_required",
+              "TOOL_BLOCKED",
+              "readback_mismatch"
+            ]
+          }
+        },
+        "required": ["session_status"]
+      },
+      "then": {
+        "properties": {
+          "native_task_id": {"const": null},
+          "native_readback": {"const": null},
+          "native_readback_attestation": {"const": null},
+          "bound_at": {"const": null}
+        }
+      }
+    }
+  ]
 }

@@ -44,6 +44,7 @@ WORKER_PACKET_FORBIDDEN_TERMS = (
 EXECUTION_SESSION_HEADER = "AGENCY_EXECUTION_SESSION: true"
 EXECUTION_SESSION_FIELDS = (
     "任务 ID",
+    "编排深度",
     "项目根目录",
     "任务清单",
     "团队计划",
@@ -55,6 +56,15 @@ EXECUTION_SESSION_FIELDS = (
 )
 EXECUTION_SESSION_DUTY = "作为本任务 Execution Root，按清单执行、调度、验证并更新进度。"
 EXECUTION_SESSION_STOP = "全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。"
+
+
+class InvalidAgencyPacket(ValueError):
+    """A reserved Agency marker was present but its packet was invalid."""
+
+    def __init__(self, packet_kind: str, detail: str) -> None:
+        super().__init__(f"INVALID_PACKET ({packet_kind}): {detail}")
+        self.packet_kind = packet_kind
+        self.detail = detail
 
 
 def _strict_lines(text: str, *, expected_count: int, label: str) -> list[str]:
@@ -133,6 +143,8 @@ def parse_execution_session_packet(text: str) -> dict[str, str]:
     task_id = result["任务 ID"]
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,95}", task_id):
         raise ValueError("execution session task id is unsafe")
+    if result["编排深度"] != "0":
+        raise ValueError("execution session orchestration depth must be exactly 0")
     project_root = Path(result["项目根目录"])
     if not project_root.is_absolute() or ".." in project_root.parts:
         raise ValueError("execution session project root must be absolute")
@@ -140,6 +152,17 @@ def parse_execution_session_packet(text: str) -> dict[str, str]:
         path = Path(result[label])
         if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
             raise ValueError(f"execution session {label} must be a safe project-relative path")
+    base = f".agency/tasks/active/{task_id}"
+    expected_paths = {
+        "任务清单": f"{base}/task-plan.json",
+        "团队计划": f"{base}/TEAM_PLAN.json",
+        "进度文件": f"{base}/PROGRESS.md",
+    }
+    for label, expected in expected_paths.items():
+        if result[label] != expected:
+            raise ValueError(
+                f"execution session {label} is not bound to task {task_id}"
+            )
     if result["执行模型请求"] != "GPT-5.6 Sol":
         raise ValueError("execution session model request must be GPT-5.6 Sol")
     if result["推理强度请求"] != "ultra":
@@ -149,6 +172,43 @@ def parse_execution_session_packet(text: str) -> dict[str, str]:
     if result["停止条件"] != EXECUTION_SESSION_STOP:
         raise ValueError("execution session stop condition is not exact")
     return result
+
+
+def classify_agency_packet(text: str) -> tuple[str, dict[str, str] | None]:
+    """Classify one prompt without letting malformed reserved packets become roots.
+
+    Ordinary text is returned unchanged as ``ordinary``. Once a reserved marker
+    is the first line, parser failure is terminal and represented by
+    :class:`InvalidAgencyPacket`; callers must not route it through normal
+    implicit activation.
+    """
+
+    lines = text.splitlines()
+    first_line = lines[0] if lines else ""
+    reserved_pattern = re.compile(
+        r"^\s*\ufeff?\s*AGENCY_(WORKER|EXECUTION_SESSION)\s*:\s*true\s*$",
+        re.IGNORECASE,
+    )
+    first_reserved = reserved_pattern.fullmatch(first_line)
+    if first_reserved and first_reserved.group(1).casefold() == "worker":
+        try:
+            return "worker", parse_worker_packet(text)
+        except ValueError as exc:
+            raise InvalidAgencyPacket("worker", str(exc)) from exc
+    if first_reserved:
+        try:
+            return "execution_session", parse_execution_session_packet(text)
+        except ValueError as exc:
+            raise InvalidAgencyPacket("execution_session", str(exc)) from exc
+    reserved_lines = [match for line in lines if (match := reserved_pattern.fullmatch(line))]
+    if reserved_lines:
+        kind = (
+            "worker"
+            if any(match.group(1).casefold() == "worker" for match in reserved_lines)
+            else "execution_session"
+        )
+        raise InvalidAgencyPacket(kind, "reserved marker must be the exact first line")
+    return "ordinary", None
 
 
 def parse_reviewer_terminal(text: str) -> dict[str, str]:

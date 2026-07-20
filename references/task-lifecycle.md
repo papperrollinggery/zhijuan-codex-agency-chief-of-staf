@@ -1,6 +1,6 @@
 # Project Task Lifecycle
 
-项目型请求使用四个用户阶段：需求讨论、执行清单、独立执行对话、归档与知识沉淀。单次小任务继续使用 Direct Mode，不创建 `.agency`。
+只有用户明确需要跨对话连续性、持续进度、独立执行对话或归档时使用四阶段生命周期。普通复杂任务继续使用 Direct/Focused，不创建 `.agency`。
 
 ## 意图与停止点
 
@@ -17,7 +17,7 @@
 
 ### 执行清单
 
-只有用户明确要求把讨论整理成执行清单时，才把计划写入项目 `.agency`。使用 `scripts/agency_task.py create` 创建：
+只有用户明确要求把讨论整理成执行清单时，才把计划写入项目 `.agency`。使用 `scripts/agency_task.py create` 创建最小初始状态：
 
 ```text
 .agency/
@@ -25,17 +25,17 @@
 └── tasks/
     ├── active/<task-id>/
     │   ├── task-plan.json
-    │   ├── TASK_EXECUTION_CHECKLIST.md
-    │   ├── TEAM_PLAN.json
-    │   ├── TEAM_PLAN.md
-    │   ├── EXECUTION_LAUNCH_PROMPT.md
-    │   ├── PROGRESS.md
-    │   ├── progress.jsonl
-    │   └── EVIDENCE.md
+    │   └── TASK_EXECUTION_CHECKLIST.md
     └── archive/
 ```
 
-清单面向用户，列出完成标准、依赖、状态和验证，不使用虚构日期、用时或百分比。创建后状态为 `plan_ready`，不会自动执行、安装 Profile 或创建新对话。
+清单面向用户，列出完成标准、依赖、状态和验证，不使用虚构日期、用时或百分比。创建后状态为 `plan_ready`，不会自动执行、安装 Profile 或创建新对话。`TEAM_PLAN.*`、Execution Session、Launch Prompt、Progress 与归档文件分别在首次需要时生成，不写占位文件。
+
+输入可以只提供每个 Work Item 的 `work_id`、`title`、`outcome` 和 `work_type`；确定性脚本补齐安全默认字段并把完整规范写入 `task-plan.json`。模型请求不属于 Plan 必填项，只在真正启动 Execution Session 时解析。
+
+首次真实执行事件才创建 `progress.jsonl` 和 `PROGRESS.md`。工作项全部完成且当前验收、验证、Review（如需要）及 Task/Thread 清理证据齐备后，使用 `scripts/complete_task.py`。默认只做 readiness 检查；传入 `--apply` 才从 `executing`/`verifying` 收口到 `completed`，并生成归档可复用的 `closure.json`。
+
+通用 `agency_task.py transition` 和公开进度命令不能写 `completed` / `archived` 或 terminal event；这些终态只能由 `complete_task.py` 与 `archive_task.py` 在证据门禁通过后写入。Task 创建、状态转换、进度事件、归档和知识沉淀的多文件提交都带故障回滚；失败不能留下 plan/index、文档/report 或 active/archive 的半状态。
 
 ### 独立执行对话
 
