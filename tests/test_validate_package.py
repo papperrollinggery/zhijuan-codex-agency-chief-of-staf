@@ -256,8 +256,13 @@ class ValidatePackageMutationTests(unittest.TestCase):
             root = self.make_copy(Path(tmp))
             path = root / "evals" / "behavior_cases.json"
             text = path.read_text(encoding="utf-8")
-            text = text.replace('"id": "explicit-write-execute"', '"id": "../escape"', 1)
-            text = text.replace('"sandbox": "workspace-write"', '"sandbox": "danger-full-access"', 1)
+            start = text.index('"id": "explicit-write-execute"')
+            prefix, target = text[:start], text[start:]
+            target = target.replace('"id": "explicit-write-execute"', '"id": "../escape"', 1)
+            target = target.replace(
+                '"sandbox": "workspace-write"', '"sandbox": "danger-full-access"', 1
+            )
+            text = prefix + target
             path.write_text(text, encoding="utf-8")
             result = self.validate(root)
             self.assertNotEqual(result.returncode, 0)

@@ -55,6 +55,31 @@ class AgencyDoctorTests(unittest.TestCase):
                 "BEGIN agency-chief-of-staff routing\n",
             )
 
+    def test_conflict_and_unavailable_native_surface_are_not_healthy(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            project = base / "project"
+            skills = base / "skills"
+            project.mkdir()
+            (project / "AGENTS.md").write_text(
+                "BEGIN agency-chief-of-staff routing\n", encoding="utf-8"
+            )
+            for name in install_skill.INSTALL_NAMES:
+                install_skill.copy_runtime(ROOT, skills / name, name)
+            native = {
+                "codex": None,
+                "agents_namespace": {"status": "unavailable", "value": None},
+                "task_thread": {"status": "unavailable", "create_verified": False},
+                "model_catalog": {"status": "unavailable", "models": []},
+                "error": "unavailable",
+            }
+            with mock.patch.object(agency_doctor, "native_report", return_value=native):
+                report = agency_doctor.doctor(project, skills, "codex", 1)
+            self.assertEqual(report["status"], "attention-required")
+            self.assertFalse(report["checks"]["project_agents_conflict_free"])
+            self.assertFalse(report["checks"]["native_thread_read_surface"])
+            self.assertFalse(report["checks"]["native_model_catalog_live"])
+
 
 if __name__ == "__main__":
     unittest.main()

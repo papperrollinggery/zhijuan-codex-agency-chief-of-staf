@@ -56,7 +56,13 @@ class InstallSkillTests(unittest.TestCase):
             legacy_yaml = (
                 target_root / install_skill.LEGACY_SKILL_NAME / "agents/openai.yaml"
             ).read_text(encoding="utf-8")
+            canonical_yaml = (
+                target_root / install_skill.CANONICAL_SKILL_NAME / "agents/openai.yaml"
+            ).read_text(encoding="utf-8")
+            self.assertIn("allow_implicit_invocation: true", canonical_yaml)
             self.assertIn("allow_implicit_invocation: false", legacy_yaml)
+            self.assertIn("旧显式调用兼容入口", legacy_yaml)
+            self.assertNotIn("聚焦项目内容，按需协调专业团队", legacy_yaml)
 
     def test_force_replaces_stale_runtime_atomically(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

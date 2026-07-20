@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import sys
 
@@ -10,8 +11,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lifecycle_test_support import ROOT, create_fixture_task, read_json
 
 sys.path.insert(0, str(ROOT / "scripts"))
-from agency_task import transition_task  # noqa: E402
-from update_task_progress import load_events, update_progress  # noqa: E402
+import agency_task as agency_task_module  # noqa: E402
+import update_task_progress as progress_module  # noqa: E402
+from agency_task import atomic_write_json, transition_task  # noqa: E402
+from update_task_progress import (  # noqa: E402
+    load_events,
+    record_terminal_progress,
+    update_progress,
+)
 
 
 class ProgressUpdateTests(unittest.TestCase):
@@ -70,7 +77,7 @@ class ProgressUpdateTests(unittest.TestCase):
                 self.assertIn(heading, text)
             self.assertNotIn("%", text)
 
-    def test_task_completion_requires_verification_and_acceptance_evidence(self) -> None:
+    def test_task_completion_event_cannot_bypass_guarded_completion(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
             task_id, task_dir = self.executing_task(project)
@@ -92,7 +99,7 @@ class ProgressUpdateTests(unittest.TestCase):
                 artifacts=["artifact.txt"],
             )
             transition_task(project, task_id, "verifying")
-            with self.assertRaisesRegex(ValueError, "evidence"):
+            with self.assertRaisesRegex(ValueError, "terminal task events are guarded"):
                 update_progress(
                     project,
                     task_id=task_id,
@@ -101,24 +108,96 @@ class ProgressUpdateTests(unittest.TestCase):
                     actor="execution-root",
                     summary="Task completed",
                 )
-            plan = read_json(task_dir / "task-plan.json")
-            plan["acceptance_evidence"] = {
-                plan["acceptance_criteria"][0]: ["test exit 0"]
-            }
-            from agency_task import atomic_write_json
+            self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "verifying")
 
-            atomic_write_json(task_dir / "task-plan.json", plan)
-            result = update_progress(
+    def test_progress_log_symlink_is_rejected_without_external_write(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            base = Path(raw)
+            project = base / "project"
+            project.mkdir()
+            task_id, task_dir = self.executing_task(project)
+            outside = base / "outside.jsonl"
+            outside.write_text("SENTINEL\n", encoding="utf-8")
+            (task_dir / "progress.jsonl").symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                update_progress(
+                    project,
+                    task_id=task_id,
+                    event_type="work_started",
+                    work_id="W-01",
+                    actor="execution-root",
+                    summary="Implementation started",
+                )
+            self.assertEqual(outside.read_text(encoding="utf-8"), "SENTINEL\n")
+
+    def test_event_append_failure_rolls_back_work_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            with mock.patch.object(
+                progress_module, "append_event", side_effect=OSError("log full")
+            ):
+                with self.assertRaisesRegex(OSError, "log full"):
+                    update_progress(
+                        project,
+                        task_id=task_id,
+                        event_type="work_started",
+                        work_id="W-01",
+                        actor="execution-root",
+                        summary="Implementation started",
+                    )
+            self.assertEqual(
+                read_json(task_dir / "task-plan.json")["work_items"][0]["status"],
+                "pending",
+            )
+            self.assertFalse((task_dir / "progress.jsonl").exists())
+
+    def test_terminal_index_failure_rolls_back_completion_event(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            update_progress(
                 project,
                 task_id=task_id,
-                event_type="task_completed",
-                work_id=None,
+                event_type="work_started",
+                work_id="W-01",
                 actor="execution-root",
-                summary="Task completed",
-                verification=["test exit 0"],
+                summary="Implementation started",
             )
-            self.assertEqual(result["status_after"], "completed")
-            self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "completed")
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="work_completed",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Implementation completed",
+                artifacts=["artifact.txt"],
+            )
+            plan = read_json(task_dir / "task-plan.json")
+            plan["acceptance_evidence"] = {
+                criterion: ["test exit 0"] for criterion in plan["acceptance_criteria"]
+            }
+            atomic_write_json(task_dir / "task-plan.json", plan)
+            transition_task(project, task_id, "verifying")
+            events_before = load_events(task_dir / "progress.jsonl")
+
+            with mock.patch.object(
+                agency_task_module, "write_index", side_effect=OSError("index full")
+            ):
+                with self.assertRaisesRegex(OSError, "index full"):
+                    record_terminal_progress(
+                        project,
+                        task_id=task_id,
+                        event_type="task_completed",
+                        actor="execution-root",
+                        summary="Task completed",
+                        verification=["test exit 0"],
+                    )
+
+            self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "verifying")
+            self.assertEqual(load_events(task_dir / "progress.jsonl"), events_before)
+            index = read_json(project / ".agency/task-index.json")
+            self.assertEqual(index["tasks"][task_id]["status"], "verifying")
 
 
 if __name__ == "__main__":

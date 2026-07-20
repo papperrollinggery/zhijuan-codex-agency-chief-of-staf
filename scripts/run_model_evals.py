@@ -184,7 +184,12 @@ if _SCRIPT_DIR not in sys.path:
 
 from agency_task import atomic_write_json, create_task, transition_task
 from install_skill import RUNTIME_FILES, SKILL_NAME, copy_runtime, runtime_manifest
-from protocol_contract import REVIEW_FIELDS, parse_reviewer_terminal
+from protocol_contract import (
+    InvalidAgencyPacket,
+    REVIEW_FIELDS,
+    classify_agency_packet,
+    parse_reviewer_terminal,
+)
 from resolve_role_route import verify_live_catalog
 from run_profile_compat import (
     hardened_git_observation,
@@ -225,7 +230,14 @@ ALLOWED_COLLABORATION = {
     "native_subagents_optional",
     "real_task",
 }
-ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker", "execution_session"}
+ALLOWED_ACTIVATION = {
+    "explicit",
+    "implicit",
+    "ordinary",
+    "worker",
+    "invalid_packet",
+    "execution_session",
+}
 ALLOWED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
 ALLOWED_LIFECYCLE_PHASES = {
     "direct",
@@ -411,6 +423,20 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "ordinary",
         "lifecycle_phase": "direct",
         "sandbox": "workspace-write",
+    },
+    "content-first-explicit-small-write": {
+        "should_trigger": True,
+        "mode": "direct",
+        "collaboration": "none",
+        "activation": "explicit",
+        "lifecycle_phase": "direct",
+        "sandbox": "workspace-write",
+    },
+    "invalid-reserved-worker-packet": {
+        "should_trigger": False,
+        "mode": "worker",
+        "collaboration": "none",
+        "activation": "invalid_packet",
     },
 }
 SAFE_ENV_KEYS = {
@@ -1248,9 +1274,23 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} has unsupported lifecycle_phase")
     if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
         raise RuntimeError(f"case {case_id} has unsupported team_expectation")
-    for key in ("no_write", "no_thread", "require_progress", "require_archive", "require_knowledge_patch"):
+    for key in (
+        "no_write",
+        "no_thread",
+        "require_progress",
+        "require_archive",
+        "require_knowledge_patch",
+        "require_takeover",
+        "require_skill_read",
+        "forbid_skill_read",
+    ):
         if key in case and type(case[key]) is not bool:
             raise RuntimeError(f"case {case_id} {key} must be boolean")
+    if case.get("require_skill_read") and case.get("forbid_skill_read"):
+        raise RuntimeError(f"case {case_id} has conflicting Skill-read requirements")
+    for key in ("max_collab_spawns", "max_management_files"):
+        if key in case and (type(case[key]) is not int or case[key] < 0):
+            raise RuntimeError(f"case {case_id} {key} must be a non-negative integer")
     setup = case.get("fixture_setup")
     if setup is not None:
         if not isinstance(setup, dict) or set(setup) != {"kind", "task_id"}:
@@ -1346,6 +1386,15 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} file assertions need expected_file")
     if case["activation"] == "worker" and not is_valid_worker_packet(str(case["prompt"])):
         raise RuntimeError(f"case {case_id} worker activation needs a complete first-line packet")
+    if case["activation"] == "invalid_packet":
+        try:
+            classify_agency_packet(str(case["prompt"]))
+        except InvalidAgencyPacket:
+            invalid_packet = True
+        else:
+            invalid_packet = False
+        if case["should_trigger"] is not False or not invalid_packet:
+            raise RuntimeError(f"case {case_id} invalid packet contract is unsafe")
     if case.get("require_collab_event"):
         if (
             not has_file
@@ -1412,6 +1461,7 @@ def event_surface(
     collaboration_event_indexes: list[int] = []
     last_file_change_event_index = -1
     passive_skill_read_ids: set[str] = set()
+    passive_skill_reads_completed: set[str] = set()
     jsonl_parse_errors = 0
     thread_started_ids: list[str] = []
     turn_started_count = 0
@@ -1475,12 +1525,11 @@ def event_surface(
             # The startup contract is about attempted task actions, not only
             # successful ones: a started or failed edit/read before boot is still an action.
             item_id = item.get("id")
-            if (
-                passive_skill_read
-                and isinstance(item_id, str)
-                and (not passive_skill_read_ids or item_id in passive_skill_read_ids)
-            ):
-                passive_skill_read_ids.add(item_id)
+            if passive_skill_read:
+                if isinstance(item_id, str):
+                    passive_skill_read_ids.add(item_id)
+                    if completed and tool_success:
+                        passive_skill_reads_completed.add(item_id)
             else:
                 task_action_event_indexes.append(index)
             if completed and tool_success:
@@ -1590,6 +1639,7 @@ def event_surface(
         "turn_failed_count": turn_failed_count,
         "top_level_error_count": top_level_error_count,
         "collaboration_identity_errors": collaboration_identity_errors,
+        "passive_skill_reads_completed": len(passive_skill_reads_completed),
     }
 
 
@@ -1648,15 +1698,38 @@ def contract_failures(
         if isinstance(surface_or_events, str)
         else len(boot_indexes) == 1
     )
-    if case["should_trigger"] and not booted:
-        failures.append("should_trigger=true but no takeover line was observed")
+    passive_reads = (
+        0
+        if isinstance(surface_or_events, str)
+        else int(surface_or_events.get("passive_skill_reads_completed", 0))
+    )
+    require_skill_read = bool(
+        case.get(
+            "require_skill_read",
+            case.get("model_smoke") and case["should_trigger"],
+        )
+    )
+    forbid_skill_read = bool(
+        case.get(
+            "forbid_skill_read",
+            case.get("model_smoke")
+            and not case["should_trigger"]
+            and case["activation"] in {"ordinary", "worker"},
+        )
+    )
+    if require_skill_read and passive_reads < 1:
+        failures.append("required Skill read was not observed")
+    if forbid_skill_read and passive_reads:
+        failures.append("excluded case read the Chief-of-Staff Skill")
+    if case.get("require_takeover") and case["should_trigger"] and not booted:
+        failures.append("required lifecycle takeover line was not observed")
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"]:
-        if case["activation"] == "worker" and len(message_events) != 1:
-            failures.append("worker must return exactly one terminal message")
-        if case["activation"] == "worker" and PROGRESS_RE.search(surface):
-            failures.append("worker or ordinary case emitted main-thread progress")
+        if case["activation"] in {"worker", "invalid_packet"} and len(message_events) != 1:
+            failures.append("worker or invalid packet must return exactly one terminal message")
+        if case["activation"] in {"worker", "invalid_packet"} and PROGRESS_RE.search(surface):
+            failures.append("worker or invalid packet emitted main-thread progress")
         if collaboration_actions:
             failures.append("worker or ordinary case attempted collaboration")
         return failures
@@ -1672,7 +1745,7 @@ def contract_failures(
     if booted and not atomic_boot_block(boot_message):
         failures.append("boot marker and first visible takeover line are not atomic")
 
-    if message_events and len(boot_indexes) != 1:
+    if booted and message_events and len(boot_indexes) != 1:
         failures.append("main session must emit exactly one takeover line")
     if boot_indexes:
         boot_index = boot_indexes[0]
@@ -2162,6 +2235,24 @@ def run_case(
         list(case.get("allowed_changed_prefixes", [])),
     )
     failures.extend(scope_failures)
+    max_collab_spawns = case.get("max_collab_spawns")
+    if isinstance(max_collab_spawns, int):
+        observed_spawns = len(parsed["spawn_completed"])
+        if observed_spawns > max_collab_spawns:
+            failures.append(
+                f"collaboration spawn budget exceeded: {observed_spawns} > {max_collab_spawns}"
+            )
+        if max_collab_spawns == 0 and parsed["collaboration_event_indexes"]:
+            failures.append("zero-collaboration case attempted a collaboration action")
+    management_changed_paths = [
+        path for path in manifest_changed_paths if path.startswith(".agency/")
+    ]
+    max_management_files = case.get("max_management_files")
+    if isinstance(max_management_files, int) and len(management_changed_paths) > max_management_files:
+        failures.append(
+            "management-file budget exceeded: "
+            f"{len(management_changed_paths)} > {max_management_files}"
+        )
     if completed.returncode != 0:
         failures.append(f"codex exit code {completed.returncode}")
     if final_output_unsafe:
@@ -2393,6 +2484,7 @@ def run_case(
             "activation": case["activation"],
         },
         "tool_events_completed": parsed["tool_events"],
+        "passive_skill_reads_completed": parsed["passive_skill_reads_completed"],
         "collab_spawns_completed": len(parsed["spawn_completed"]),
         "reviewer_results_completed": len(review_ids),
         "reviewer_session_identities_verified": len(review_session_identity_ids),
@@ -2412,6 +2504,7 @@ def run_case(
         "event_top_level_error_count": parsed["top_level_error_count"],
         "fixture_head_unchanged": final_git["head"] == baseline_git["head"],
         "fixture_manifest_changed_paths": manifest_changed_paths,
+        "management_files_changed": management_changed_paths,
         "auth_exact_value_leak_detected": (
             events_leak or stderr_leak or final_leak or artifact_leak
         ),

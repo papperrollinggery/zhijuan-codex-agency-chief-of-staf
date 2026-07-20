@@ -28,6 +28,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "collaboration": "none",
             "activation": "explicit",
             "model_smoke": True,
+            "require_takeover": True,
         }
 
     def test_evaluated_codex_kills_descendants_on_success_and_timeout(self) -> None:
@@ -37,7 +38,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
             fake.write_text(
                 "#!/usr/bin/env python3\n"
                 "import pathlib, subprocess, sys, time\n"
-                "child = (\"import pathlib,sys,time; time.sleep(0.35); \"\n"
+                "child = (\"import pathlib,sys,time; time.sleep(3); \"\n"
                 "         \"pathlib.Path(sys.argv[1]).write_text('survived')\")\n"
                 "subprocess.Popen([sys.executable, '-c', child, sys.argv[2]], "
                 "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
@@ -1162,9 +1163,9 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "\n".join(map(json.dumps, (worker_spawn, worker_progress, worker_extra_commentary))), ""
         )
         worker_failures = runner.contract_failures(worker, parsed_worker)
-        self.assertIn("worker or ordinary case emitted main-thread progress", worker_failures)
+        self.assertIn("worker or invalid packet emitted main-thread progress", worker_failures)
         self.assertIn("worker or ordinary case attempted collaboration", worker_failures)
-        self.assertIn("worker must return exactly one terminal message", worker_failures)
+        self.assertIn("worker or invalid packet must return exactly one terminal message", worker_failures)
 
         failed_worker_spawn = {
             "type": "item.completed",
@@ -1215,6 +1216,12 @@ class ModelEvalRunnerTests(unittest.TestCase):
             ),
         )
         self.assertNotIn("task action preceded COS_BOOT_RECEIPT", allowed)
+        observed = runner.event_surface(
+            "\n".join(map(json.dumps, (cat_skill_started, cat_skill))),
+            "",
+            installed_skill_path=Path("/tmp/skill/SKILL.md"),
+        )
+        self.assertEqual(observed["passive_skill_reads_completed"], 1)
         smuggled = dict(cat_skill)
         smuggled["item"] = {**cat_skill["item"], "command": "touch x; /bin/cat /tmp/skill/SKILL.md"}
         rejected = runner.contract_failures(
@@ -1240,6 +1247,41 @@ class ModelEvalRunnerTests(unittest.TestCase):
             ),
         )
         self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
+
+    def test_activation_contract_requires_or_forbids_observed_skill_read(self) -> None:
+        skill_read = {
+            "type": "item.completed",
+            "item": {
+                "id": "skill",
+                "type": "command_execution",
+                "status": "completed",
+                "exit_code": 0,
+                "command": "/bin/cat /tmp/skill/SKILL.md",
+            },
+        }
+        parsed = runner.event_surface(
+            json.dumps(skill_read),
+            "done",
+            installed_skill_path=Path("/tmp/skill/SKILL.md"),
+        )
+        required = self.base_case()
+        required.pop("require_takeover")
+        required["require_skill_read"] = True
+        self.assertNotIn("required Skill read was not observed", runner.contract_failures(required, parsed))
+        self.assertIn("required Skill read was not observed", runner.contract_failures(required, "done"))
+        excluded = self.base_case()
+        excluded.update(
+            {
+                "should_trigger": False,
+                "activation": "ordinary",
+                "require_takeover": False,
+                "forbid_skill_read": True,
+            }
+        )
+        self.assertIn(
+            "excluded case read the Chief-of-Staff Skill",
+            runner.contract_failures(excluded, parsed),
+        )
 
     def test_allows_one_narrow_platform_skill_announcement_before_boot(self) -> None:
         announcement = {
@@ -1311,6 +1353,12 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertNotIn("should_trigger=true but no takeover line was observed", failures)
         self.assertNotIn("boot marker and first visible takeover line are not atomic", failures)
         self.assertNotIn("main session must emit exactly one takeover line", failures)
+
+    def test_direct_content_case_does_not_require_takeover_ritual(self) -> None:
+        case = self.base_case()
+        case.pop("require_takeover")
+        failures = runner.contract_failures(case, "agency-model-eval-fixture")
+        self.assertFalse(any("takeover" in failure for failure in failures))
 
     def test_failed_command_is_not_tool_evidence_but_still_preboot_task_action(self) -> None:
         event = {

@@ -7,28 +7,97 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lifecycle_test_support import create_fixture_task, read_json, work_item
+from lifecycle_test_support import create_fixture_task, read_json, task_plan, work_item
+
+from agency_task import create_task, validate_task_plan
 
 
 class ExecutionChecklistTests(unittest.TestCase):
-    def test_plan_creation_writes_all_user_and_machine_artifacts_without_execution(self) -> None:
+    def test_plan_creation_lazily_writes_only_plan_and_checklist(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
             _, task_dir = create_fixture_task(project)
-            expected = {
-                "task-plan.json",
-                "TASK_EXECUTION_CHECKLIST.md",
-                "TEAM_PLAN.json",
-                "TEAM_PLAN.md",
-                "EXECUTION_LAUNCH_PROMPT.md",
-                "PROGRESS.md",
-                "progress.jsonl",
-                "EVIDENCE.md",
-            }
+            expected = {"task-plan.json", "TASK_EXECUTION_CHECKLIST.md"}
             self.assertEqual({path.name for path in task_dir.iterdir()}, expected)
             self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "plan_ready")
-            self.assertEqual(read_json(task_dir / "TEAM_PLAN.json")["status"], "pending")
-            self.assertEqual((task_dir / "progress.jsonl").read_text(encoding="utf-8"), "")
+            index = read_json(project / ".agency" / "task-index.json")
+            self.assertEqual(index["active_task_ids"], ["task-test-001"])
+
+    def test_compact_plan_is_normalized_before_persistence(self) -> None:
+        compact = {
+            "title": "Compact task",
+            "objective": "Persist a safe normalized task",
+            "source_discussion": {"summary": "Scope is clear."},
+            "acceptance_criteria": ["The normalized task is readable"],
+            "work_items": [
+                {
+                    "work_id": "W-01",
+                    "title": "Implement the change",
+                    "outcome": "The change is verified",
+                    "work_type": "implementation",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            result = create_task(project, compact)
+            persisted = read_json(Path(result["task_dir"]) / "task-plan.json")
+
+        self.assertEqual(persisted["schema_version"], "1.0")
+        self.assertEqual(persisted["status"], "plan_ready")
+        self.assertTrue(persisted["task_id"].startswith("task-"))
+        self.assertEqual(persisted["out_of_scope"], [])
+        self.assertEqual(
+            persisted["source_discussion"],
+            {
+                "summary": "Scope is clear.",
+                "accepted_decisions": [],
+                "constraints": [],
+                "assumptions": [],
+                "open_questions": [],
+            },
+        )
+        self.assertNotIn("execution_model_request", persisted)
+        self.assertEqual(
+            persisted["work_items"][0],
+            {
+                "work_id": "W-01",
+                "title": "Implement the change",
+                "outcome": "The change is verified",
+                "work_type": "implementation",
+                "dependencies": [],
+                "read_scope": [],
+                "write_scope": [],
+                "verification": [],
+                "risk": "medium",
+                "uncertainty": "medium",
+                "context_coupling": "high",
+                "parallelizable": False,
+                "isolated_worktree_required": False,
+                "accountable_position": "",
+                "profile": None,
+                "review_profile": None,
+                "status": "pending",
+                "evidence_refs": [],
+                "blockers": [],
+                "required": True,
+            },
+        )
+
+    def test_legacy_complete_plan_and_closure_fields_remain_valid(self) -> None:
+        legacy = task_plan()
+        legacy["work_items"][0]["status"] = "waived"
+        legacy["work_items"][0]["waiver_reason"] = "Superseded by verified equivalent work"
+        legacy["acceptance_evidence"] = {
+            legacy["acceptance_criteria"][0]: ["test exit 0"]
+        }
+        normalized = validate_task_plan(legacy)
+        self.assertEqual(normalized["execution_model_request"], legacy["execution_model_request"])
+        self.assertEqual(normalized["acceptance_evidence"], legacy["acceptance_evidence"])
+        self.assertEqual(
+            normalized["work_items"][0]["waiver_reason"],
+            "Superseded by verified equivalent work",
+        )
 
     def test_checklist_is_readable_and_preserves_dependency_order(self) -> None:
         items = [

@@ -12,9 +12,11 @@ from pathlib import Path, PurePosixPath
 
 from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
 from protocol_contract import (
+    InvalidAgencyPacket,
     REVIEW_OUTCOME_RE,
     WORKER_FIELDS,
     WORKER_STOP_CONDITION,
+    classify_agency_packet,
     parse_worker_packet,
 )
 from validate_agent_profiles import PROFILE_NAMES, validate_profile_set
@@ -79,8 +81,10 @@ EXPECTED_RUNTIME_FILES = (
     "scripts/prepare_team_runtime.py",
     "scripts/agency_doctor.py",
     "scripts/prepare_execution_launch.py",
+    "scripts/bind_execution_session.py",
     "scripts/resolve_execution_model.py",
     "scripts/update_task_progress.py",
+    "scripts/complete_task.py",
     "scripts/archive_task.py",
     "scripts/deposit_knowledge.py",
     "scripts/validate_task_archive.py",
@@ -105,7 +109,14 @@ ALLOWED_COLLABORATION = {
     "native_subagents_optional",
     "real_task",
 }
-ALLOWED_ACTIVATION = {"explicit", "implicit", "ordinary", "worker", "execution_session"}
+ALLOWED_ACTIVATION = {
+    "explicit",
+    "implicit",
+    "ordinary",
+    "worker",
+    "invalid_packet",
+    "execution_session",
+}
 ALLOWED_SANDBOXES = {"read-only", "workspace-write"}
 ALLOWED_LIFECYCLE_PHASES = {
     "direct",
@@ -172,6 +183,8 @@ REQUIRED_MODEL_SMOKE_IDS = {
     "lifecycle-progress-update",
     "lifecycle-archive-knowledge",
     "lifecycle-small-task-exclusion",
+    "content-first-explicit-small-write",
+    "invalid-reserved-worker-packet",
 }
 REQUIRED_VISUAL_SURFACES = {
     "task-stage",
@@ -571,9 +584,23 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
         fail(f"behavior case {case_id} lifecycle_phase is unsupported")
     if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
         fail(f"behavior case {case_id} team_expectation is unsupported")
-    for key in ("no_write", "no_thread", "require_progress", "require_archive", "require_knowledge_patch"):
+    for key in (
+        "no_write",
+        "no_thread",
+        "require_progress",
+        "require_archive",
+        "require_knowledge_patch",
+        "require_takeover",
+        "require_skill_read",
+        "forbid_skill_read",
+    ):
         if key in case and type(case[key]) is not bool:
             fail(f"behavior case {case_id} {key} must be boolean")
+    if case.get("require_skill_read") and case.get("forbid_skill_read"):
+        fail(f"behavior case {case_id} has conflicting Skill-read requirements")
+    for key in ("max_collab_spawns", "max_management_files"):
+        if key in case and (type(case[key]) is not int or case[key] < 0):
+            fail(f"behavior case {case_id} {key} must be a non-negative integer")
     setup = case.get("fixture_setup")
     if setup is not None:
         if not isinstance(setup, dict) or set(setup) != {"kind", "task_id"}:
@@ -753,6 +780,15 @@ def validate_behavior_cases(path: Path) -> int:
             fail(f"behavior case {case_id} worker activation must bypass the skill")
         if case["activation"] == "worker" and not valid_worker_packet(str(case["prompt"])):
             fail(f"behavior case {case_id} worker activation needs a complete packet")
+        if case["activation"] == "invalid_packet":
+            if case["should_trigger"] is not False:
+                fail(f"behavior case {case_id} invalid packet must bypass root activation")
+            try:
+                classify_agency_packet(str(case["prompt"]))
+            except InvalidAgencyPacket:
+                pass
+            else:
+                fail(f"behavior case {case_id} must contain a malformed reserved packet")
 
     smoke = [case for case in cases if case.get("model_smoke")]
     smoke_ids = {str(case["id"]) for case in smoke}

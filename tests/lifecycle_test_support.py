@@ -153,6 +153,10 @@ def completed_task(
         criterion: ["test exit 0"] for criterion in plan["acceptance_criteria"]
     }
     atomic_write_json(task_dir / "task-plan.json", plan)
+    index_path = project / ".agency/task-index.json"
+    index = read_json(index_path)
+    index["tasks"][task_id]["status"] = "completed"
+    atomic_write_json(index_path, index)
     positions = [{"profile": "execution-root"}]
     if reviewer:
         positions.append({"profile": "reviewer"})

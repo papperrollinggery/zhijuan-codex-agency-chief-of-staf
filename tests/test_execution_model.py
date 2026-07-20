@@ -13,27 +13,39 @@ from resolve_execution_model import resolve_execution_model  # noqa: E402
 
 class ExecutionModelTests(unittest.TestCase):
     def test_sol_ultra_resolves_to_live_exact_id(self) -> None:
-        result = resolve_execution_model(live_catalog())
+        result = resolve_execution_model(live_catalog(), catalog_mechanically_verified=True)
         self.assertEqual(result["resolved_model_id"], "gpt-5.6-sol")
         self.assertEqual(result["resolved_reasoning"], "ultra")
         self.assertTrue(result["launch_allowed"])
 
     def test_ultra_unsupported_requires_user_choice_without_downgrade(self) -> None:
-        result = resolve_execution_model(live_catalog(ultra=False))
+        result = resolve_execution_model(
+            live_catalog(ultra=False), catalog_mechanically_verified=True
+        )
         self.assertEqual(result["resolution_status"], "user_choice_required")
         self.assertIsNone(result["resolved_reasoning"])
         self.assertFalse(result["launch_allowed"])
         self.assertEqual(len(result["choices"]), 3)
 
     def test_missing_sol_is_not_guessed(self) -> None:
-        result = resolve_execution_model(live_catalog(include_sol=False))
+        result = resolve_execution_model(
+            live_catalog(include_sol=False), catalog_mechanically_verified=True
+        )
         self.assertIsNone(result["resolved_model_id"])
         self.assertEqual(result["reason"], "requested_display_model_not_found")
+
+    def test_matching_sol_without_provider_proof_is_not_launchable(self) -> None:
+        catalog = live_catalog()
+        catalog["models"][0]["provider"] = None
+        result = resolve_execution_model(catalog, catalog_mechanically_verified=True)
+        self.assertEqual(result["reason"], "requested_provider_unverified")
+        self.assertEqual(result["candidate_model_ids"], ["gpt-5.6-sol"])
+        self.assertFalse(result["launch_allowed"])
 
     def test_non_live_catalog_is_rejected(self) -> None:
         catalog = live_catalog()
         catalog["live_readback_verified"] = False
-        result = resolve_execution_model(catalog)
+        result = resolve_execution_model(catalog, catalog_mechanically_verified=True)
         self.assertEqual(result["reason"], "live_catalog_required")
         self.assertFalse(result["launch_allowed"])
 
@@ -45,9 +57,16 @@ class ExecutionModelTests(unittest.TestCase):
                 "actual_model_id": "gpt-5.6-sol",
                 "actual_reasoning_effort": "xhigh",
             },
+            catalog_mechanically_verified=True,
         )
         self.assertEqual(result["status"], "FAIL")
         self.assertEqual(result["resolution_status"], "readback_mismatch")
+
+    def test_serialized_self_attested_catalog_cannot_launch(self) -> None:
+        result = resolve_execution_model(live_catalog())
+        self.assertEqual(result["reason"], "serialized_catalog_unverified")
+        self.assertEqual(result["catalog_attestation"], "caller-asserted-unverified")
+        self.assertFalse(result["launch_allowed"])
 
 
 if __name__ == "__main__":

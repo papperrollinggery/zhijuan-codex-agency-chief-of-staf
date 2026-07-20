@@ -28,6 +28,7 @@ PYTHONPYCACHEPREFIX="$PYCACHE_ROOT" python3 -m py_compile \
   scripts/prepare_team_runtime.py \
   scripts/agency_doctor.py \
   scripts/prepare_execution_launch.py \
+  scripts/bind_execution_session.py \
   scripts/resolve_execution_model.py \
   scripts/update_task_progress.py \
   scripts/archive_task.py \
