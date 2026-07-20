@@ -1,6 +1,6 @@
 # Agency Chief of Staff for Codex
 
-> An outcome-owned OpenAI Codex Desktop and Codex CLI Skill for discussing project requirements, creating durable execution checklists, launching a separate Execution Root, planning a role-based team, tracking evidence-backed progress, archiving tasks, and depositing reusable knowledge. One-off work retains Direct Mode.
+> A content-first, outcome-owned OpenAI Codex Desktop and Codex CLI Skill. Root handles ordinary work directly; durable checklists, a separate Execution Root, role-based teams, progress, archive, and reusable knowledge are added only when they improve project execution or evidence.
 
 Canonical Skill: `agency-chief-of-staff`, with implicit invocation enabled for project-lifecycle intent. The legacy `zhijuan-codex-agency-chief-of-staf` slug is only an explicit compatibility entry. The core runtime uses OpenAI/Codex; Claude and Fable are optional advisor extension points that are disabled by default and are not dependencies. Common discovery terms include Codex agency, Codex multi-agent orchestration, requirements discussion, execution checklist, separate Codex task, task archive, knowledge deposition, Codex Skill, Codex 幕僚长, and Codex 多 Agent 编排.
 
@@ -11,6 +11,7 @@ This is a curated inference-time documentation index following the emerging `llm
 - [Project overview and installation](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/README.md): Canonical entry, current checkout boundary, installation, routing, visualization, and validation levels.
 - [Canonical Skill instructions](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/SKILL.md): Runtime orchestration contract and user-facing behavior.
 - [Documentation index](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/docs/README.md): Current runtime guidance and historical-record boundaries.
+- [Content-first runtime design](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/docs/CONTENT_FIRST_DESIGN.md): Source-candidate research, overhead budgets, and decisions; not part of the installed Runtime.
 - [Real-world prompts](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/examples/real-world-prompts.md): Invocation examples for delivery, Goal, review, and real task/thread workflows.
 
 ## Runtime Contracts
@@ -26,7 +27,7 @@ This is a curated inference-time documentation index following the emerging `llm
 
 ## Verification and Releases
 
-The `v0.3.0-rc.1` documentation describes an unpublished source candidate. v0.1's fixed heavy team is retired; v0.2 Direct Mode remains; the v0.3 lifecycle is project-intent-only, does not require every task to create a Thread, prepares Profiles Selected-only, and routes the Execution Root separately from Subagents.
+The `v0.3.0-rc.2` documentation describes an unpublished content-first source candidate. v0.1's fixed heavy team is retired; v0.2 Direct Mode remains; the v0.3 lifecycle is project-intent-only, lazily materializes durable state, does not require every task to create a Thread, prepares Profiles Selected-only, and routes the Execution Root separately from Subagents.
 
 - [Changelog](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/blob/main/CHANGELOG.md): `Unreleased` development changes and tagged-version history.
 - [GitHub Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases): Authoritative public release and tag surface.

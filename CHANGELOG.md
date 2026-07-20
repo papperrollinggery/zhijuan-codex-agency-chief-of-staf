@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## v0.3.0-rc.2 - 2026-07-21 (source candidate, unpublished)
+
+- Reframed the runtime around content-first execution. Direct and Focused work no longer require a takeover receipt, eager UX/visualization loading, `.agency` state, Model Catalog lookup, a team, or Cold Review; each control action must unlock judgment, coordinate real parallelism, or prove a current result.
+- Reduced `SKILL.md` to a progressive-disclosure routing map and made visualization, exact model receipts, CLI compatibility, delivery review, and lifecycle references conditional.
+- Changed durable Plan creation to write only `task-plan.json`, the user checklist, and the project index. Team, session, launch prompt, progress, evidence, and archive assets now materialize only when first needed; compact plans remain compatible with full v1.0 plans.
+- Added a net-execution-value gate to the deterministic Team Planner. A single research stream, document, ordinary file change, or tightly coupled implementation stays with Root; independent research instances remain distinct; required architecture/review roles cannot be truncated; parallel writer limits are enforced.
+- Made reserved worker/session markers fail closed and added machine-validated orchestration depth so malformed child packets cannot re-enter the root workflow.
+- Added `complete_task.py` as the guarded completion entry point for acceptance evidence, current validation, risk-derived review/cleanup proof, progress completion, and a reusable archive closure; completed closures reject later evidence drift.
+- Distinguished a visible Sol catalog entry with no provider proof from a missing model, keeping launch blocked with the explicit `requested_provider_unverified` reason until provider and spawn identity can be read back.
+- Reworked model-smoke contracts to measure actual artifacts, zero-governance budgets for small tasks, collaboration attempts, lazy lifecycle files, recursion failure, progress, archive, and knowledge patches instead of treating a takeover phrase as sufficient evidence.
+- Made model smoke require an observed completed read of the installed Skill for positive activation cases and forbid that read for ordinary/worker exclusions, closing false PASSes where output happened to look correct without activation.
+- Restricted completed/archived state changes and terminal progress events to guarded completion/archive entry points; managed state, progress logs, archive artifacts, and archive directories now reject symlink escape paths.
+- Bound knowledge candidates to the archived task and its actual closure evidence, added Chinese filename/heading reuse, transactional multi-document rollback, complete manifest coverage, and an explicit archived-with-blocker result when post-archive deposit cannot finish.
+- Renamed caller-supplied Native readback results to field consistency rather than verification and made the execution-session schema reject `executing` unless a host-mechanical create/readback attestation is present.
+- Replaced string-shaped execution attestation with a non-JSON public binder: `bind_execution_session.py` mechanically joins App Server `thread/read`, live catalog, canonical state, exact packet, Root identity, isolated worktree, and rollout turn model/effort before a rollback-capable transition to `executing`.
+- Made guarded task completion transactional across acceptance evidence, checklist/index, progress log/view, reusable closure, and terminal status; injected closure, transition, or terminal-event failures now restore the exact pre-completion state.
+- Kept stale blocked-status reasons out of successful archive manifests while preserving explicit reasons for cancelled and superseded dispositions.
+- Made malformed padded, BOM-prefixed, or case-varied reserved packets fail closed, and made task creation/state transitions roll back plan, checklist, directory, and index together on injected write failures.
+- Made knowledge document patches and their deposit report one rollback boundary, so a report failure cannot leave an unreported long-term document mutation.
+- Build and validate archives in an isolated staging copy before atomically swapping the active task and index; preparation failures now leave the active plan, progress, and index untouched.
+- Bound execution-session artifact paths to their exact Task ID, preserved blockers for cancelled/superseded archives, and made archive validation cross-check disposition, reason, blockers, evidence, closure, and task-plan status.
+- Made each progress event, work-item state, checklist, rendered progress view, terminal transition, and task index one rollback boundary under injected append or index failures.
+- Documented the durable-state transaction boundary and retained real blockers when users close work as cancelled or superseded instead of laundering them into completion.
+
+This candidate does not update either installed Skill bundle, global Codex configuration, tags, releases, or remote branches. Promotion still requires current offline gates, fresh model/native evidence within their stated scope, independent cold review, and an explicit installation decision.
+
 ## v0.3.0-rc.1 - 2026-07-19 (source candidate, unpublished)
 
 - Added an opt-in project lifecycle: discussion without writes or dispatch, durable `plan_ready` execution checklists under `.agency`, independent execution-session launch, event-driven progress and verification, validated archive, and reusable knowledge deposition.

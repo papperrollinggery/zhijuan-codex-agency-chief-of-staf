@@ -2,15 +2,15 @@
 
 > Status: Current documentation index
 >
-> As of: 2026-07-19
+> As of: 2026-07-21
 >
-> Reviewed source candidate: `v0.3.0-rc.1`; unpublished and not an installed-state claim
+> Reviewed source candidate: `v0.3.0-rc.2`; unpublished and not an installed-state claim
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 
-`agency-chief-of-staff` is a Codex Desktop / Codex CLI host-scoped Skill with a project lifecycle from requirements discussion through durable planning, a separate execution session, progress, verification, archive, and reusable knowledge. One-off work still uses Direct Mode.
+`agency-chief-of-staff` is a content-first Codex Desktop / Codex CLI Skill. It keeps one-off and single-session work on a light Root-owned path, and adds durable planning, a separate execution session, progress, verification, archive, and reusable knowledge only for explicit project-lifecycle intent.
 
-`agency-chief-of-staff` 是面向 Codex Desktop / Codex CLI 的结果负责型 Skill：项目型请求可从需求讨论推进到持久化清单、独立执行对话、团队执行、验证、归档与长期知识；单次任务继续使用 Direct Mode。
+`agency-chief-of-staff` 是面向 Codex Desktop / Codex CLI 的内容优先、结果负责型 Skill：单次和单会话任务默认由 Root 直接完成；只有明确的项目生命周期意图才增加持久化清单、独立执行对话、按需团队、进度、归档与长期知识。
 
 ## Start here
 
@@ -18,6 +18,7 @@
 - [LLM-friendly documentation index](../llms.txt)
 - [Repository discovery and release metadata](REPOSITORY_DISCOVERY.md)
 - [Canonical Skill instructions](../SKILL.md)
+- [Content-first runtime design](CONTENT_FIRST_DESIGN.md)
 - [Real-world prompts](../examples/real-world-prompts.md)
 - [Changelog](../CHANGELOG.md)
 - [Contributing](../CONTRIBUTING.md)
@@ -40,12 +41,13 @@ These files are loaded on demand by the Skill. They describe operating contracts
 - [Execution session launch and recovery](../references/execution-session.md)
 - [Archive and knowledge deposition](../references/knowledge-archiving.md)
 
-The four-stage lifecycle is intent-gated. It does not restore a fixed organization, does not require every task to create a Thread, prepares only Team Plan selected Profiles, and keeps the Execution Root model request separate from Subagent routing.
+The four-stage lifecycle is intent-gated and lazily materialized. Team planning first applies a net-execution-value gate; it does not restore a fixed organization, require every task to create a Thread, or force routine review. Only Team Plan selected Profiles are prepared, and Execution Root model requests remain separate from Subagent routing.
 
 ## Design and historical records
 
 These records explain prior decisions or implementation work. Their embedded version, interface, and release statements are snapshots, not current compatibility claims.
 
+- [Content-first runtime design](CONTENT_FIRST_DESIGN.md) — current source-candidate problem statement, comparison research, overhead budgets, and evidence boundary; intentionally excluded from Runtime.
 - [vNext design decision](VNEXT_DESIGN.md) — accepted design record; implementation state is superseded by the current source tree.
 - [Codex Desktop hardening handoff](CODEX_DESKTOP_HARDENING_HANDOFF_2026-07-15.md) — superseded implementation brief; its findings must not be treated as current open defects without reproduction.
 - [Master handoff](MASTER_HANDOFF.md) — historical task handoff and authorization boundary.

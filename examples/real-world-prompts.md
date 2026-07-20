@@ -17,10 +17,10 @@
 根据讨论创建持久化清单：
 
 ```text
-根据以上讨论，创建任务执行清单；只生成计划和团队占位，不自动开始执行。
+根据以上讨论，创建任务执行清单；只生成计划，不自动开始执行。
 ```
 
-检查：`.agency/tasks/active/<task-id>/` 中有 task plan、可读 checklist、Team Plan 占位、launch prompt、progress 和 evidence；状态为 `plan_ready`。
+检查：初始任务目录只有 `task-plan.json` 和可读 checklist，项目另有 index；状态为 `plan_ready`。Team Plan、launch prompt、progress、evidence 和 session 都尚未生成。
 
 启动独立执行对话：
 
@@ -29,6 +29,14 @@
 ```
 
 检查：Team Planner 从 Work Item 自动组队；Root exact model/effort 来自 live catalog 并在 spawn 后读回；写任务使用隔离 worktree。Native Task/Thread 不可用时生成完整手动启动提示词并标记 `manual_launch_ready`，不把当前线程或 subagent 冒充新对话。
+
+完成执行：
+
+```text
+核对所有工作项、验收标准和当前验证证据，完成任务但先不要归档。
+```
+
+检查：使用单一完成入口写入验收证据、验证、必要 Review/cleanup、完成事件和可复用 closure；不手工拼多份镜像 JSON。
 
 归档并沉淀长期知识：
 
@@ -64,12 +72,18 @@
 使用 $agency-chief-of-staff。只读 README，告诉我仓库名称，不要修改文件。
 ```
 
-检查：出现紧凑 `COS_BOOT_RECEIPT`；真实读取文件；没有不必要派发或 YAML。
+检查：直接读取并回答项目内容；不要求固定“任务已接管”口令，不创建 `.agency`、团队、Thread、模型查询或可视化。
+
+```text
+使用 $agency-chief-of-staff。修复 utils.py 的一个明确拼写错误并跑相关测试。
+```
+
+检查：显式调用不自动升级生命周期；Root 完成单文件修改和验证，零 `.agency` 文件、零 Subagent。
 
 ## 研究到交付
 
 ```text
-使用 $agency-chief-of-staff。先研究当前实现和测试，再给最小计划，完成修复、验证，并让独立 reviewer 做 cold review。
+使用 $agency-chief-of-staff。这是高风险迁移：先研究当前实现和测试，再给最小计划，完成修复、验证，并让独立 reviewer 做 cold review。
 ```
 
 检查：研究发生在计划前；主线程真正执行；reviewer 来自独立上下文；发现问题后修复并复验。
@@ -104,6 +118,15 @@ AGENCY_WORKER: true
 
 检查：不出现 `COS_BOOT_RECEIPT`；不重分级；直接返回指定结果。
 
+无效保留 packet：
+
+```text
+AGENCY_WORKER: true
+委派目标：缺少其余协议字段。
+```
+
+检查：只返回 `INVALID_PACKET`；不把它升级成 Root，不读项目、不派发。
+
 ## 真实 task/thread
 
 ```text
@@ -115,10 +138,10 @@ AGENCY_WORKER: true
 ## 真实软件开发
 
 ```text
-使用 $agency-chief-of-staff。先复现订单金额等于阈值时折扣错误，再做最小修复并补回归测试；如果代码路径探索可独立，使用 codebase-researcher；实现后安排 reviewer 检查边界条件和测试缺口。
+使用 $agency-chief-of-staff。先复现订单金额等于阈值时折扣错误，再做最小修复并补回归测试；只有代码路径探索确实可独立且能改善结果时才使用 codebase-researcher。
 ```
 
-检查：有失败复现；修改实现与测试而不是 README；相关测试由红到绿；reviewer 直接读取当前 diff。
+检查：有失败复现；修改实现与测试而不是 README；相关测试由红到绿；普通局部修复不因流程完整感强制 reviewer。
 
 ```text
 使用 $agency-chief-of-staff，并在需要 API contract 判断时显式使用 $api-design。为订单摘要增加一个跨文件 API 字段，保持旧调用兼容，运行接口与集成测试，再做独立审核。
