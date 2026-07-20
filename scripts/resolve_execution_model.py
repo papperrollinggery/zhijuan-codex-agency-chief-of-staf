@@ -207,6 +207,7 @@ def resolve_execution_model(
     *,
     policy: dict[str, Any] | None = None,
     spawn_readback: dict[str, Any] | None = None,
+    catalog_mechanically_verified: bool = False,
 ) -> dict[str, Any]:
     policy = policy or load_policy()
     catalog = normalize_catalog(raw_catalog)
@@ -217,10 +218,16 @@ def resolve_execution_model(
         "fallback": policy["fallback"],
         "catalog_source": catalog["source"],
         "catalog_live_readback_verified": catalog["live_readback_verified"],
+        "catalog_attestation": (
+            "mechanical-live-readback"
+            if catalog_mechanically_verified
+            else "caller-asserted-unverified"
+        ),
         "readback_verified": False,
     }
     if policy["require_live_catalog"] and (
         not catalog["live_readback_verified"] or catalog["source"] != "active-host-catalog"
+        or not catalog_mechanically_verified
     ):
         return {
             **base,
@@ -229,17 +236,22 @@ def resolve_execution_model(
             "resolved_model_id": None,
             "resolved_reasoning": None,
             "launch_allowed": False,
-            "reason": "live_catalog_required",
+            "reason": (
+                "serialized_catalog_unverified"
+                if catalog["live_readback_verified"]
+                and catalog["source"] == "active-host-catalog"
+                and not catalog_mechanically_verified
+                else "live_catalog_required"
+            ),
             "choices": ["使用用户指定替代模型", "暂不启动"],
         }
     requested_display = _normalized_display(policy["display_model"])
-    matches = [
+    display_matches = [
         item
         for item in catalog["models"]
         if _normalized_display(item["display_name"]) == requested_display
-        and item["provider"] == policy["provider"]
     ]
-    if not matches:
+    if not display_matches:
         return {
             **base,
             "status": "user_choice_required",
@@ -248,6 +260,27 @@ def resolve_execution_model(
             "resolved_reasoning": None,
             "launch_allowed": False,
             "reason": "requested_display_model_not_found",
+            "choices": ["使用用户指定替代模型", "暂不启动"],
+        }
+    matches = [item for item in display_matches if item["provider"] == policy["provider"]]
+    if not matches:
+        advertised = sorted(
+            {item["provider"] for item in display_matches if item["provider"] is not None}
+        )
+        return {
+            **base,
+            "status": "user_choice_required",
+            "resolution_status": "unavailable",
+            "resolved_model_id": None,
+            "resolved_reasoning": None,
+            "launch_allowed": False,
+            "reason": (
+                "requested_provider_mismatch"
+                if advertised
+                else "requested_provider_unverified"
+            ),
+            "candidate_model_ids": sorted({item["id"] for item in display_matches}),
+            "advertised_providers": advertised,
             "choices": ["使用用户指定替代模型", "暂不启动"],
         }
     exact_ids = {item["id"] for item in matches}
@@ -320,7 +353,7 @@ def run_self_test() -> dict[str, Any]:
             }
         ]
     )
-    resolved = resolve_execution_model(available)
+    resolved = resolve_execution_model(available, catalog_mechanically_verified=True)
     if resolved["resolved_model_id"] != "gpt-5.6-sol-2026-07" or not resolved["launch_allowed"]:
         raise AssertionError("Sol ultra did not resolve")
     unsupported = resolve_execution_model(
@@ -333,11 +366,12 @@ def run_self_test() -> dict[str, Any]:
                     "supported_reasoning": ["high", "xhigh"],
                 }
             ]
-        )
+        ),
+        catalog_mechanically_verified=True,
     )
     if unsupported["resolution_status"] != "user_choice_required":
         raise AssertionError("unsupported ultra did not require user choice")
-    absent = resolve_execution_model(catalog([]))
+    absent = resolve_execution_model(catalog([]), catalog_mechanically_verified=True)
     if absent["resolved_model_id"] is not None or absent["reason"] != "requested_display_model_not_found":
         raise AssertionError("missing Sol was guessed")
     mismatch = resolve_execution_model(
@@ -347,6 +381,7 @@ def run_self_test() -> dict[str, Any]:
             "actual_model_id": "different-model",
             "actual_reasoning_effort": "ultra",
         },
+        catalog_mechanically_verified=True,
     )
     if mismatch["status"] != "FAIL" or mismatch["resolution_status"] != "readback_mismatch":
         raise AssertionError("spawn model mismatch did not fail")
@@ -374,10 +409,11 @@ def main() -> None:
     if args.self_test:
         result = run_self_test()
     else:
-        catalog = (
-            load_json(args.catalog)
-            if args.catalog
-            else live_catalog(
+        if args.catalog:
+            catalog = load_json(args.catalog)
+            catalog_mechanically_verified = False
+        else:
+            catalog = live_catalog(
                 codex_bin=args.codex_bin,
                 project=args.project,
                 codex_home=args.codex_home,
@@ -385,9 +421,13 @@ def main() -> None:
                 thread_id=args.thread_id,
                 timeout_seconds=args.timeout_seconds,
             )
-        )
+            catalog_mechanically_verified = True
         readback = load_json(args.spawn_readback) if args.spawn_readback else None
-        result = resolve_execution_model(catalog, spawn_readback=readback)
+        result = resolve_execution_model(
+            catalog,
+            spawn_readback=readback,
+            catalog_mechanically_verified=catalog_mechanically_verified,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if result.get("status") == "FAIL":
         raise SystemExit(1)

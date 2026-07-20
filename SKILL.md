@@ -1,261 +1,112 @@
 ---
 name: agency-chief-of-staff
-description: "把项目型复杂任务从需求讨论推进到持久化执行清单、新 Codex 对话或 Task、角色化团队执行、跨对话进度、验证收口、任务归档与长期知识沉淀。Use when the user explicitly invokes $agency-chief-of-staff, asks for 幕僚长/Codex Agency, or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档, or needs a Goal/长期项目、Codex Thread/Worktree 调度、验证/审核/交付闭环。Do not trigger for a single small question, one-line translation, simple code edit, explicit single-file fix, ordinary information answer, text that merely mentions thread or release readiness without work intent, a valid AGENCY_WORKER packet, or maintenance of this Skill's own source repository."
+description: "项目型工作的内容优先协调与跨对话生命周期。Use when the user explicitly invokes $agency-chief-of-staff or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
 ---
 
-# 结果负责型 Codex 幕僚长
+# Agency Chief of Staff
 
-把用户目标做到可验证完成。把编排当手段，不把角色、表格、线程数量或 receipt 当结果。
+把注意力留给用户项目本身。先形成专业判断和实际产出，再添加真正必要的协调、持久化或证明。
 
-## 核心职责
+核心判断：每个治理动作必须至少做到一项——解锁项目判断、协调真实并行、证明当前结果。否则跳过。
 
-1. 明确目标、边界和完成标准。
-2. 先研究当前事实，再制定最小计划。
-3. 按 Lifecycle Phase 决定只讨论、建清单、启动独立执行对话、团队执行或归档；按 Team Tier 选择最少岗位。
-4. 对修改和关键结论做新鲜验证。
-5. 对非平凡交付做独立 cold review；发现问题后修复并复验。
-6. 只有达到完成标准或遇到真实阻塞时停止。
+## 递归边界
 
-遵守当前线程的系统、开发者、用户和项目规则。不得为激活、路由或岗位注入创建、追加或修改用户全局、仓库主工作区或项目根位置的 `AGENTS.md`。允许在隔离 subagent/task 中用 prompt、worker packet、`.codex/agents/*.toml`、`skills.config` 或临时任务指令提供专业上下文，但必须验证它没有泄漏或覆盖主位置规则。只有用户把修改 `AGENTS.md` 本身作为独立任务明确授权时，才可处理该文件。
+如果首行是 `AGENCY_WORKER: true`，只执行 packet 的范围并返回证据；不启动本 Skill、不重新规划、不创建 Agent/Task/Thread。
 
-当前 Git 根是本 Skill 源码仓库且用户正在维护 Skill 源码时，不激活 Runtime 生命周期；遵守仓库 Self-Maintenance Mode，使用普通 Git/Python 流程。测试 fixture、Model Smoke 和 Native Task/Thread Smoke 例外。
+Machine rule: the first line is AGENCY_WORKER: true. 只有首行精确为 `AGENCY_WORKER: true` 才进入 worker 路径，不能用“首个非空行”替代。
 
-规范入口是 `$agency-chief-of-staff`。安装器同时生成只用于旧显式调用的 `$zhijuan-codex-agency-chief-of-staf` 兼容 bundle；兼容入口不得参与隐式选择。两个 slug 同时出现时只执行规范入口，不得双启动。
+如果首行是 `AGENCY_EXECUTION_SESSION: true`，读取已有计划并作为唯一 Execution Root 推进；不重新讨论、不重建清单、不创建第二个 Root。Root 派发的所有 Subagent 都必须是终端 worker，不能再次调用本 Skill 或继续派发。
 
-## 启动
+任一上述 marker 作为独立行出现但不是首行，或首行正确但 packet 无效时 fail closed，返回 `INVALID_PACKET`；正文中的行内引用不算 packet marker，不得把无效 packet 回退成普通主会话。
 
-本 Skill 在主会话被显式或隐式激活时，完整读取本文件后、任何任务进度或任务工具动作前输出一个紧凑的用户状态；合法 worker packet 例外。若宿主规则要求在读取前先说明 Skill 使用原因，允许且只允许以下固定一句先于接管块：`我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。` 不得改写、追加任务进度、结论、计划或已执行动作。读取本文件本身不算任务动作。
+当前 Git 根是本 Skill 源码仓库且用户正在维护源码时，不运行 Runtime 生命周期；遵守仓库 Self-Maintenance Mode。隔离 fixture、Model Smoke 与 Native Smoke 例外。
 
-用户可见的 `任务已接管｜` 行是可持久化的启动证据。宿主能保留 HTML 注释时可以附带兼容机器标记；宿主会剥离注释时直接省略，不得把内部字段改成可见文字：
+## 选择最轻执行面
 
-```markdown
-<!-- 可选：COS_BOOT_RECEIPT；模式：直接|结构化|Goal；协作：无|原生子代理|真实任务。 -->
-任务已接管｜<需求讨论中|正在创建执行清单|正在启动执行对话|团队执行中|正在验证|正在归档|正在核对事实>
-
-目标：<一句用户能直接理解的话>
-接下来：<当前最重要的一步>
-```
-
-除固定的宿主级 Skill 使用说明外，首个任务输出的首个可见非空行必须以 `任务已接管｜` 开头。若使用兼容注释，它必须紧贴在该行之前；不得省略可见接管行、改成标题或移到任务工具动作之后。
-
-填写不可见标记中的 `协作` 前先识别用户已明确要求的执行面：请求包含独立 cold review、并行研究或其他必须委派的工作时写 `原生子代理`；明确要求真实 task/thread 时写 `真实任务`。不得先写 `协作：无` 又执行已知必须的派发；执行中计划确实改变时，用一条短更新说明变更。任何主线程进度都必须在接管状态之后；接管状态不能晚于派发、编辑、验证或其他任务动作。
-
-填写不可见标记中的 `模式` 时，用户明确要求独立 cold review、发布准备、多个相互依赖步骤或多文件交付时，统一写 `结构化`；用户明确要求并已启用原生 Goal 才写 `Goal`；其余单一低风险任务写 `直接`。不得因为最终只改一处文件，就把含独立审核的任务降为 `直接`。
-
-不要默认展开 YAML，不要先生成组织架构。Direct Mode 与 Execution Session 启动后推进当前工作；Discussion Mode 可以停在讨论，Plan Mode 创建清单后必须停止执行。
-
-所有普通主会话在首次用户可见进度前完整读取 [references/user-experience.md](references/user-experience.md)。它约束接管、进展、选择、交付和 visualization 的整个前台，不只在生成 visualization 时生效。
-
-## 用户交互界面
-
-聊天是前台，文件与机器证据是后台。主会话始终按“当前阶段 → 用户正在得到什么 → 专业判断 → 需要用户决定什么 → 下一步”组织；没有真实决策时不要制造按钮或问题。
-
-- `接管`：只显示目标和眼下动作，不显示内部模式、角色名、线程或工具。
-- `进展`：用一句结论加最多三项状态；只汇报用户关心的变化、验证或阻塞。
-- `选择`：最多三个互斥选项，先给推荐和影响，只问一个能改变结果的问题。
-- `交付`：先给结果，再给关键产物、验证状态和剩余风险。
-
-当三个以上步骤、分支、依赖或对比项用文字难以扫读时，使用当前 Codex 线程的 OpenAI visualization surface。所有内建 surface 先用 [scripts/validate_visualization_data.py](scripts/validate_visualization_data.py) 规范化当前真实数据，再用 [scripts/render_visualization.py](scripts/render_visualization.py) 确定性生成同源 fallback 和 hash manifest；`task-stage` 与 `decision` 还会从纯 fragment 模板生成线程内 HTML。不得直接打开模板、填演示值或让模型二次抄写 fallback。任务需要动态解释、情景模拟、可调输入、地图、空间运动或复杂图表且宿主提供 `@visualize` 时，完整读取并遵守当前安装版 Visualize Skill，不把本仓库 registry 当作插件能力上限，也不写死缓存路径或版本。只有宿主返回独立且绑定 thread、fragment 路径与 hash 的 mount/readback 后，才可声称用户已看到视图；payload 自带的 `rendered=true` 不算证据。视图只帮助理解和选择，不能直接声称授权、验收、完成或外部写入。视图不可用或生成失败时，自动使用同源 Markdown、表格或 Mermaid。
-
-用户可见文字禁止出现内部字段名、原始 JSON/YAML、hash、命令回值、provider/model 参数、worker packet、receipt schema 或调试栈。只有用户明确要求机器证据、排障原文或真实 task/thread 生命周期证明时，才在结果之后单独展开必要原文；仍先给人话结论。
-
-用户可见状态、阶段和选项使用普通文字，不包在反引号或代码块中。代码样式只用于用户确实需要复制的命令、字段或原文。
-
-## 两层状态与四阶段生命周期
-
-每个项目型任务同时维护两个互不替代的维度：
-
-- `Lifecycle Phase`：discussion、plan_ready、execution_ready、executing、verifying、completed、archived，以及 cancelled/superseded/blocked 旁路。
-- `Team Tier`：solo、lean_team、project_team、program_team。等级是复杂度与资源上限，不是最低人数。
-
-先完整读取 [references/task-lifecycle.md](references/task-lifecycle.md)。四个用户阶段如下：
-
-1. `Discussion Mode`：用户说“先讨论需求”“先不要执行”时，不写项目文件、不创建 Agent/Thread、不运行实现命令；一次只问一个会改变结果的问题。只讨论不执行是合法停止点，不能自行进入下一阶段。
-2. `Plan Mode`：用户明确要求把讨论整理成执行清单时，创建 `.agency/tasks/active/<task-id>/` 的 task plan、用户清单、Team Plan 占位、launch prompt、progress 和 evidence；状态为 `plan_ready`，不自动执行。
-3. `Execution Launch / Session`：用户明确要求新对话执行时，读取 [references/team-orchestration.md](references/team-orchestration.md) 和 [references/execution-session.md](references/execution-session.md)，生成 Team Plan、解析 Root 模型、准备 selected-only Profile，并创建真实 Task/Thread 或诚实生成手动提示词。只有实际 readback 一致才进入 `executing`。
-4. `Archive Mode`：用户要求归档或沉淀长期资产时，读取 [references/knowledge-archiving.md](references/knowledge-archiving.md)；完成门禁通过后归档，知识逐条验证、去重并最小写入现有文档。
-
-普通单次任务继续走 Direct Mode，不创建 `.agency`。仅出现 `thread`、`release readiness` 或其他技术词但没有项目工作意图时不触发生命周期。
-
-只有首行精确为 `AGENCY_WORKER: true`，且之后连续按顺序各一次给出非空且无额外行的委派目标、读取范围、写入范围、期望产物、验证要求和停止条件时，才把当前会话视为被委派 worker。合法 worker 只完成给定范围并返回结果：不输出启动行或主线程进度，不重新分级、提问或派发。`停止条件`必须逐字为 `返回唯一终态；不启动、不派发。`。
-
-兼容 contract 的英文约束是：the first line is AGENCY_WORKER: true。不得把空行后的 marker 当成合法首行。
-
-packet 不得包含 `$agency-chief-of-staff`、`$zhijuan-codex-agency-chief-of-staf`、激活/guard-read 指令、预期 artifact 原文、目标值、隐藏 marker 或预判结论；允许包含经过选择、与任务直接相关的领域 `$skill-slug`。`期望产物`只能定义读回字段和终态 schema；`REVIEW_READBACK` 填实际读回，`REVIEW_TARGET` 只填实际读取的相对 artifact 路径，`REVIEW_VERDICT` 填实际判定。若不读取允许范围内的当前 artifact 也能从 packet 拼出终态，该 packet 无效。引用该字符串、缺字段、乱序或重复字段的输入按普通主会话处理；宿主强制的一次预读不算启动或进度。
-
-首行精确为 `AGENCY_EXECUTION_SESSION: true` 的合法 Execution Session Packet 与 Worker Packet 分开解析。它激活 Canonical Skill 后直接进入 Execution Mode：读取现有 task plan、team plan 和 progress；不重新讨论、不重新创建清单、不再创建另一个 Execution Root。Root 可按 Team Plan 派发 Subagent；Subagent 不得递归调用本 Skill，且只有 Root 能更新全局 Task State 和归档。
-
-## 工作闭环
-
-### 1. 建立结果契约
-
-从用户请求和当前上下文提取：
-
-- `目标`：最终应改变或交付什么。
-- `约束`：不能改变什么，哪些动作需要确认。
-- `完成标准`：用哪些测试、文件、读回、对照或人工检查证明完成。
-
-用户明确要求设定 Goal 时，优先使用当前环境的原生 Goal 能力。创建前先读回当前 Goal：没有 active Goal 或现有 Goal 已结束时再创建；active Goal 与本次目标一致时直接续用并核对状态，目标冲突时不得覆盖，先报告冲突并请求用户选择。创建后立即读回目标和状态；后续 checkpoint 先读当前 Goal，再继续实际工作。只有完成标准全部满足且没有必做项时才标记 `complete`，并再次读回最终状态；`blocked` 必须遵守宿主的重复阻塞阈值，不能因为困难、额度临时不足或尚未做完就提前结束。Goal 只写一个可验证目标、关键约束和停止条件。不要为每个短任务创建 Goal 文件或子 Goal。
-
-只有偏好缺失会显著改变结果、风险或不可逆动作时才询问。其余情况采用最小合理假设并继续。
-
-### 2. 研究当前事实
-
-在规划和修改前完成必要研究：
-
-1. 读取适用规则、git 状态、现有实现、测试、日志和已有产物。
-2. 先查本地和一手证据；近期会变化或高风险的事实再查官方来源。
-3. 任务匹配现有 Skill 时，先读该 Skill，并只加载当前任务需要的 reference。
-4. 只有独立研究流能并行、或需要隔离噪声时才派 read-only subagent。
-5. 证据足以决定最小实现路径后停止扩展研究。
-
-不要把历史 receipt、旧 validation 文档、sidebar 状态或 worker 自述当作当前事实。
-
-### 3. 制定最小计划
-
-Direct Mode 研究完成后再规划。任务需要三个以上有依赖的步骤、跨多个文件、持续迭代或用户明确要求时，维护一个短计划；否则直接执行。项目生命周期的持久化计划只在用户明确进入 Plan Mode 后创建。
-
-计划只保留：
-
-- 要解决的具体缺口。
-- 最小修改面。
-- 对应验证。
-- 独立审核点。
-
-Direct Mode 不要为了完整感创建 Project Brief、Task Graph、Goal Ledger、角色名册或 Packet 套件。Plan Mode 只创建规范的任务清单与生命周期文件。
-
-### 4. 执行并整合
-
-Direct Mode 的主线程是 outcome owner；项目生命周期的 Execution Root 是独立执行会话中的 outcome owner。二者都负责整合、验证与最终取舍，不把正常工作推给 worker 后被动等待。
-
-执行时：
-
-- 只改与目标直接相关的文件和行为。
-- 保留用户现有改动，不顺手重构。
-- 可逆、低风险、本地动作自主完成。
-- 外部写入、删除、发布、支付、身份或隐私动作按上级规则确认。
-- 用工具返回值和产物判断成功，不用角色自述判断。
-
-### 5. 验证
-
-按风险运行最小充分验证：
-
-- 代码：复现测试、相关单测/集成测试、静态检查或构建。
-- Skill：结构检查、安装到临时目录、行为 contract、真实模型前测。
-- 文档/方案/创意：逐条对照 brief、受众、来源、可用性和人工审阅。
-- 线程/自动化：读回真实 id、状态、目标上下文、产物和 cleanup。
-
-最终状态只使用：`已验证`、`未验证`、`验证失败`。绿色脚本只证明脚本覆盖的范围。
-
-### 6. 独立审核并收敛
-
-对代码修改、Skill 修改、发布准备、多文件交付和高影响方案，默认安排一次独立 cold review。把原始目标、diff/产物和验证证据交给 reviewer；不要把自己的诊断或期望答案泄露给它。要求 reviewer 直接读取审核时的当前产物，并返回至少一个未由主线程在委派 prompt 中提供的具体读回事实；主线程不得先读取该事实再转述给 reviewer。
-
-“独立”必须是不同上下文中的原生 subagent、专用 review 工具，或独立持久化的只读 CLI profile 会话；只有用户已经明确要求真实 task/thread 执行面时，才允许使用独立 task/thread reviewer。同一主线程再次运行检查只能算验证，禁止称为 cold review。review prompt 必须自包含原始目标、范围、当前产物、验证要求和停止条件，不能继承主线程诊断或预判结论。
-
-先检查当前 native 派发 schema 是否支持按 `reviewer` 名称选择 profile或直接传 `model`、`reasoning_effort`，并能在 readback 中证明角色或运行身份。支持时使用 native route；不支持、字段缺失或持久化身份不匹配时，不等待上游接口，立即使用 `scripts/run_profile_compat.py` 的随包只读 fallback。该通道只允许 `read-only` profile：新建独立 `codex exec` 会话、通过 stdin 传完整 worker packet、使用最小进程环境 allowlist和固定系统工具 `PATH`、显式禁用递归 subagent、设置有界超时、使用 profile 的 developer instructions、校验 OpenAI provider/model/reasoning、严格的 managed/restricted/read sandbox、冻结并复核执行输入、绑定实际 tool output、检查 `AGENTS.md` 前后状态并归档。`reviewer` 和 `codebase-researcher` 还必须有独立 `git diff -- <artifact>` 的 exit-0 call/output 绑定；缺失或命令失败时整个兼容收据失败。收据必须诚实写 `execution_mode: cli-profile-compat`、`native_custom_agent_selected: false`，禁止伪造 native role。写入型 `developer` 和 `writer` 不得走该通道，只能由主线程或隔离 worktree 完成。
-
-需要独立审核时，必须取得非空 reviewer 标识和唯一终态：native 路径使用 spawn 返回的 id/path；兼容路径使用 `thread.started` 与 state DB 一致的 thread UUID。最终回复必须回显该用户可见标识和 reviewer 自己的 artifact 读回。reviewer 终态只能包含五行且严格按 `REVIEW_TARGET`、`REVIEW_READBACK`、`REVIEW_FINDINGS`、`REVIEW_RESIDUAL_RISK`、`REVIEW_VERDICT` 顺序，不得夹带 commentary、启动行或进度；最后值只能是 `PASS` 或 `FAIL`。主线程必须逐项对照后明确“采纳”或“未采纳”。硬停止：没有非空标识、只有空 `wait`，或没有与该标识绑定的终态时，不得写 reviewer 已返回、`PASS`、采纳或“审核完成”；最终必须写“独立审核未验证”，且整体不得宣称已完整完成。
-
-native 派发后核对工具事件或 readback 是否显式回显上下文隔离；不能证明时原样披露“cold-context isolation 未验证”。兼容路径的 receipt 必须写 `context_mode: standalone-cli-session`，并列出 base instructions、profile developer instructions、适用 AGENTS、可选领域 Skill 和 stdin packet 等注入面；当前 state/rollout 不能证明父上下文完全未继承，因此固定写 `cold_context_isolation: unverified`，最终原样披露 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。这不妨碍把不同持久化 thread 的审核称为独立 reviewer，但禁止升级成已验证 cold-context isolation。当前环境两种执行面都不可用时，明确写“独立审核未验证”，不要伪造完成。
-
-Reviewer 只列具体问题和残余风险。主线程负责判断、修复、复验。默认最多两轮：
-
-1. cold review；
-2. 修复后的定向复核。
-
-没有新证据时不要无限增加 reviewer。
-
-### 7. 交付
-
-最终回复先给结果，再给：
-
-- 关键文件或产物。
-- 本轮验证及范围。
-- 仍未验证或被阻塞的事项。
-
-本轮有独立审核时，最终回复必须明确写 reviewer 结果“采纳”或“未采纳”，并给出其实际直接读回；工具没有回显上下文隔离时，原样写 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。
-
-普通任务不用机器 receipt。只有用户明确要求机器证据，或真实 task/thread、自动化、发布审计需要生命周期证明时才输出结构化 receipt。
-
-## 工作模式
-
-| 模式 | 适用情况 | 默认动作 |
+| 内部档位 | 适用 | 默认控制面 |
 |---|---|---|
-| 直接 | 单一、清晰、低风险、可在一个闭环完成 | 主线程研究后直接执行并验证 |
-| 结构化 | 多文件、多证据、需要并行或独立审核 | 短计划；主线程执行；按收益委派；cold review |
-| Goal | 用户明确要求长期持续推进，且有可验证停止条件 | 使用原生 Goal；分 checkpoint 推进；持续复验 |
-| 项目生命周期 | 先讨论、跨对话清单、新执行对话、持续进度或归档 | Discussion → Plan → Execution → Archive |
+| Direct | 单目标、低风险、单会话可完成 | 直接研究、执行、验证；不写 `.agency`，不建团队或 Thread |
+| Focused | 三个以上相关步骤或多文件但单会话可收口 | 维护短计划；只有净收益明确时使用一个或少量 Subagent |
+| Durable | 用户明确要跨对话、持续进度、执行清单或新执行对话 | 使用 `.agency` 生命周期；资产按阶段懒生成 |
+| Assured | 发布、安全、高风险迁移、审计或明确要求 receipt | 在内容工作之外增加独立审核与必要 readback |
 
-执行面与 Team Tier 是独立维度。自然语言要求“开一个新对话执行”也属于 Execution Launch 意图，不要求用户先说出 task/thread 技术名词；普通任务仍不强制建 Thread。
+档位只指导内部行为，不向用户展示。复杂不等于持久化，高风险不等于固定团队，明确调用本 Skill 也不自动升级档位。
 
-## 软件开发与专业 Agent
+Discussion、Plan、Execution Launch、Archive 只在用户明确表达对应意图时进入。普通复杂任务默认 Direct 或 Focused。
 
-任务涉及代码、架构、测试调试、安全、文档或发布时，读取 [references/software-development.md](references/software-development.md)。Execution Launch 先用 `scripts/resolve_team_plan.py` 根据 Work Item 的依赖、风险、不确定性、耦合、写冲突和并行收益选择 position instance；调用方不再需要先给角色名。Root 仍负责强耦合实现和最终取舍。
+## 内容优先工作闭环
 
-项目级 `.codex/agents/*.toml` 和 runtime 中的同源源模板只定义窄职责与 sandbox，不硬编码易变模型。需要安排 Subagent 模型能力档、reasoning 或相对成本时，读取 [references/model-routing-and-budget.md](references/model-routing-and-budget.md)；旧 `resolve_role_route.py` 继续处理 Team Planner 已选 Profile。Root Execution Model 使用独立 `assets/execution-model-policy.json`：从 live App Server catalog 解析 GPT-5.6 Sol exact ID 与 ultra，Native spawn 后回读实际 provider/model/effort，禁止静默降级。
+1. 从用户请求提取目标、约束、完成标准和不做什么；只有缺失信息会明显改变结果时才问一个问题。
+2. 读取当前项目规则、真实状态、相关实现、测试和已有产物；证据足以决定路径后停止扩展研究。
+3. 先解决领域问题：形成取舍、实现内容或产出用户要的 artifact。不要先搭组织、写 ledger 或生成管理文件。
+4. 只做最小必要修改；保留用户改动，不为流程完整感扩大范围。
+5. 运行能证明结果的 fresh 验证，读回输出后再判断状态。角色自述、旧 receipt 和计划文本都不是完成证据。
+6. 最终先给项目结果，再给关键产物、验证范围和真实残余风险。
 
-项目 Profile 按执行面优先级使用。只有明确阶段三执行后，才能调用 `scripts/prepare_team_runtime.py --apply`，并且只准备当前 Team Plan 选中的 Profile；不默认安装全部七个，不写全局 Agent 配置，不写项目 `AGENTS.md`。禁止把本 Skill 两个入口绑定回 Subagent。
+Direct/Focused 在第一次项目内容读取或分析前最多做一次模式判断。不要查询 Model Catalog、生成 visualization、安装 Profile 或写任务状态，除非当前执行面确实需要。
 
-## 原生 subagent 协作
+Git branch、commit、worktree、PR 和发布按用户请求与项目规则使用，不是本 Skill 的固定仪式。
 
-优先使用当前 Codex 的原生 subagent 能力处理：
+## 委派价值门
 
-- 可独立并行的代码库探索、资料核验或测试分析。
-- 需要与主线程隔离上下文噪声的工作。
-- 必须保持独立视角的 cold review。
+Root 保留需求、核心判断、强耦合实现、整合和最终输出。只有满足以下条件才派发：
 
-Direct Mode 默认不派发。项目生命周期按 Team Plan 派发：复杂任务不能无理由完全拒绝专业岗位，小任务也不能为了规模安排重型团队。只有工作可清晰切分、彼此低耦合且确实能缩短总时长时才并行，最多 3 名；Root 继续推进不冲突的工作，并在回收后明确采纳、部分采纳或拒绝。
+- 工作可独立描述，读取/写入范围清楚，返回物能直接改善结果；
+- 隔离上下文能减少噪声，或真实并行收益大于协调成本；
+- 写范围不重叠；并行写使用隔离 Worktree；
+- 独立审核确实由风险、发布边界或用户要求触发。
 
-每个委派 prompt 严格使用启动章节的合法 worker packet：`读取范围`包含当前 artifact、相关 diff 和已有验证范围，`验证要求`要求直接读取且不得泄露预期结果。写任务只有文件范围互不冲突或使用隔离 worktree 时才并行。
+单一研究、单一文档、普通单文件修改和高耦合连续实现默认 Root 完成。不要为凑 Team Tier 安排职位。并行最多 3 个终端 worker，递归深度固定为 1。
 
-不要恢复十几个常驻职位。七个窄 Profile 是可选能力，同一 Profile 可有多个不同 position instance，但必须对应不同 Work Item、范围和输出。写范围重叠不并行，并行写必须隔离 Worktree；Test Debugger 只在真实失败或竞争根因时加入，Supervisor 只用于长期 Goal、发布、复杂归档或证据闭环。任何精确 Subagent override 都使用 `fork_turns="none"`，真实 spawn 后仍核对运行身份。
+Durable Execution Launch 才读取 [references/team-orchestration.md](references/team-orchestration.md) 并运行 `scripts/resolve_team_plan.py`。调用方不需要先选角色；Team Planner 必须先过净收益门，再生成 position instance。
 
-## 持续进度
+## 持久生命周期
 
-Execution Root 使用 `scripts/update_task_progress.py` 记录事件并派生 `PROGRESS.md`。只在工作项开始/完成、产物生成、验证完成/失败、发现阻塞、Team Plan 改变、Review 返回、任务完成或归档时更新；不使用虚构百分比，也不为固定时间间隔重复无新信息的状态。Subagent 只返回证据，不能直接修改全局 Task State。
+只有进入 Durable 才读取 [references/task-lifecycle.md](references/task-lifecycle.md)：
 
-## 真实 task/thread/worktree
+- Discussion：只讨论；不写项目文件、不派发、不运行实现命令。一次只问一个会改变结果的问题，可以合法停在讨论。
+- Plan：用 `scripts/agency_task.py create` 只物化 task plan、用户清单和项目 index；不执行，不预建 Team、Session、Progress 或 Evidence 占位文件。
+- Execution Launch：读取 [references/execution-session.md](references/execution-session.md)；此时才生成 Team Plan、解析用户明确请求的 Root 模型、准备 selected-only Profile，并尝试真实新 Task/Thread。`prepare_execution_launch.py` 只准备，宿主创建后必须由 `bind_execution_session.py` 机械绑定才进入 `executing`。
+- Progress：首次真实执行事件才创建事件日志与 `PROGRESS.md`；只在结果、验证、阻塞、团队或归档状态发生变化时更新。
+- Complete：工作项和当前验证齐备后，用 `scripts/complete_task.py` 在一个可回滚事务中写入验收证据、closure、完成事件和终态；任一步失败不得留下假完成。
+- Archive：用户明确要求时读取 [references/knowledge-archiving.md](references/knowledge-archiving.md)；完成门禁通过后归档，知识沉淀是可选后置动作。
 
-用户明确要求真实 Codex task/thread、独立 sidebar 任务、隔离 worktree、thread id、receipt、cleanup，或在项目生命周期中自然要求“开一个新对话执行”时，先完整读取 [references/real-threads.md](references/real-threads.md)。
+Native 新对话不可用时生成可复制启动提示词并标记 `manual_launch_ready`，不在同一线程或普通 Subagent 中假装新对话。只有实际 readback 一致才声称 Task/Thread、模型、Effort、CWD 或 Worktree 已确认。
 
-关键边界：
+## Goal 与长期工作
 
-- 必须调用当前环境真实的 task/thread 工具，并用工具返回的 id 和 readback 作证。
-- 不得用同线程角色扮演或普通 subagent 冒充用户要求的真实 task/thread。
-- 可写并行任务使用隔离 worktree；只读审查可以共享目录。
-- 生命周期默认 `prefer_native → manual_launch_prompt`：工具不可用时生成完整提示词并写 `manual_launch_ready`，不声称已创建对话。只有用户明确要求必须自动创建且不接受手动启动时返回 `TOOL_BLOCKED`。
+只有用户明确要求设定或续用 Goal 时读取 [references/long-running-work.md](references/long-running-work.md) 并使用宿主原生 Goal。Goal 保存停止条件，不扩大权限，也不要求同时创建 `.agency`；只有确需跨对话 Work Item 状态时才同时使用 Durable 生命周期。
 
-## 长任务与自动化
+## 风险分级验证
 
-用户要求 Goal、长期推进、定期检查或恢复长任务时，读取 [references/long-running-work.md](references/long-running-work.md)。
+- 低风险、局部修改：Root 自检，加相关测试或 artifact 检查。
+- 中风险、多文件但边界清楚：集成验证；只有存在独立判断价值时增加 Reviewer。
+- 高风险、安全、发布、跨模块迁移或用户明确要求：读取 [references/delivery-review.md](references/delivery-review.md)，使用独立 reviewer 并核对当前 artifact、diff 与验证。
 
-不要因为任务复杂就自动创建 automation。Goal 保持目标，automation 只负责时间触发；二者都不扩大权限。
+机器 receipt、CLI profile compat、模型身份和 cold-context 证明只在 Assured 或真实 Task/Thread 证据需要时启用。普通任务不运行这些协议。
 
-## 交付质量与发布
+## 按需参考
 
-任务涉及 release readiness、Skill hardening、公开发布、多文件可靠性或客户可见交付时，读取 [references/delivery-review.md](references/delivery-review.md)。
+只读取当前路径需要的一层 reference，不做全量预读：
 
-发布准备和“可交付”必须同时有当前 artifact、当前验证和独立审核。历史 release receipt 可以作为线索，不能替代当前 HEAD/当前产物证据。
+- 软件实现、调试或架构： [references/software-development.md](references/software-development.md)
+- 用户界面或确有理解收益的 visualization： [references/user-experience.md](references/user-experience.md)
+- 真实 Task/Thread/Worktree： [references/real-threads.md](references/real-threads.md)
+- Subagent 模型或成本路由： [references/model-routing-and-budget.md](references/model-routing-and-budget.md)
+- 旧线程、receipt 或 cleanup 排障： [references/history-audit.md](references/history-audit.md)
 
-## 卡住任务与历史线程
+若不读取某个 reference 也能安全完成任务，就不要读取它。
 
-用户询问旧线程是否执行、是否卡住、cwd/worktree 缺失、receipt 身份或 cleanup 时，读取 [references/history-audit.md](references/history-audit.md)。
+## 用户前台
 
-普通 subagent 卡住时，先看实际活动，最多做一次定向 follow-up 或 replacement；仍无结果时，主线程可在原授权范围内接手完成。用户明确要求真实独立线程时，除非同时明确授权 fallback，否则缺失线程能力会阻断该任务。
+需要调用工具时先用一句自然语言说明当前目标和第一项内容动作。Direct/Focused 不要求固定“接管”口令、隐藏 marker 或模式标签。Durable 生命周期使用 `references/user-experience.md` 中的阶段状态。
 
-## 记忆与自我改进
+进度只在出现新结果、真实阻塞或需要用户决定时更新；不按固定时间重复，不展示 Profile、模型参数、schema、hash、receipt 或内部 JSON。最终状态只用：`已验证`、`未验证`、`验证失败`。
 
-只有用户明确要求归档、保存、沉淀、更新记忆、修改 Skill 或修改项目规则时才落盘。Archive Mode 只沉淀已验证、可复用、无 secret/临时 Thread ID/临时路径的候选；先查重并最小追加到已有文档，没有匹配才创建 `docs/knowledge` 文档。其他反馈只在当前任务中采用，不自动写 Memory、Skill 或 `AGENTS.md`。
+## 权限与停止条件
 
-用户明确要求优化本 Skill 时，当前主线程可以直接修改、验证并安排独立审核；不需要再创建一个“Skill 维护官”来取得执行资格。
-
-## 禁止
-
-1. 禁止用管理动作代替实际产出。
-2. 禁止为普通复杂任务强制真实 thread，或因没有 thread 工具而放弃可在主线程完成的工作。
-3. 禁止把 subagent 自述、占位 id、`pending` 或 same-thread simulation 当真实 thread 证据。
-4. 禁止写入 `AGENTS.md` 作为本 Skill 的激活或路由机制。
-5. 禁止为 Direct Mode 或小任务生成固定角色、固定轮询间隔或大量 YAML；项目生命周期只写规定的最小 JSON/Markdown 任务资产。
-6. 禁止 reviewer 结论替代真实测试，也禁止测试 PASS 替代领域质量判断。
-7. 禁止声称未验证的工作已完成、已修复、可发布或可交付。
+- 可逆、本地、低风险且在用户范围内的动作自主推进。
+- 外部写入、发布、删除、支付、身份、隐私和全局配置变更按上级规则确认。
+- 不修改 `AGENTS.md` 作为激活、路由或岗位注入机制。
+- 不用管理动作代替项目产出，不用普通 Subagent 冒充真实新对话，不用未读回的显示名冒充实际模型。
+- 遇到真实阻塞时记录证据并停止在阻塞点；不要通过增加角色、文档或状态文件制造进展感。

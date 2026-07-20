@@ -4,32 +4,27 @@
   "title": "Agency Task Execution Plan",
   "type": "object",
   "required": [
-    "schema_version",
-    "task_id",
     "title",
     "objective",
     "source_discussion",
     "acceptance_criteria",
-    "out_of_scope",
-    "execution_model_request",
-    "work_items",
-    "status"
+    "work_items"
   ],
   "properties": {
-    "schema_version": {"const": "1.0"},
+    "schema_version": {"const": "1.0", "default": "1.0"},
     "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,95}$"},
     "title": {"type": "string", "minLength": 1},
     "objective": {"type": "string", "minLength": 1},
     "source_discussion": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["summary", "accepted_decisions", "constraints", "assumptions", "open_questions"],
+      "required": ["summary"],
       "properties": {
         "summary": {"type": "string", "minLength": 1},
-        "accepted_decisions": {"type": "array", "items": {"type": "string", "minLength": 1}},
-        "constraints": {"type": "array", "items": {"type": "string", "minLength": 1}},
-        "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}},
-        "open_questions": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        "accepted_decisions": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
+        "constraints": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
+        "assumptions": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
+        "open_questions": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []}
       }
     },
     "acceptance_criteria": {
@@ -37,7 +32,7 @@
       "minItems": 1,
       "items": {"type": "string", "minLength": 1}
     },
-    "out_of_scope": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "out_of_scope": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
     "execution_model_request": {
       "type": "object",
       "additionalProperties": false,
@@ -67,9 +62,18 @@
         "cancelled",
         "superseded",
         "blocked"
-      ]
+      ],
+      "default": "plan_ready"
     },
-    "status_reason": {"type": "string"}
+    "status_reason": {"type": "string"},
+    "acceptance_evidence": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string", "minLength": 1}
+      }
+    }
   },
   "$defs": {
     "work_item": {
@@ -78,22 +82,7 @@
         "work_id",
         "title",
         "outcome",
-        "work_type",
-        "dependencies",
-        "read_scope",
-        "write_scope",
-        "verification",
-        "risk",
-        "uncertainty",
-        "context_coupling",
-        "parallelizable",
-        "isolated_worktree_required",
-        "accountable_position",
-        "profile",
-        "review_profile",
-        "status",
-        "evidence_refs",
-        "blockers"
+        "work_type"
       ],
       "properties": {
         "work_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$"},
@@ -102,22 +91,23 @@
         "work_type": {
           "enum": ["research", "architecture", "implementation", "writing", "testing", "review", "integration", "release"]
         },
-        "dependencies": {"type": "array", "items": {"type": "string"}},
-        "read_scope": {"type": "array", "items": {"type": "string"}},
-        "write_scope": {"type": "array", "items": {"type": "string"}},
-        "verification": {"type": "array", "items": {"type": "string", "minLength": 1}},
-        "risk": {"enum": ["low", "medium", "high", "critical"]},
-        "uncertainty": {"enum": ["low", "medium", "high"]},
-        "context_coupling": {"enum": ["low", "medium", "high"]},
-        "parallelizable": {"type": "boolean"},
-        "isolated_worktree_required": {"type": "boolean"},
-        "accountable_position": {"type": ["string", "null"]},
-        "profile": {"type": ["string", "null"]},
-        "review_profile": {"type": ["string", "null"]},
-        "status": {"enum": ["pending", "in_progress", "completed", "blocked", "waived"]},
-        "evidence_refs": {"type": "array", "items": {"type": "string"}},
-        "blockers": {"type": "array", "items": {"type": "string"}},
-        "required": {"type": "boolean", "default": true}
+        "dependencies": {"type": "array", "items": {"type": "string"}, "default": []},
+        "read_scope": {"type": "array", "items": {"type": "string"}, "default": []},
+        "write_scope": {"type": "array", "items": {"type": "string"}, "default": []},
+        "verification": {"type": "array", "items": {"type": "string", "minLength": 1}, "default": []},
+        "risk": {"enum": ["low", "medium", "high", "critical"], "default": "medium"},
+        "uncertainty": {"enum": ["low", "medium", "high"], "default": "medium"},
+        "context_coupling": {"enum": ["low", "medium", "high"], "default": "high"},
+        "parallelizable": {"type": "boolean", "default": false},
+        "isolated_worktree_required": {"type": "boolean", "default": false},
+        "accountable_position": {"type": ["string", "null"], "default": ""},
+        "profile": {"type": ["string", "null"], "default": null},
+        "review_profile": {"type": ["string", "null"], "default": null},
+        "status": {"enum": ["pending", "in_progress", "completed", "blocked", "waived"], "default": "pending"},
+        "evidence_refs": {"type": "array", "items": {"type": "string"}, "default": []},
+        "blockers": {"type": "array", "items": {"type": "string"}, "default": []},
+        "required": {"type": "boolean", "default": true},
+        "waiver_reason": {"type": "string", "minLength": 1}
       }
     }
   }

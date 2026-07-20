@@ -33,6 +33,14 @@ PROFILE_WAVES = {
     "reviewer": 4,
     "supervisor": 5,
 }
+ACCOUNTABLE_PROFILE_BY_WORK_TYPE = {
+    "research": "codebase-researcher",
+    "architecture": "technical-architect",
+    "implementation": "developer",
+    "integration": "developer",
+    "writing": "writer",
+    "testing": "test-debugger",
+}
 MAX_ACTIVE_POSITIONS = 5
 MAX_PARALLEL_POSITIONS = 3
 MAX_PARALLEL_WRITERS = 2
@@ -42,6 +50,12 @@ RISK_POINTS = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 LEVEL_POINTS = {"low": 0, "medium": 1, "high": 2}
 FAILURE_RE = re.compile(r"\b(?:fail(?:ed|ing|ure)?|error|flaky|regression)\b|失败|报错|不稳定|根因", re.I)
 ARCHITECTURE_RE = re.compile(r"migration|migrate|cross[- ]module|interface|architecture|迁移|跨模块|接口|架构", re.I)
+MIGRATION_RE = re.compile(r"migration|migrate|cross[- ]module|迁移|跨模块", re.I)
+SECURITY_RE = re.compile(
+    r"security|auth(?:entication|orization)?|credential|permission|secret|vulnerab|"
+    r"安全|鉴权|认证|权限|凭据|密钥|漏洞",
+    re.I,
+)
 GOAL_RE = re.compile(r"\bgoal\b|长期|持续项目", re.I)
 
 
@@ -101,35 +115,39 @@ def is_cross_module(items: list[dict[str, Any]], plan: dict[str, Any]) -> bool:
         [plan["title"], plan["objective"]]
         + [item["title"] + " " + item["outcome"] for item in items]
     )
-    return (
-        any(item["work_type"] == "architecture" for item in items)
-        or len(scope_roots) >= 2 and bool(ARCHITECTURE_RE.search(narrative))
+    structural_work = any(
+        item["work_type"] in {"architecture", "integration"} for item in items
+    )
+    return bool(MIGRATION_RE.search(narrative)) or (
+        len(scope_roots) >= 2
+        and (structural_work or bool(ARCHITECTURE_RE.search(narrative)))
     )
 
 
-def is_nontrivial_delivery(items: list[dict[str, Any]]) -> bool:
-    write_paths = {path for item in items for path in item["write_scope"]}
-    code_items = [item for item in items if item["work_type"] in {"implementation", "integration"}]
-    return (
-        len(write_paths) > 1
-        or len(code_items) > 1
-        or any(RISK_POINTS[item["risk"]] >= 1 for item in code_items)
-        or any(item["work_type"] == "release" for item in items)
-    )
-
-
-def high_coupling_continuous_implementation(
-    items: list[dict[str, Any]], conflicts: list[tuple[str, str]]
+def requires_independent_review(
+    items: list[dict[str, Any]], plan: dict[str, Any], signals: dict[str, Any]
 ) -> bool:
-    implementations = [
-        item for item in items if item["work_type"] in {"implementation", "integration"}
-    ]
-    if not implementations:
-        return False
-    high_count = sum(item["context_coupling"] == "high" for item in implementations)
-    dependency_links = sum(len(item["dependencies"]) for item in implementations)
-    return high_count == len(implementations) and (
-        len(implementations) == 1 or bool(conflicts) or dependency_links >= len(implementations) - 1
+    narrative = " ".join(
+        [plan["title"], plan["objective"]]
+        + [item["title"] + " " + item["outcome"] for item in items]
+    )
+    scope_roots = {
+        _scope_prefix(path)[:1]
+        for item in items
+        for path in item["read_scope"] + item["write_scope"]
+        if _scope_prefix(path)
+    }
+    structural_cross_module = len(scope_roots) >= 2 and any(
+        item["work_type"] in {"architecture", "integration"} for item in items
+    )
+    return (
+        signals.get("independent_review_required") is True
+        or any(item["work_type"] == "review" for item in items)
+        or any(item["risk"] in {"high", "critical"} for item in items)
+        or any(item["work_type"] == "release" for item in items)
+        or structural_cross_module
+        or bool(MIGRATION_RE.search(narrative))
+        or bool(SECURITY_RE.search(narrative))
     )
 
 
@@ -154,15 +172,20 @@ def score_dimensions(plan: dict[str, Any], signals: dict[str, Any]) -> dict[str,
         if item["parallelizable"] and item["context_coupling"] == "low"
     ]
     specialist_types = types & {"research", "architecture", "writing", "testing", "release"}
+    parallel_gain = min(2, max(0, len(parallel_items) - 1))
+    parallel_gain = max(0, parallel_gain - min(2, len(conflicts)))
     return {
         "workstream_count": min(3, max(0, len(types) - 1)),
         "dependency_depth": min(2, max(0, dependency_depth(items) - 1)),
         "uncertainty": max((LEVEL_POINTS[item["uncertainty"]] for item in items), default=0),
         "risk": max((RISK_POINTS[item["risk"]] for item in items), default=0),
-        "write_conflict": min(2, len(conflicts)),
+        # A conflict is a scheduling cost, never a reason to grow the team.
+        "write_conflict": 0,
         "specialist_need": min(3, len(specialist_types)),
-        "parallel_gain": min(2, max(0, len(parallel_items) - 1)),
-        "independent_review_need": 2 if is_nontrivial_delivery(items) else 0,
+        "parallel_gain": parallel_gain,
+        "independent_review_need": (
+            2 if requires_independent_review(items, plan, signals) else 0
+        ),
         "duration_scope": 0 if len(items) <= 1 else 1 if len(items) <= 3 else 2,
     }
 
@@ -186,6 +209,7 @@ def _position(
 ) -> dict[str, Any]:
     suffix = position_suffix or str(instance)
     position_id = "execution-root" if profile == "execution-root" else f"{profile}-{suffix.lower()}"
+    writable_items = [item for item in items if item["write_scope"]]
     return {
         "position_id": position_id,
         "title": PROFILE_TITLES[profile],
@@ -197,14 +221,15 @@ def _position(
         "wave": PROFILE_WAVES[profile],
         "isolated_worktree_required": bool(
             profile in {"developer", "writer"}
-            and any(item["isolated_worktree_required"] for item in items)
+            and writable_items
+            and all(item["isolated_worktree_required"] for item in writable_items)
         ),
     }
 
 
 def _dedicated_research_positions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     research = [item for item in items if item["work_type"] == "research"]
-    if not research:
+    if len(research) <= 1:
         return []
     independently_parallel = all(
         item["parallelizable"] and item["context_coupling"] == "low" and item["read_scope"]
@@ -215,7 +240,8 @@ def _dedicated_research_positions(items: list[dict[str, Any]]) -> list[dict[str,
         for index, left in enumerate(research)
         for right in research[index + 1 :]
     )
-    if len(research) > 1 and independently_parallel and distinct_scopes:
+    distinct_outputs = len({item["outcome"] for item in research}) == len(research)
+    if independently_parallel and distinct_scopes and distinct_outputs:
         return [
             _position(
                 "codebase-researcher",
@@ -228,8 +254,44 @@ def _dedicated_research_positions(items: list[dict[str, Any]]) -> list[dict[str,
     return [_position("codebase-researcher", research, 1)]
 
 
+def _parallel_implementation_streams(
+    implementation: list[dict[str, Any]],
+) -> bool:
+    return (
+        len(implementation) > 1
+        and all(
+            item["context_coupling"] == "low"
+            and item["parallelizable"]
+            and item["write_scope"]
+            and item["isolated_worktree_required"]
+            for item in implementation
+        )
+        and not write_conflict_pairs(implementation)
+        and len({item["outcome"] for item in implementation}) == len(implementation)
+    )
+
+
+def _developer_positions(
+    items: list[dict[str, Any]], signals: dict[str, Any]
+) -> list[dict[str, Any]]:
+    implementation = [
+        item for item in items if item["work_type"] in {"implementation", "integration"}
+    ]
+    if not implementation:
+        return []
+    parallel_streams = _parallel_implementation_streams(implementation)
+    if not parallel_streams and signals.get("explicit_delegate_implementation") is not True:
+        return []
+    if parallel_streams:
+        return [
+            _position("developer", [item], index, position_suffix=item["work_id"])
+            for index, item in enumerate(implementation, 1)
+        ]
+    return [_position("developer", implementation, 1)]
+
+
 def _candidate_positions(
-    plan: dict[str, Any], signals: dict[str, Any], conflicts: list[tuple[str, str]]
+    plan: dict[str, Any], signals: dict[str, Any]
 ) -> list[dict[str, Any]]:
     items = plan["work_items"]
     candidates = _dedicated_research_positions(items)
@@ -241,17 +303,15 @@ def _candidate_positions(
         ] or items
         candidates.append(_position("technical-architect", architecture_items, 1))
 
-    implementation = [item for item in items if item["work_type"] in {"implementation", "integration"}]
-    if implementation and not high_coupling_continuous_implementation(items, conflicts):
-        candidates.append(_position("developer", implementation, 1))
+    candidates.extend(_developer_positions(items, signals))
     writing = [item for item in items if item["work_type"] == "writing"]
-    if writing:
+    if len(writing) > 1:
         candidates.append(_position("writer", writing, 1))
     testing = [item for item in items if item["work_type"] == "testing"]
     if testing and requires_test_debugger(items, signals):
         candidates.append(_position("test-debugger", testing, 1))
     review = [item for item in items if item["work_type"] == "review"]
-    if is_nontrivial_delivery(items) or review:
+    if requires_independent_review(items, plan, signals):
         candidates.append(_position("reviewer", review or items, 1))
     narrative = plan["title"] + " " + plan["objective"]
     if (
@@ -263,17 +323,6 @@ def _candidate_positions(
     return candidates
 
 
-def _single_file_high_coupling(items: list[dict[str, Any]]) -> bool:
-    scopes = {path for item in items for path in item["write_scope"]}
-    return (
-        len(items) == 1
-        and len(scopes) <= 1
-        and items[0]["context_coupling"] == "high"
-        and items[0]["risk"] == "low"
-        and items[0]["work_type"] not in {"architecture", "release", "review"}
-    )
-
-
 def _waves(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for wave in range(6):
@@ -282,21 +331,28 @@ def _waves(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         parallel: list[str] = []
         sequential: list[str] = []
+        parallel_writers = 0
         for member in members:
+            writable = member["profile"] in {"developer", "writer"} and bool(
+                member["write_scope"]
+            )
             conflicts_with_parallel = any(
                 scopes_overlap(member["write_scope"], other["write_scope"])
                 for other in members
                 if other["position_id"] in parallel and member["write_scope"] and other["write_scope"]
             )
-            write_requires_isolation = bool(member["write_scope"]) and not member["isolated_worktree_required"]
+            write_requires_isolation = writable and not member["isolated_worktree_required"]
             if (
                 len(parallel) >= MAX_PARALLEL_POSITIONS
+                or writable and parallel_writers >= MAX_PARALLEL_WRITERS
                 or conflicts_with_parallel
                 or write_requires_isolation
             ):
                 sequential.append(member["position_id"])
             else:
                 parallel.append(member["position_id"])
+                if writable:
+                    parallel_writers += 1
         result.append(
             {
                 "wave": wave,
@@ -328,33 +384,36 @@ def resolve_team_plan(
     score = sum(breakdown.values())
     tier = tier_for_score(score)
     root = _position("execution-root", items, 1)
-    candidates = [] if _single_file_high_coupling(items) else _candidate_positions(plan, signals, conflicts)
+    candidates = _candidate_positions(plan, signals)
 
     profile_priority = {
-        "technical-architect": 90,
-        "reviewer": 85,
+        "technical-architect": 100,
+        "reviewer": 95,
         "codebase-researcher": 75,
         "developer": 70,
         "writer": 60,
         "test-debugger": 55,
-        "supervisor": 50,
+        "supervisor": 90,
     }
+    if signals.get("explicit_delegate_implementation") is True:
+        profile_priority["developer"] = 90
     candidates = sorted(
         candidates,
-        key=lambda item: (PROFILE_WAVES[item["profile"]], -profile_priority[item["profile"]], item["position_id"]),
+        key=lambda item: (-profile_priority[item["profile"]], item["instance"], item["position_id"]),
     )
-    selected = [root] + candidates[: MAX_ACTIVE_POSITIONS - 1]
-    selected_work_ids = {work_id for position in selected for work_id in position["work_items"]}
-    delegated_work_ids = {
-        work_id
-        for position in selected
-        if position["profile"] != "execution-root"
-        for work_id in position["work_items"]
-    }
+    chosen = candidates[: MAX_ACTIVE_POSITIONS - 1]
+    selected = [root] + sorted(
+        chosen,
+        key=lambda item: (PROFILE_WAVES[item["profile"]], item["position_id"]),
+    )
     root_owned = sorted(
         item["work_id"]
         for item in items
-        if item["work_id"] not in delegated_work_ids or item["work_id"] not in selected_work_ids
+        if not any(
+            position["profile"] == ACCOUNTABLE_PROFILE_BY_WORK_TYPE.get(item["work_type"])
+            and item["work_id"] in position["work_items"]
+            for position in selected
+        )
     )
     if len(selected) == 1:
         tier = "solo"
@@ -433,7 +492,8 @@ def write_team_plan(task_dir: Path, team_plan: dict[str, Any]) -> None:
             (
                 position
                 for position in positions
-                if position["profile"] not in {"execution-root", "reviewer", "supervisor"}
+                if position["profile"]
+                == ACCOUNTABLE_PROFILE_BY_WORK_TYPE.get(item["work_type"])
             ),
             next((position for position in positions if position["profile"] == "execution-root"), None),
         )
@@ -523,7 +583,24 @@ def run_self_test() -> dict[str, Any]:
         raise AssertionError("independent researcher instances were collapsed")
     feature_items = [
         _work("W-01", "architecture", "api/", title="Cross-module interface"),
-        _work("W-02", "implementation", "client/", dependencies=["W-01"], risk="medium"),
+        _work(
+            "W-02",
+            "implementation",
+            "client/",
+            dependencies=["W-01"],
+            risk="medium",
+            parallelizable=True,
+            isolated_worktree_required=True,
+        ),
+        _work(
+            "W-03",
+            "implementation",
+            "server/",
+            dependencies=["W-01"],
+            risk="medium",
+            parallelizable=True,
+            isolated_worktree_required=True,
+        ),
     ]
     feature = resolve_team_plan(_self_test_plan(feature_items, "Cross-module migration"))
     profiles = {position["profile"] for position in feature["positions"]}

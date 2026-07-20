@@ -1,6 +1,6 @@
 # Team Orchestration
 
-团队计划由 Work Item 确定性生成，不要求调用方先写角色清单。旧 `resolve_role_route.py` 继续负责已选 Profile 的 Subagent 模型档路由；`resolve_team_plan.py` 先决定是否需要岗位、需要哪些岗位和几个实例。
+团队计划由 Work Item 确定性生成，不要求调用方先写角色清单。旧 `resolve_role_route.py` 继续负责已选 Profile 的 Subagent 模型档路由；`resolve_team_plan.py` 先过净执行价值门，再决定是否需要岗位、需要哪些岗位和几个实例。Root 是默认执行者。
 
 ## 两层结构
 
@@ -33,19 +33,21 @@
 11+   program_team
 ```
 
-等级描述任务复杂度，不是最低人数。活跃职位最多 5、同时并行最多 3、同时可写最多 2；团队规模始终是上限，不是目标。
+分数与 Team Tier 描述任务复杂度，不是最低人数，也不能绕过净执行价值门。活跃职位最多 5、同时并行最多 3、同时可写最多 2；团队规模始终是上限，不是目标。
 
 ## 硬规则
 
-- 单文件、单目标、低风险、高耦合任务默认由 Root 单独完成。
-- 非平凡代码或多文件交付至少安排一个独立 Reviewer。
-- 跨模块接口或迁移考虑 Technical Architect。
+- 单一研究、单一文档、普通单文件修改和高耦合连续实现默认由 Root 完成。
+- Developer 只用于多个可隔离、无写冲突、输出不同的实现流，或调用方显式要求委派实现。
+- Reviewer 只在显式审核、独立审核需求、高/关键风险、发布、安全、迁移或结构性跨模块变更时加入。
+- 跨模块接口、迁移或高不确定架构判断考虑 Technical Architect。
 - 独立研究流可创建多个 Researcher Instance。
 - 写范围重叠不并行；并行写必须使用隔离 Worktree。
 - 高耦合连续实现由 Root 执行，不拆成冲突写线程。
 - Test Debugger 只在有真实失败或竞争根因信号时加入。
 - Supervisor 只用于长期 Goal、发布、复杂归档或证据闭环。
 - 不为满足人数或 Team Tier 安排岗位。
+- 必需的 Architect 或 Reviewer 优先于可选 Researcher，不能被数量截断挤出。
 
 ## 波次
 
@@ -58,4 +60,4 @@ Wave 4：独立 Review
 Wave 5：Supervisor 收口，仅在需要时
 ```
 
-Root 负责整合、验证和全局状态。Subagent 只返回范围内证据，不能改变 Task 生命周期或归档。
+Root 负责整合、验证和全局状态。Subagent 只返回范围内证据，不能改变 Task 生命周期或归档。波次计划必须真实满足同时并行不超过 3、同时可写不超过 2；这些值不是只读元数据。

@@ -1,6 +1,6 @@
 # Delivery and Independent Review
 
-在 release readiness、Skill hardening、公开发布、多文件可靠性或客户可见交付时读取本文件。
+只在 Assured 路径读取本文件：release readiness、Skill hardening、公开发布、安全、高风险迁移、结构性跨模块变更、客户可见交付，或用户明确要求独立审核。普通低风险多文件修改不因文件数量本身强制 Cold Review。
 
 ## 证据层级
 
@@ -15,7 +15,7 @@
 
 ## Cold review
 
-默认给不同上下文中的原生 subagent 或专用 review 工具；只有用户已明确要求真实 task/thread 执行面时，才使用独立 task/thread reviewer：
+审核确有独立判断价值时，给不同上下文中的原生 subagent 或专用 review 工具；只有用户已明确要求真实 task/thread 执行面时，才使用独立 task/thread reviewer：
 
 - 原始目标和约束。
 - 变更 diff 或最终 artifact。

@@ -212,11 +212,27 @@ def doctor(project: Path, skills_root: Path, codex_bin: str, timeout_seconds: in
     root = safe_project_root(project)
     canonical = bundle_report(skills_root, CANONICAL_SKILL_NAME)
     legacy = bundle_report(skills_root, LEGACY_SKILL_NAME)
+    profiles = profile_report(root)
+    native = native_report(root, codex_bin, timeout_seconds)
+    rules = agents_rule_report(root)
+    thread = native.get("task_thread", {})
+    catalog = native.get("model_catalog", {})
     checks = {
         "canonical_installed": canonical["state"] == "current",
         "legacy_installed": legacy["state"] == "current",
         "canonical_implicit_true": canonical["implicit_policy"] is True,
         "legacy_implicit_false": legacy["implicit_policy"] is False,
+        "project_agents_conflict_free": rules["conflict"] is False,
+        "native_thread_read_surface": (
+            isinstance(thread, dict)
+            and (
+                thread.get("read_verified") is True
+                or thread.get("status") == "read-surface-available"
+            )
+        ),
+        "native_model_catalog_live": (
+            isinstance(catalog, dict) and catalog.get("status") == "live-read"
+        ),
     }
     return {
         "schema_version": "1.0",
@@ -224,9 +240,9 @@ def doctor(project: Path, skills_root: Path, codex_bin: str, timeout_seconds: in
         "project": str(root),
         "canonical": canonical,
         "legacy": legacy,
-        "project_agent_profiles": profile_report(root),
-        "native": native_report(root, codex_bin, timeout_seconds),
-        "project_agents_rules": agents_rule_report(root),
+        "project_agent_profiles": profiles,
+        "native": native,
+        "project_agents_rules": rules,
         "checks": checks,
         "mutations_performed": False,
     }
