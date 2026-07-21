@@ -9,6 +9,19 @@ description: "项目型工作的内容优先协调与跨对话生命周期。Use
 
 核心判断：每个治理动作必须至少做到一项——解锁项目判断、协调真实并行、证明当前结果。否则跳过。
 
+## Durable 入口硬契约
+
+用户明确进入生命周期阶段时，阶段响应的第一行必须逐字使用下列状态；不得省略、改写或加前缀。即使信息不足，也先显示状态，再问一个会改变结果的问题：
+
+- Discussion：`任务已接管｜需求讨论中`
+- Plan：`任务已接管｜正在创建执行清单`
+- Execution Launch：`任务已接管｜正在启动执行对话`
+- Execution：`任务已接管｜团队执行中`
+- Verify：`任务已接管｜正在验证`
+- Archive：`任务已接管｜正在归档`
+
+Discussion 显示状态后停在讨论，不执行、不写文件、不创建 Agent 或 Task/Thread。
+
 ## 递归边界
 
 如果首行是 `AGENCY_WORKER: true`，只执行 packet 的范围并返回证据；不启动本 Skill、不重新规划、不创建 Agent/Task/Thread。
@@ -63,15 +76,6 @@ Durable Execution Launch 才读取 [references/team-orchestration.md](references
 ## 持久生命周期
 
 只有进入 Durable 才读取 [references/task-lifecycle.md](references/task-lifecycle.md)：
-
-进入 Durable 阶段后，把对应状态作为读取 Skill 后的首个用户可见行；先显示状态，再解释、提问或调用项目工具：
-
-- Discussion：`任务已接管｜需求讨论中`
-- Plan：`任务已接管｜正在创建执行清单`
-- Execution Launch：`任务已接管｜正在启动执行对话`
-- Execution：`任务已接管｜团队执行中`
-- Verify：`任务已接管｜正在验证`
-- Archive：`任务已接管｜正在归档`
 
 - Discussion：只讨论；不写项目文件、不派发、不运行实现命令。一次只问一个会改变结果的问题，可以合法停在讨论。
 - Plan：用 `scripts/agency_task.py create` 只物化 task plan、用户清单和项目 index；不执行，不预建 Team、Session、Progress 或 Evidence 占位文件。
