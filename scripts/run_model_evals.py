@@ -781,9 +781,12 @@ def initialize_fixture_repository(fixture: Path) -> None:
             ["config", "user.email", "model-eval@example.invalid"],
             "fixture user.email config",
         )
+        baseline_paths = ["README.md", ".agents"]
+        if (fixture / "AGENTS.md").is_file() and not (fixture / "AGENTS.md").is_symlink():
+            baseline_paths.append("AGENTS.md")
         require_hardened_git(
             fixture,
-            ["-c", "core.hooksPath=/dev/null", "add", "--", "README.md", ".agents"],
+            ["-c", "core.hooksPath=/dev/null", "add", "--", *baseline_paths],
             "fixture add",
         )
         require_hardened_git(

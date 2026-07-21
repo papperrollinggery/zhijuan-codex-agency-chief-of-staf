@@ -571,6 +571,43 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.assertEqual(runner.changed_paths(fixture), {"README.md"})
             self.assertFalse(fsmonitor_sentinel.exists())
 
+    def test_fixture_agents_contract_is_tracked_but_symlink_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            fixture = base / "fixture"
+            fixture.mkdir()
+            (fixture / "README.md").write_text("before\n", encoding="utf-8")
+            payload = fixture / ".agents" / "payload.txt"
+            payload.parent.mkdir()
+            payload.write_text("fixture\n", encoding="utf-8")
+            (fixture / "AGENTS.md").write_text(
+                runner.EVAL_HOST_AGENTS_TEXT, encoding="utf-8"
+            )
+            runner.initialize_fixture_repository(fixture)
+            tracked = runner.require_hardened_git(
+                fixture, ["ls-files", "-z"], "test fixture tracked files"
+            ).split(b"\0")
+            self.assertIn(b"AGENTS.md", tracked)
+            self.assertEqual(runner.changed_paths(fixture), set())
+
+            symlink_fixture = base / "symlink-fixture"
+            symlink_fixture.mkdir()
+            (symlink_fixture / "README.md").write_text(
+                "before\n", encoding="utf-8"
+            )
+            symlink_payload = symlink_fixture / ".agents" / "payload.txt"
+            symlink_payload.parent.mkdir()
+            symlink_payload.write_text("fixture\n", encoding="utf-8")
+            host_agents = base / "host-AGENTS.md"
+            host_agents.write_text("host rules\n", encoding="utf-8")
+            (symlink_fixture / "AGENTS.md").symlink_to(host_agents)
+            runner.initialize_fixture_repository(symlink_fixture)
+            tracked = runner.require_hardened_git(
+                symlink_fixture, ["ls-files", "-z"], "test symlink fixture tracked files"
+            ).split(b"\0")
+            self.assertNotIn(b"AGENTS.md", tracked)
+            self.assertEqual(runner.changed_paths(symlink_fixture), {"AGENTS.md"})
+
     def test_fixture_manifest_detects_committed_scope_escape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             fixture = Path(tmp) / "fixture"
