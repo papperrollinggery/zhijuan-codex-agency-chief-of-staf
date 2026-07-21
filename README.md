@@ -23,11 +23,11 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | Python | 3.10+ |
 | 最新 stable tag | [`v0.1.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.1.7) |
 | 最新 prerelease tag | [`v0.2.0-rc.3`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.2.0-rc.3) |
-| 当前 checkout | `v0.3.0-rc.3` 本地源码候选；未打 tag、未发布 |
+| 当前 checkout | `v0.3.0-rc.4` 本地源码候选；未打 tag、未发布 |
 
 入口：[文档索引](docs/README.md) · [内容优先设计依据](docs/CONTENT_FIRST_DESIGN.md) · [LLM 索引](llms.txt) · [发现性与发布元数据](docs/REPOSITORY_DISCOVERY.md) · [Changelog](CHANGELOG.md) · [示例](examples) · [贡献](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [行为规范](CODE_OF_CONDUCT.md) · [全部 Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases)
 
-本 README 正文描述 `v0.3.0-rc.3` 本地源码候选。它不是当前 GitHub Release，也不代表本机已安装 Skill 已更新。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
+本 README 正文描述 `v0.3.0-rc.4` 本地源码候选。它不是当前 GitHub Release，也不代表任一宿主的已安装 Skill 已更新。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
 
 | 版本线 | 能力边界 |
 | --- | --- |
@@ -36,6 +36,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | `v0.2.0-rc.3` prerelease | 七角色、current-catalog direct 路由/readback、可恢复 native routing 配置和 fragment/fallback/manifest 流程；named profile 与 host mount 仍按宿主能力 fail closed |
 | `v0.3.0-rc.2` 本地源码候选 | 在 rc.1 生命周期上增加内容优先执行面、净执行价值门、懒资产、递归 fail-closed、单命令完成收口和结果/开销评测；尚未发布，真实 Model/Native 行为仍需单独 smoke |
 | `v0.3.0-rc.3` 本地源码候选 | 在 rc.2 上补齐 Native `create_thread` transport 解包、user-owned source 证明与 v1.0 raw session 兼容回填；尚未发布，安装态 Model/Native 行为仍需单独 smoke |
+| `v0.3.0-rc.4` 本地源码候选 | 用真实生命周期 trace 把持久执行收敛为内容优先快路径，增加失败调用也计数的 tool-event 预算、无歧义完成证据 argv、恢复/归档边界与评测防伪；尚未发布，安装态 Native 行为仍需单独 readback |
 
 ## v0.3 迁移
 
@@ -117,7 +118,7 @@ cd zhijuan-codex-agency-chief-of-staf
 python3 scripts/install_skill.py
 ```
 
-如需已发布 prerelease，把 tag 改为 `v0.2.0-rc.3`。`v0.3.0-rc.3` 当前只存在于本地源码候选；仅在已审阅的源码 checkout 中开发或验证新增量时直接运行：
+如需已发布 prerelease，把 tag 改为 `v0.2.0-rc.3`。`v0.3.0-rc.4` 当前只存在于本地源码候选；仅在已审阅的源码 checkout 中开发或验证新增量时直接运行：
 
 ```bash
 python3 scripts/install_skill.py

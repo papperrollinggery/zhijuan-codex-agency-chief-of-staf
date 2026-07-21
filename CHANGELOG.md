@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## v0.3.0-rc.4 - 2026-07-21 (source candidate, unpublished)
+
+- Added stage-specific fast paths so an Execution Root uses task content plus stable helper JSON instead of enumerating `.agency`, reading helper source, probing `--help`, rereading mirrored state, or running Git housekeeping solely to prove lifecycle writes.
+- Added model-smoke tool-attempt budgets for resume, progress, and archive; failed commands count, started/completed events are deduplicated by tool identity, and receipts expose attempted as well as successful tool events.
+- Added unambiguous two-argv completion evidence options, preserved legacy `::` input compatibility, documented shell-safe argv handling, and covered delimiter/operator payloads without executing task text.
+- Corrected archive guidance for optional candidates, new knowledge targets, post-archive deposit blockers, and the real `destination` response field; corrected resume guidance to read canonical progress once when prior blocker, review, team, or work evidence exists.
+- Hardened source-forward evaluation for chunked full Skill reads, completed/index fixture consistency, oversized sed ranges, terminal event pairing, and status-first lifecycle messages without weakening true preboot action checks.
+- On the current host, the exact `ef2a2dc` source runtime passed the three targeted GPT-5.6 Sol Ultra lifecycle cases with 10/13, 7/9, and 7/11 attempted tool events. This was a primary-credential, no-catalog `passed_partial` diagnostic with `release_evidence_eligible=false`; it is not portable release evidence or an installed-state claim.
+
 ## v0.3.0-rc.3 - 2026-07-21 (source candidate, unpublished)
 
 - Accepted the exact `<codex_delegation>` transport envelope emitted by native `create_thread` while keeping raw Execution Session markers strict and Worker recursion fail closed; standalone malformed transport tags cannot fall back to ordinary activation, the source must be a user-owned Root in App Server and canonical state, and legacy v1.0 raw readbacks are backfilled only after fresh mechanical verification.

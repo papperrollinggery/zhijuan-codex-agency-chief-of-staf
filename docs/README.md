@@ -4,7 +4,7 @@
 >
 > As of: 2026-07-21
 >
-> Reviewed source candidate: `v0.3.0-rc.3`; unpublished and not an installed-state claim
+> Reviewed source candidate: `v0.3.0-rc.4`; unpublished and not an installed-state claim
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 
@@ -42,6 +42,8 @@ These files are loaded on demand by the Skill. They describe operating contracts
 - [Archive and knowledge deposition](../references/knowledge-archiving.md)
 
 The four-stage lifecycle is intent-gated and lazily materialized. Team planning first applies a net-execution-value gate; it does not restore a fixed organization, require every task to create a Thread, or force routine review. Only Team Plan selected Profiles are prepared, and Execution Root model requests remain separate from Subagent routing.
+
+The rc.4 fast path treats durable state as a continuity and evidence layer, not the work itself. Stable helper exit-0 JSON normally ends a lifecycle step; failed calls count against model-smoke overhead budgets, and prior canonical progress is read once only when a resumed task actually has evidence to recover.
 
 ## Design and historical records
 

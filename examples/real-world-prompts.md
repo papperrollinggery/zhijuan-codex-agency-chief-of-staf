@@ -36,7 +36,7 @@
 核对所有工作项、验收标准和当前验证证据，完成任务但先不要归档。
 ```
 
-检查：使用单一完成入口写入验收证据、验证、必要 Review/cleanup、完成事件和可复用 closure；不手工拼多份镜像 JSON。
+检查：使用单一完成入口写入验收证据、验证、必要 Review/cleanup、完成事件和可复用 closure；不手工拼多份镜像 JSON，不枚举管理目录、不读取 helper 源码，也不用 Git housekeeping 重复证明 helper 的 exit-0 JSON。
 
 归档并沉淀长期知识：
 
@@ -44,7 +44,7 @@
 归档这个任务，并把已验证、可复用的信息最小写入已有文档；没有匹配文档时再创建 docs/knowledge 文档。
 ```
 
-检查：Required Work、Acceptance Evidence、Blocker、Review、cleanup、产物和验证先通过；archive manifest 有效；知识去重，拒绝 secret、临时 Thread ID、临时路径和未验证推断。
+检查：Required Work、Acceptance Evidence、Blocker、Review、cleanup、产物和验证先通过；archive manifest 有效；已有目标文档只读一次，新目标由 helper 创建；知识去重，拒绝 secret、临时 Thread ID、临时路径和未验证推断，archive JSON 加一次 validator 后停止重复盘点。
 
 ## Team Tier 平衡
 
