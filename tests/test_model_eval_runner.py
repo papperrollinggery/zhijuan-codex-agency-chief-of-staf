@@ -31,6 +31,12 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "require_takeover": True,
         }
 
+    def test_eval_host_contract_normalizes_notice_without_selecting_a_skill(self) -> None:
+        self.assertIn("<skill-name>", runner.EVAL_HOST_AGENTS_TEXT)
+        self.assertNotIn(runner.SKILL_NAME, runner.EVAL_HOST_AGENTS_TEXT)
+        self.assertNotIn(runner.LEGACY_SKILL_NAME, runner.EVAL_HOST_AGENTS_TEXT)
+        self.assertIn("does not select or activate any Skill", runner.EVAL_HOST_AGENTS_TEXT)
+
     def test_contamination_check_allows_only_source_maintenance_boundary(self) -> None:
         self.assertEqual(
             tuple(
@@ -1433,6 +1439,63 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertIn(
             "excluded case read the Chief-of-Staff Skill",
             runner.contract_failures(excluded, parsed),
+        )
+        announced = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "assistant_message",
+                                "text": (
+                                    "我会使用 agency-chief-of-staff Skill，"
+                                    "因为本任务匹配它的职责；先完整读取 Skill 说明。"
+                                ),
+                            },
+                        },
+                        {
+                            "type": "item.completed",
+                            "item": {"type": "assistant_message", "text": "你好"},
+                        },
+                    ),
+                )
+            ),
+            "",
+        )
+        self.assertIn(
+            "excluded case mentioned the Chief-of-Staff Skill",
+            runner.contract_failures(excluded, announced),
+        )
+        suffixed_announcement = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (
+                        {
+                            "type": "item.completed",
+                            "item": {
+                                "type": "assistant_message",
+                                "text": (
+                                    "我会使用 agency-chief-of-staff Skill，"
+                                    "因为本任务匹配它的职责；先完整读取 Skill 说明。"
+                                    "下一步直接回答。"
+                                ),
+                            },
+                        },
+                        {
+                            "type": "item.completed",
+                            "item": {"type": "assistant_message", "text": "你好"},
+                        },
+                    ),
+                )
+            ),
+            "",
+        )
+        self.assertIn(
+            "excluded case mentioned the Chief-of-Staff Skill",
+            runner.contract_failures(excluded, suffixed_announcement),
         )
 
     def test_allows_one_narrow_platform_skill_announcement_before_boot(self) -> None:

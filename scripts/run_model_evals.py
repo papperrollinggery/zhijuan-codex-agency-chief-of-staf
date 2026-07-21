@@ -224,6 +224,13 @@ CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
 MODEL_RE = re.compile(r"\bmodel=([A-Za-z0-9._-]+)")
 THREAD_ID_RE = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 EVAL_TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+EVAL_HOST_AGENTS_TEXT = """# Model Smoke Host Contract
+
+This file does not select or activate any Skill.
+If, and only if, you independently decide an installed Skill applies, send exactly one pre-read announcement using this template and replace `<skill-name>` with its exact name:
+`我会使用 <skill-name> Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。`
+Do not add task status, findings, evidence, actions, or results to that announcement.
+"""
 PROGRESS_RE = re.compile(r"(?:MAIN_PROGRESS|\bprogress\b|进度)", re.IGNORECASE)
 BOOT_PREFIX_RE = re.compile(
     r"^(?:<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n)?任务已接管｜"
@@ -1864,6 +1871,12 @@ def contract_failures(
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
     if not case["should_trigger"]:
+        if any(
+            SKILL_NAME in str(item.get("text", ""))
+            or LEGACY_SKILL_NAME in str(item.get("text", ""))
+            for item in message_events
+        ):
+            failures.append("excluded case mentioned the Chief-of-Staff Skill")
         if case["activation"] in {"worker", "invalid_packet"} and len(message_events) != 1:
             failures.append("worker or invalid packet must return exactly one terminal message")
         if case["activation"] in {"worker", "invalid_packet"} and PROGRESS_RE.search(surface):
@@ -2889,6 +2902,10 @@ def main() -> None:
             (fixture / "README.md").write_text(
                 "# Agency model-eval fixture\n\n"
                 "Repository name: agency-model-eval-fixture.\n",
+                encoding="utf-8",
+            )
+            (fixture / "AGENTS.md").write_text(
+                EVAL_HOST_AGENTS_TEXT,
                 encoding="utf-8",
             )
             skill_target = fixture / ".agents" / "skills" / SKILL_NAME
