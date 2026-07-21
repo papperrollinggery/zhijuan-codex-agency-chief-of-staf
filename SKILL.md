@@ -71,7 +71,9 @@ Root 保留需求、核心判断、强耦合实现、整合和最终输出。只
 
 单一研究、单一文档、普通单文件修改和高耦合连续实现默认 Root 完成。不要为凑 Team Tier 安排职位。并行最多 3 个终端 worker，递归深度固定为 1。
 
-Durable Execution Launch 才读取 [references/team-orchestration.md](references/team-orchestration.md) 并运行 `scripts/resolve_team_plan.py`。调用方不需要先选角色；Team Planner 必须先过净收益门，再生成 position instance。
+用户只要求比较或规划团队、且没有要求创建执行清单或启动执行时，作为 Direct/Focused 的团队咨询处理：读取 [references/team-orchestration.md](references/team-orchestration.md)，使用其中稳定的用户可见职位名，但不进入 Plan、不显示 Durable 阶段状态、不写 `.agency`、不创建 Agent/Task/Thread。没有结构化 Work Item 时不要为了咨询运行规划脚本。
+
+Durable Execution Launch 读取同一 reference 并运行 `scripts/resolve_team_plan.py`。调用方不需要先选角色；Team Planner 必须先过净收益门，再生成 position instance。
 
 ## 持久生命周期
 

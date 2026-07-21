@@ -72,6 +72,14 @@ class ActivationLifecycleTests(unittest.TestCase):
         self.assertIn("不得加入 Runtime Bundle", agents)
         self.assertNotIn("AGENTS.md", install_skill.RUNTIME_FILES)
 
+    def test_team_advice_stays_lightweight_but_uses_stable_position_names(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Direct/Focused 的团队咨询", skill)
+        self.assertIn("不显示 Durable 阶段状态", skill)
+        self.assertIn("不写 `.agency`、不创建 Agent/Task/Thread", skill)
+        self.assertIn("稳定的用户可见职位名", skill)
+        self.assertIn("没有结构化 Work Item 时不要为了咨询运行规划脚本", skill)
+
 
 if __name__ == "__main__":
     unittest.main()
