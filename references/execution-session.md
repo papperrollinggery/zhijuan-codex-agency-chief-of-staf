@@ -13,7 +13,7 @@
 1. 找到唯一 active 的 `plan_ready` 任务；有多个时只问用户选哪一个。
 2. 校验 task plan、依赖和完成标准。
 3. 用 `resolve_team_plan.py` 生成 Team Plan。
-4. 从当前 Codex App Server live catalog 按显示名查找 GPT-5.6 Sol 的精确 ID。
+4. 从当前 Codex App Server live catalog 按显示名查找 GPT-5.6 Sol 的精确 ID。若 live model item 没有 provider 字段，调用 `prepare_execution_launch.py` 时显式传 `--thread-id "$CODEX_THREAD_ID"`；helper 会从同一 App Server 的 canonical `codexHome/state_5.sqlite` 机械读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，因此最终仍必须由 binder 读回新执行 Task；selector 缺失、状态读回失败或 provider 不匹配时 fail closed，不从模型名猜 provider。
 5. 验证该 ID 支持 `ultra`；不支持或不存在时停止并给用户唯一模型选择，不静默降级。
 6. 按执行面优先级准备所需 Profile：Native Direct Route → 已读回 Named Custom Agent → 项目 selected-only Profile → Generic Native Subagent + Role Packet → CLI read-only compat → Root 直接执行。
 7. `prepare_execution_launch.py` 只生成 Execution Session Packet 和 `execution-session.json`，状态最多到 `native_launch_ready` 或 `manual_launch_ready`；它不会把调用方 JSON 当成创建证明。

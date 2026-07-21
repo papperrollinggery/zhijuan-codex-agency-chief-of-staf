@@ -127,8 +127,8 @@ def live_catalog(
     thread_id: str | None = None,
     timeout_seconds: int = 20,
 ) -> dict[str, Any]:
-    if bool(state_db) != bool(thread_id):
-        raise ValueError("state_db and thread_id must be supplied together")
+    if state_db is not None and thread_id is None:
+        raise ValueError("state_db requires thread_id")
     executable = resolve_executable(codex_bin)
     root = project.expanduser().resolve()
     if not root.is_dir() or root.is_symlink():
@@ -141,11 +141,15 @@ def live_catalog(
     ) as app:
         items = collect_model_items(app)
         root_provider: str | None = None
-        provider_evidence = "catalog-advertised"
-        if state_db is not None and thread_id is not None:
-            with canonical_state_connection(state_db, app.codex_home) as (database, _identity):
+        provider_evidence = "unverified"
+        if thread_id is not None:
+            selected_state_db = state_db or (app.codex_home / "state_5.sqlite")
+            with canonical_state_connection(selected_state_db, app.codex_home) as (
+                database,
+                _identity,
+            ):
                 root_provider = root_provider_from_database(database, thread_id)
-            provider_evidence = "root-state-inferred"
+            provider_evidence = "selected-root-state-inferred"
     models: list[dict[str, Any]] = []
     for item in items:
         model_id = item.get("model")

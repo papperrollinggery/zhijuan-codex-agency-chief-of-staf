@@ -254,7 +254,7 @@ Packet 可从 [`examples/cli-profile-review.packet.txt`](examples/cli-profile-re
 
 ## 当前模型能力的使用方式
 
-Execution Root 与 Subagent 分开路由。Root 读取 `assets/execution-model-policy.json`，默认请求 GPT-5.6 Sol + `ultra`，使用 `scripts/resolve_execution_model.py` 从当前 App Server catalog 解析 exact ID；若 Sol 不存在、Ultra 不受支持或 spawn readback 不一致，就要求用户选择或 FAIL，不猜测、不静默降级。`prepare_execution_launch.py` 只产生 ready packet；宿主创建后由 `bind_execution_session.py` 内部核对真实 Task ID、Root/packet、provider、model、effort、CWD/worktree、canonical state 和 rollout turn，再事务性进入 `executing`。
+Execution Root 与 Subagent 分开路由。Root 读取 `assets/execution-model-policy.json`，默认请求 GPT-5.6 Sol + `ultra`，使用 `scripts/resolve_execution_model.py` 从当前 App Server catalog 解析 exact ID；目录缺少 provider 时，Runtime 显式把宿主提供的 `CODEX_THREAD_ID` 作为 `--thread-id` 传入，helper 再从同一 App Server canonical state 读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，最终以新执行 Task 的 binder readback 为准；selector 缺失或状态读回失败仍 fail closed，不从模型名猜 provider。若 Sol 不存在、Ultra 不受支持或 spawn readback 不一致，就要求用户选择或 FAIL，不静默降级。`prepare_execution_launch.py` 只产生 ready packet；宿主创建后由 `bind_execution_session.py` 内部核对真实 Task ID、Root/packet、provider、model、effort、CWD/worktree、canonical state 和 rollout turn，再事务性进入 `executing`。
 
 七个窄 Subagent Profile 继续使用 `efficient`、`balanced`、`judgment` 能力档和三种预算模式；它们不要求全部使用 Ultra。仓库不维护会过期的模型排行榜或角色硬编码 model slug。
 
