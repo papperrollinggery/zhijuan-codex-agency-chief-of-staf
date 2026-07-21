@@ -781,9 +781,13 @@ def initialize_fixture_repository(fixture: Path) -> None:
             ["config", "user.email", "model-eval@example.invalid"],
             "fixture user.email config",
         )
-        baseline_paths = ["README.md", ".agents"]
-        if (fixture / "AGENTS.md").is_file() and not (fixture / "AGENTS.md").is_symlink():
-            baseline_paths.append("AGENTS.md")
+        baseline_paths = sorted(
+            relative
+            for relative, entry in fixture_file_manifest(fixture).items()
+            if entry.startswith("file:")
+        )
+        if not baseline_paths:
+            raise RuntimeError("model-eval fixture baseline contains no regular files")
         require_hardened_git(
             fixture,
             ["-c", "core.hooksPath=/dev/null", "add", "--", *baseline_paths],

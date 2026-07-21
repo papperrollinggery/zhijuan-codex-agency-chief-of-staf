@@ -583,11 +583,13 @@ class ModelEvalRunnerTests(unittest.TestCase):
             (fixture / "AGENTS.md").write_text(
                 runner.EVAL_HOST_AGENTS_TEXT, encoding="utf-8"
             )
+            (fixture / "utils.py").write_text('LABEL = "teh"\n', encoding="utf-8")
             runner.initialize_fixture_repository(fixture)
             tracked = runner.require_hardened_git(
                 fixture, ["ls-files", "-z"], "test fixture tracked files"
             ).split(b"\0")
             self.assertIn(b"AGENTS.md", tracked)
+            self.assertIn(b"utils.py", tracked)
             self.assertEqual(runner.changed_paths(fixture), set())
 
             symlink_fixture = base / "symlink-fixture"
