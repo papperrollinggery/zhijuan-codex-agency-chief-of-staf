@@ -2152,6 +2152,31 @@ class ModelEvalRunnerTests(unittest.TestCase):
             any("first visible takeover line is not exact" in item for item in valid)
         )
 
+        counted_reference_read = read_pair(
+            "counted-reference",
+            "/bin/zsh -lc \"wc -l "
+            f"{skill_path} {lifecycle_path} && "
+            f"sed -n '241,520p' {skill_path} && "
+            f"sed -n '1,320p' {lifecycle_path}\"",
+        )
+        counted_reference_valid = runner.contract_failures(
+            case,
+            parsed(
+                boot,
+                *skill_read,
+                *counted_reference_read,
+                message("你希望这个项目最终改变什么结果？"),
+            ),
+        )
+        self.assertNotIn(
+            "discussion attempted a non-Skill tool or collaboration action",
+            counted_reference_valid,
+        )
+        self.assertNotIn(
+            "Skill announcement/read order violated takeover contract",
+            counted_reference_valid,
+        )
+
         reversed_reads = runner.contract_failures(
             case,
             parsed(

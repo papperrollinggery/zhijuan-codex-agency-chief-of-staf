@@ -1156,11 +1156,12 @@ def classify_passive_skill_bundle_read(
         return False
 
     for segment in segments:
-        target: Path | None = None
+        segment_targets: list[Path] = []
         if len(segment) == 2 and segment[0] in {"/bin/cat", "cat"}:
             target = resolved_bundle_target(segment[1])
             if target is None:
                 return False, False
+            segment_targets.append(target)
             if target == skill_path:
                 canonical_complete = True
         elif (
@@ -1174,6 +1175,7 @@ def classify_passive_skill_bundle_read(
             target = resolved_bundle_target(segment[3])
             if match is None or target is None:
                 return False, False
+            segment_targets.append(target)
             start = int(match.group(1))
             end_token = match.group(2)
             if end_token != "$" and int(end_token) < start:
@@ -1194,17 +1196,20 @@ def classify_passive_skill_bundle_read(
                 if start <= end:
                     canonical_intervals.append((start, end))
         elif (
-            len(segment) == 3
+            3 <= len(segment) <= 10
             and segment[0] in {"/usr/bin/wc", "wc"}
             and segment[1] == "-l"
         ):
-            target = resolved_bundle_target(segment[2])
-            if target is None:
-                return False, False
+            for raw_target in segment[2:]:
+                target = resolved_bundle_target(raw_target)
+                if target is None:
+                    return False, False
+                segment_targets.append(target)
         else:
             return False, False
-        if target != skill_path and not canonical_coverage_complete():
-            canonical_order_violation = True
+        for target in segment_targets:
+            if target != skill_path and not canonical_coverage_complete():
+                canonical_order_violation = True
     if canonical_order_violation:
         return True, False
     if canonical_coverage_complete():
