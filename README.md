@@ -95,11 +95,12 @@ Discussion 可以合法停在讨论；Plan 初始只创建 `task-plan.json`、�
 激活路径只有：
 
 1. 显式 `$agency-chief-of-staff`；
-2. frontmatter `description` 的隐式匹配；
-3. `agents/openai.yaml` 中的 UI metadata 和 default prompt；
-4. 仅为旧 prompt 保留的显式兼容入口 `$zhijuan-codex-agency-chief-of-staf`。
+2. Canonical frontmatter `description` 的隐式匹配；
+3. 早排序的动作型发现入口 `$agency-discuss-plan-execute-progress-archive`，在宿主因 Skill 目录过大而裁掉 Description 或后排名称时，只把真正的项目生命周期请求转交 Canonical；
+4. `agents/openai.yaml` 中的 UI metadata 和 default prompt；
+5. 仅为旧 prompt 保留的显式兼容入口 `$zhijuan-codex-agency-chief-of-staf`。
 
-旧入口关闭隐式调用；同一请求同时出现两个 slug 时只执行 canonical 入口。
+发现入口只有 `SKILL.md` 和 UI metadata，不实现第二套生命周期、不创建计划或任务；Canonical 仍是唯一运行契约。旧入口关闭隐式调用；同一请求同时出现两个主控 slug 时只执行 canonical 入口。
 
 安装器不会读取、创建、追加或修改项目/全局 `AGENTS.md`，也不提供 routing 注入参数。已有 `AGENTS.md` 仍作为项目规则正常生效，但不是本 Skill 的安装或激活机制。隔离 subagent/task 可以通过 worker packet、项目 `.codex/agents/*.toml`、`skills.config` 或临时任务指令获得专业上下文；验证必须证明这些配置没有覆盖主位置规则。
 
@@ -124,14 +125,15 @@ python3 scripts/install_skill.py
 python3 scripts/install_skill.py
 ```
 
-默认一次安装两个同源 runtime bundle：
+默认把两个同源 runtime bundle 和一个两文件发现入口放进同一可回滚事务：
 
 ```text
 ~/.agents/skills/agency-chief-of-staff
 ~/.agents/skills/zhijuan-codex-agency-chief-of-staf
+~/.agents/skills/agency-discuss-plan-execute-progress-archive
 ```
 
-前者是 canonical 入口；后者只兼容旧显式调用，不是第二份维护源。
+前者是 canonical 入口；第二个只兼容旧显式调用；`agency-discuss-plan-execute-progress-archive` 只解决大型 Skill 目录下 Description 或后排名称被宿主预算裁掉后的自然语言发现，不是第三份运行实现。
 
 覆盖不同版本：
 
@@ -140,19 +142,19 @@ python3 scripts/install_skill.py --force
 ```
 
 从准备交付的源码 checkout 独立读回安装态；只有 `status` 为
-`already-installed`，且 canonical/legacy 两个 `states_before` 都为 `current`，
+`already-installed`，且 canonical、legacy 和 discovery 三个 `states_before` 都为 `current`，
 当前 checkout 的 Runtime 能力才可归属于本机已安装 Skill。输出同时包含两套
-runtime 的逐文件 SHA-256 manifest，不能只看目录存在或 Skill 名称：
+runtime 与发现入口的逐文件 SHA-256 manifest，不能只看目录存在或 Skill 名称：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/install_skill.py --dry-run --json
 ```
 
-Dry Run 不修改安装：缺失时返回 `would-install`，与源码不同且未传 `--force` 时返回 `would-replace`，两套都一致时返回 `already-installed`。先审阅差异，再显式执行
+Dry Run 不修改安装：缺失时返回 `would-install`，与源码不同且未传 `--force` 时返回 `would-replace`，三个受管入口都一致时返回 `already-installed`。先审阅差异，再显式执行
 `--force`，随后重复上述 dry-run；已发布 tag 的安装仍以对应 tag 自带的 README
 和 manifest 为准。
 
-安装器只复制运行时 allowlist，并把两个 bundle 作为一个可回滚的 pair transaction 更新；不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
+安装器只复制运行时 allowlist，并把 canonical/legacy pair 与发现入口作为一个可回滚事务更新；不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
 
 专业 Agent 模板随 runtime 分发，但不会默认写入任何项目或用户配置。项目生命周期阶段三默认依据 `TEAM_PLAN.json` 做 Selected-only 准备，并且只有显式 `--apply` 才写当前项目：
 

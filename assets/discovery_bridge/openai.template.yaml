@@ -1,0 +1,7 @@
+interface:
+  display_name: "Agency Project Lifecycle · Codex 幕僚长"
+  short_description: "发现复杂项目需求并转交 Codex 幕僚长执行完整项目生命周期"
+  default_prompt: "使用 $agency-discuss-plan-execute-progress-archive，将匹配的项目型请求转交 $agency-chief-of-staff。"
+
+policy:
+  allow_implicit_invocation: true

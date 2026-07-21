@@ -42,8 +42,10 @@ class InstallSkillTests(unittest.TestCase):
             self.assertFalse(payload["agents_md_touched"])
             self.assertEqual(agents.read_text(encoding="utf-8"), "USER SENTINEL\n")
 
-            self.assertEqual(set(payload["targets"]), set(install_skill.INSTALL_NAMES))
-            for skill_name in install_skill.INSTALL_NAMES:
+            self.assertEqual(
+                set(payload["targets"]), set(install_skill.MANAGED_INSTALL_NAMES)
+            )
+            for skill_name in install_skill.MANAGED_INSTALL_NAMES:
                 installed = target_root / skill_name
                 files = {
                     str(path.relative_to(installed))
@@ -59,8 +61,23 @@ class InstallSkillTests(unittest.TestCase):
             canonical_yaml = (
                 target_root / install_skill.CANONICAL_SKILL_NAME / "agents/openai.yaml"
             ).read_text(encoding="utf-8")
+            discovery = target_root / install_skill.DISCOVERY_SKILL_NAME
+            discovery_skill = (discovery / "SKILL.md").read_text(encoding="utf-8")
+            discovery_yaml = (discovery / "agents/openai.yaml").read_text(encoding="utf-8")
             self.assertIn("allow_implicit_invocation: true", canonical_yaml)
             self.assertIn("allow_implicit_invocation: false", legacy_yaml)
+            self.assertIn("allow_implicit_invocation: true", discovery_yaml)
+            self.assertIn("name: agency-discuss-plan-execute-progress-archive", discovery_skill)
+            self.assertIn("../agency-chief-of-staff/SKILL.md", discovery_skill)
+            self.assertEqual(
+                set(payload["manifests"][install_skill.DISCOVERY_SKILL_NAME]),
+                {"SKILL.md", "agents/openai.yaml"},
+            )
+            for runtime_name in install_skill.INSTALL_NAMES:
+                nested_skill_files = list((target_root / runtime_name).rglob("SKILL.md"))
+                self.assertEqual(
+                    nested_skill_files, [target_root / runtime_name / "SKILL.md"]
+                )
             self.assertIn("旧显式调用兼容入口", legacy_yaml)
             self.assertNotIn("聚焦项目内容，按需协调专业团队", legacy_yaml)
 
@@ -70,11 +87,14 @@ class InstallSkillTests(unittest.TestCase):
             first = self.run_installer("--target-root", str(target_root))
             self.assertEqual(first.returncode, 0, first.stderr)
             installed = target_root / "zhijuan-codex-agency-chief-of-staf"
+            discovery = target_root / install_skill.DISCOVERY_SKILL_NAME
             (installed / "stale.txt").write_text("stale", encoding="utf-8")
+            (discovery / "stale.txt").write_text("stale", encoding="utf-8")
 
             replaced = self.run_installer("--target-root", str(target_root), "--force")
             self.assertEqual(replaced.returncode, 0, replaced.stderr)
             self.assertFalse((installed / "stale.txt").exists())
+            self.assertFalse((discovery / "stale.txt").exists())
             self.assertFalse(list(target_root.glob(".*.staging-*")))
             self.assertFalse(list(target_root.glob(".*.backup-*")))
 
@@ -114,9 +134,31 @@ class InstallSkillTests(unittest.TestCase):
             self.assertEqual(canonical.returncode, 0, canonical.stderr)
             self.assertEqual(json.loads(canonical.stdout)["status"], "already-installed")
 
+            discovery = target_root / install_skill.DISCOVERY_SKILL_NAME
+            (discovery / "stale.txt").write_text("stale", encoding="utf-8")
+            repaired = subprocess.run(
+                [
+                    "python3",
+                    str(canonical_installer),
+                    "--target-root",
+                    str(target_root),
+                    "--force",
+                    "--json",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(repaired.returncode, 0, repaired.stderr)
+            self.assertEqual(json.loads(repaired.stdout)["status"], "replaced")
+            self.assertEqual(
+                install_skill.installed_manifest(discovery),
+                install_skill.runtime_manifest(ROOT, install_skill.DISCOVERY_SKILL_NAME),
+            )
+
             manifests_before = {
                 name: install_skill.installed_manifest(target_root / name)
-                for name in install_skill.INSTALL_NAMES
+                for name in install_skill.MANAGED_INSTALL_NAMES
             }
             legacy_installer = (
                 target_root / install_skill.LEGACY_SKILL_NAME / "scripts/install_skill.py"
@@ -133,9 +175,47 @@ class InstallSkillTests(unittest.TestCase):
                 manifests_before,
                 {
                     name: install_skill.installed_manifest(target_root / name)
-                    for name in install_skill.INSTALL_NAMES
+                    for name in install_skill.MANAGED_INSTALL_NAMES
                 },
             )
+
+    def test_third_target_promotion_failure_rolls_back_every_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target_root = Path(tmp) / "skills"
+            targets = {
+                name: target_root / name for name in install_skill.MANAGED_INSTALL_NAMES
+            }
+            for name, target in targets.items():
+                target.mkdir(parents=True)
+                (target / "sentinel.txt").write_text(name, encoding="utf-8")
+
+            real_rename = Path.rename
+
+            def fail_discovery_promotion(path: Path, destination: object) -> Path:
+                destination_path = Path(destination)  # type: ignore[arg-type]
+                if (
+                    path.name.startswith(f".{install_skill.DISCOVERY_SKILL_NAME}.staging-")
+                    and destination_path == targets[install_skill.DISCOVERY_SKILL_NAME]
+                ):
+                    raise OSError("injected discovery promotion failure")
+                return real_rename(path, destination_path)
+
+            with mock.patch.object(
+                Path, "rename", autospec=True, side_effect=fail_discovery_promotion
+            ):
+                with self.assertRaisesRegex(OSError, "discovery promotion"):
+                    install_skill.replace_many_from_staging(ROOT, targets)
+
+            for name, target in targets.items():
+                self.assertEqual(
+                    (target / "sentinel.txt").read_text(encoding="utf-8"), name
+                )
+                self.assertEqual(
+                    install_skill.installed_manifest(target),
+                    {"sentinel.txt": install_skill.digest(target / "sentinel.txt")},
+                )
+            self.assertFalse(list(target_root.glob(".*.staging-*")))
+            self.assertFalse(list(target_root.glob(".*.backup-*")))
 
     def test_python_bytecode_is_detected_as_install_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

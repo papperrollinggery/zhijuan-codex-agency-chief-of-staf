@@ -99,8 +99,14 @@ if install.get("agents_md_touched") is not False:
     raise SystemExit("installer did not prove AGENTS.md remained untouched")
 if install["manifests"] != dry_run["manifests"]:
     raise SystemExit("runtime pair manifest drift after install")
-if set(install["targets"]) != {"agency-chief-of-staff", "zhijuan-codex-agency-chief-of-staf"}:
-    raise SystemExit("installer did not produce the canonical and legacy pair")
+if set(install["targets"]) != {
+    "agency-chief-of-staff",
+    "zhijuan-codex-agency-chief-of-staf",
+    "agency-discuss-plan-execute-progress-archive",
+}:
+    raise SystemExit("installer did not produce the runtime pair and discovery bridge")
+if set(install["manifests"]["agency-discuss-plan-execute-progress-archive"]) != {"SKILL.md", "agents/openai.yaml"}:
+    raise SystemExit("discovery bridge is not a two-file lightweight bundle")
 PY
 
 python3 - \
@@ -125,4 +131,4 @@ PROFILE_COMPAT_INSTALLED_ROOT="$TMP_ROOT/skills" \
   python3 -m unittest \
   tests.test_profile_compat.ProfileCompatibilityTests.test_installed_bundles_execute_full_receipt_flow
 
-echo "Release smoke passed: canonical/legacy bundles, opt-in profiles, and permanent read-only compatibility runner match source; model behavior not claimed."
+echo "Release smoke passed: canonical/legacy bundles, discovery bridge, opt-in profiles, and permanent read-only compatibility runner match source; model behavior not claimed."

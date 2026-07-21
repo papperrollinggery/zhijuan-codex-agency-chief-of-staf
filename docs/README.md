@@ -45,6 +45,8 @@ The four-stage lifecycle is intent-gated and lazily materialized. Team planning 
 
 The rc.4 fast path treats durable state as a continuity and evidence layer, not the work itself. Stable helper exit-0 JSON normally ends a lifecycle step; failed calls count against model-smoke overhead budgets, and prior canonical progress is read once only when a resumed task actually has evidence to recover.
 
+Large local Skill catalogs can exhaust Codex's metadata context budget, remove every Skill description, and omit later-sorted names before inference. The installed two-file `agency-discuss-plan-execute-progress-archive` discovery bridge stays near the visible Canonical entry, exposes the lifecycle actions in its name, and forwards only matching requests to the single canonical runtime; it does not duplicate orchestration or add work to Direct Mode.
+
 ## Design and historical records
 
 These records explain prior decisions or implementation work. Their embedded version, interface, and release statements are snapshots, not current compatibility claims.

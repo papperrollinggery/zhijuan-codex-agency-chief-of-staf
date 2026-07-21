@@ -24,7 +24,7 @@ class AgencyDoctorTests(unittest.TestCase):
             project.mkdir()
             sentinel = project / "AGENTS.md"
             sentinel.write_text("USER SENTINEL\n", encoding="utf-8")
-            for name in install_skill.INSTALL_NAMES:
+            for name in install_skill.MANAGED_INSTALL_NAMES:
                 install_skill.copy_runtime(ROOT, skills / name, name)
             native = {
                 "codex": "/usr/bin/codex",
@@ -38,6 +38,8 @@ class AgencyDoctorTests(unittest.TestCase):
             self.assertEqual(report["status"], "healthy")
             self.assertTrue(report["checks"]["canonical_implicit_true"])
             self.assertTrue(report["checks"]["legacy_implicit_false"])
+            self.assertTrue(report["checks"]["discovery_installed"])
+            self.assertTrue(report["checks"]["discovery_implicit_true"])
             self.assertEqual(report["project_agent_profiles"]["present_count"], 0)
             self.assertFalse(report["mutations_performed"])
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "USER SENTINEL\n")
@@ -64,7 +66,7 @@ class AgencyDoctorTests(unittest.TestCase):
             (project / "AGENTS.md").write_text(
                 "BEGIN agency-chief-of-staff routing\n", encoding="utf-8"
             )
-            for name in install_skill.INSTALL_NAMES:
+            for name in install_skill.MANAGED_INSTALL_NAMES:
                 install_skill.copy_runtime(ROOT, skills / name, name)
             native = {
                 "codex": None,

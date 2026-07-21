@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install canonical and legacy-compatible runtime bundles without AGENTS routing."""
+"""Install the runtime pair and lightweight discovery bridge without AGENTS routing."""
 
 from __future__ import annotations
 
@@ -14,11 +14,15 @@ from pathlib import Path
 
 CANONICAL_SKILL_NAME = "agency-chief-of-staff"
 LEGACY_SKILL_NAME = "zhijuan-codex-agency-chief-of-staf"
+DISCOVERY_SKILL_NAME = "agency-discuss-plan-execute-progress-archive"
 INSTALL_NAMES = (CANONICAL_SKILL_NAME, LEGACY_SKILL_NAME)
+MANAGED_INSTALL_NAMES = (*INSTALL_NAMES, DISCOVERY_SKILL_NAME)
 SKILL_NAME = CANONICAL_SKILL_NAME
 RUNTIME_FILES = (
     "SKILL.md",
     "agents/openai.yaml",
+    "assets/discovery_bridge/skill.template.md",
+    "assets/discovery_bridge/openai.template.yaml",
     "references/real-threads.md",
     "references/delivery-review.md",
     "references/long-running-work.md",
@@ -81,6 +85,14 @@ RUNTIME_FILES = (
     "scripts/deposit_knowledge.py",
     "scripts/validate_task_archive.py",
 )
+DISCOVERY_RUNTIME_FILES = (
+    "SKILL.md",
+    "agents/openai.yaml",
+)
+DISCOVERY_TEMPLATE_FILES = {
+    "SKILL.md": "assets/discovery_bridge/skill.template.md",
+    "agents/openai.yaml": "assets/discovery_bridge/openai.template.yaml",
+}
 
 
 def digest_bytes(data: bytes) -> str:
@@ -102,6 +114,14 @@ def runtime_source_path(root: Path, rel: str) -> Path:
     return path
 
 
+def runtime_files(skill_name: str) -> tuple[str, ...]:
+    if skill_name in INSTALL_NAMES:
+        return RUNTIME_FILES
+    if skill_name == DISCOVERY_SKILL_NAME:
+        return DISCOVERY_RUNTIME_FILES
+    raise ValueError(f"unsupported install name: {skill_name}")
+
+
 def validate_canonical_source(root: Path) -> None:
     """Reject execution from the rendered legacy bundle before it can rewrite both installs."""
     skill = runtime_source_path(root, "SKILL.md").read_text(encoding="utf-8")
@@ -116,9 +136,10 @@ def validate_canonical_source(root: Path) -> None:
 
 
 def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> bytes:
-    source = runtime_source_path(root, rel)
+    source_rel = DISCOVERY_TEMPLATE_FILES[rel] if skill_name == DISCOVERY_SKILL_NAME else rel
+    source = runtime_source_path(root, source_rel)
     data = source.read_bytes()
-    if skill_name == CANONICAL_SKILL_NAME:
+    if skill_name in {CANONICAL_SKILL_NAME, DISCOVERY_SKILL_NAME}:
         return data
     if skill_name != LEGACY_SKILL_NAME:
         raise ValueError(f"unsupported install name: {skill_name}")
@@ -161,7 +182,7 @@ def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> 
 def runtime_manifest(root: Path, skill_name: str = SKILL_NAME) -> dict[str, str]:
     return {
         rel: digest_bytes(render_runtime_bytes(root, rel, skill_name))
-        for rel in RUNTIME_FILES
+        for rel in runtime_files(skill_name)
     }
 
 
@@ -180,7 +201,7 @@ def installed_manifest(root: Path) -> dict[str, str]:
 def copy_runtime(
     source: Path, target: Path, skill_name: str = SKILL_NAME
 ) -> None:
-    for rel in RUNTIME_FILES:
+    for rel in runtime_files(skill_name):
         destination = target / rel
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(render_runtime_bytes(source, rel, skill_name))
@@ -197,7 +218,7 @@ def best_effort_remove(path: Path) -> None:
 
 
 def replace_many_from_staging(source: Path, targets: dict[str, Path]) -> None:
-    """Replace every managed bundle as one rollback-capable pair transaction."""
+    """Replace the runtime pair and discovery bridge in one rollback transaction."""
     staged: dict[str, Path] = {}
     backups: dict[str, Path] = {}
     promoted: set[str] = set()
@@ -248,7 +269,7 @@ def replace_from_staging(
     source: Path, target: Path, skill_name: str = SKILL_NAME
 ) -> None:
     """Compatibility helper for focused installer tests."""
-    effective_name = target.name if target.name in INSTALL_NAMES else skill_name
+    effective_name = target.name if target.name in MANAGED_INSTALL_NAMES else skill_name
     replace_many_from_staging(source, {effective_name: target})
 
 
@@ -262,7 +283,7 @@ def emit(result: dict[str, object], as_json: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Install canonical and legacy-compatible runtime bundles. This command "
+            "Install canonical/legacy runtime bundles and the discovery bridge. This command "
             "never reads or modifies project or global AGENTS.md files."
         )
     )
@@ -302,8 +323,8 @@ def main() -> None:
         emit(result, args.json)
         raise SystemExit(1)
     target_root = raw_target_root.resolve()
-    targets = {name: target_root / name for name in INSTALL_NAMES}
-    expected = {name: runtime_manifest(source, name) for name in INSTALL_NAMES}
+    targets = {name: target_root / name for name in MANAGED_INSTALL_NAMES}
+    expected = {name: runtime_manifest(source, name) for name in MANAGED_INSTALL_NAMES}
 
     for name, target in targets.items():
         if target.is_symlink():
@@ -347,7 +368,10 @@ def main() -> None:
             "target_root": str(target_root),
             "status": "conflict",
             "states": states,
-            "message": "installed pair differs; re-run with --force to replace both bundles",
+            "message": (
+                "installed runtime set differs; re-run with --force to replace the "
+                "canonical/legacy pair and discovery bridge"
+            ),
             "agents_md_touched": False,
         }
         emit(result, args.json)
@@ -366,6 +390,9 @@ def main() -> None:
         "status": status,
         "states_before": states,
         "runtime_files_per_bundle": len(RUNTIME_FILES),
+        "runtime_file_counts": {
+            name: len(runtime_files(name)) for name in MANAGED_INSTALL_NAMES
+        },
         "manifests": expected,
         "agents_md_touched": False,
     }

@@ -10,7 +10,14 @@ import sys
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
-from install_skill import LEGACY_SKILL_NAME, RUNTIME_FILES, SKILL_NAME, runtime_manifest
+from install_skill import (
+    DISCOVERY_RUNTIME_FILES,
+    DISCOVERY_SKILL_NAME,
+    LEGACY_SKILL_NAME,
+    RUNTIME_FILES,
+    SKILL_NAME,
+    runtime_manifest,
+)
 from protocol_contract import (
     InvalidAgencyPacket,
     REVIEW_OUTCOME_RE,
@@ -27,6 +34,8 @@ from validate_agent_profiles import PROFILE_NAMES, validate_profile_set
 EXPECTED_RUNTIME_FILES = (
     "SKILL.md",
     "agents/openai.yaml",
+    "assets/discovery_bridge/skill.template.md",
+    "assets/discovery_bridge/openai.template.yaml",
     "references/real-threads.md",
     "references/delivery-review.md",
     "references/long-running-work.md",
@@ -89,6 +98,7 @@ EXPECTED_RUNTIME_FILES = (
     "scripts/deposit_knowledge.py",
     "scripts/validate_task_archive.py",
 )
+EXPECTED_DISCOVERY_RUNTIME_FILES = ("SKILL.md", "agents/openai.yaml")
 
 PROHIBITED_ROUTING_MARKERS = (
     "AGENTS_ROUTING_SNIPPET",
@@ -251,7 +261,9 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
-def parse_frontmatter(skill_path: Path) -> dict[str, str]:
+def parse_frontmatter(
+    skill_path: Path, expected_name: str = SKILL_NAME
+) -> dict[str, str]:
     lines = skill_path.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0] != "---":
         fail("SKILL.md must start with YAML frontmatter")
@@ -264,10 +276,13 @@ def parse_frontmatter(skill_path: Path) -> dict[str, str]:
         if not line.strip() or ":" not in line:
             fail(f"invalid frontmatter line: {line!r}")
         key, value = line.split(":", 1)
-        fields[key.strip()] = value.strip().strip('"')
+        normalized_key = key.strip()
+        if normalized_key in fields:
+            fail(f"SKILL.md frontmatter contains duplicate field: {normalized_key}")
+        fields[normalized_key] = value.strip().strip('"')
     if set(fields) != {"name", "description"}:
         fail("SKILL.md frontmatter must contain only name and description")
-    if fields["name"] != SKILL_NAME:
+    if fields["name"] != expected_name:
         fail(f"unexpected skill name: {fields['name']}")
     if not fields["description"]:
         fail("skill description must not be empty")
@@ -279,9 +294,12 @@ def parse_frontmatter(skill_path: Path) -> dict[str, str]:
         fail("description containing a colon must be YAML-quoted")
     if raw_description.startswith('"'):
         try:
-            json.loads(raw_description)
+            decoded = json.loads(raw_description)
         except json.JSONDecodeError as exc:
             raise ValueError("SKILL.md description is not a valid quoted scalar") from exc
+        if not isinstance(decoded, str) or not decoded:
+            fail("skill description must be a non-empty string")
+        fields["description"] = decoded
     return fields
 
 
@@ -840,6 +858,8 @@ def main() -> None:
 
     if tuple(RUNTIME_FILES) != EXPECTED_RUNTIME_FILES:
         fail("installer runtime manifest drifted from the independent package contract")
+    if tuple(DISCOVERY_RUNTIME_FILES) != EXPECTED_DISCOVERY_RUNTIME_FILES:
+        fail("discovery bridge manifest drifted from the independent package contract")
 
     fields = parse_frontmatter(root / "SKILL.md")
     skill_text = (root / "SKILL.md").read_text(encoding="utf-8")
@@ -852,6 +872,43 @@ def main() -> None:
     validate_visualization_assets(root)
     agent_profiles = validate_profile_set(root)
     manifest = runtime_manifest(root)
+    discovery_manifest = runtime_manifest(root, DISCOVERY_SKILL_NAME)
+    discovery_path = root / "activation" / DISCOVERY_SKILL_NAME / "SKILL.md"
+    discovery_fields = parse_frontmatter(discovery_path, DISCOVERY_SKILL_NAME)
+    discovery_text = discovery_path.read_text(encoding="utf-8")
+    description = discovery_fields["description"]
+    for cue in (
+        "discuss goals and boundaries before planning",
+        "ordinary questions",
+        "one-line translation",
+        "a simple code edit",
+        "an explicit single-file fix",
+        "a valid AGENCY_WORKER packet",
+        "thread or release readiness without work intent",
+        "maintenance of the Agency Chief of Staff source repository",
+    ):
+        if cue not in description:
+            fail(f"discovery bridge description is missing activation boundary: {cue}")
+    for cue in (
+        "../agency-chief-of-staff/SKILL.md",
+        "Do not invoke this bridge again",
+        "Do not create plans, files, tasks, Agents, or Threads",
+    ):
+        if cue not in discovery_text:
+            fail(f"discovery bridge is missing canonical handoff boundary: {cue}")
+    validate_openai_yaml(
+        root / "activation" / DISCOVERY_SKILL_NAME / "agents" / "openai.yaml"
+    )
+    if discovery_path.read_bytes() != (
+        root / "assets" / "discovery_bridge" / "skill.template.md"
+    ).read_bytes():
+        fail("discovery bridge Skill and installed template must be byte-identical")
+    if (
+        root / "activation" / DISCOVERY_SKILL_NAME / "agents" / "openai.yaml"
+    ).read_bytes() != (
+        root / "assets" / "discovery_bridge" / "openai.template.yaml"
+    ).read_bytes():
+        fail("discovery bridge metadata and installed template must be byte-identical")
 
     authored_files = authored_text_files(root)
     authored_relatives = {str(path.relative_to(root)) for path in authored_files}
@@ -893,6 +950,7 @@ def main() -> None:
         "skill": fields["name"],
         "skill_lines": line_count,
         "runtime_files": len(manifest),
+        "discovery_runtime_files": len(discovery_manifest),
         "custom_agent_profiles": len(PROFILE_NAMES),
         "custom_agent_template_parity": agent_profiles["project_template_parity"],
         "behavior_contract_cases": case_count,

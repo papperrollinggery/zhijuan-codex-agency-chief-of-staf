@@ -43,6 +43,28 @@ class ActivationLifecycleTests(unittest.TestCase):
             metadata,
         )
 
+    def test_action_named_discovery_bridge_is_lightweight_and_exclusion_safe(self) -> None:
+        bridge_root = ROOT / "activation" / "agency-discuss-plan-execute-progress-archive"
+        skill = (bridge_root / "SKILL.md").read_text(encoding="utf-8")
+        metadata = (bridge_root / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertIn("name: agency-discuss-plan-execute-progress-archive", skill)
+        self.assertIn("../agency-chief-of-staff/SKILL.md", skill)
+        self.assertIn("discovery-only bridge", skill)
+        description = skill.splitlines()[2]
+        for exclusion in (
+            "ordinary questions",
+            "one-line translation",
+            "a simple code edit",
+            "an explicit single-file fix",
+            "AGENCY_WORKER",
+            "maintenance of the Agency Chief of Staff source repository",
+        ):
+            self.assertIn(exclusion, skill)
+            self.assertIn(exclusion, description)
+        self.assertIn("thread or release readiness without work intent", description)
+        self.assertIn("Do not invoke this bridge again", skill)
+        self.assertIn("allow_implicit_invocation: true", metadata)
+
     def test_durable_statuses_are_in_the_core_skill_contract(self) -> None:
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         for status in (
