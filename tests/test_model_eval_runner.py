@@ -1330,69 +1330,79 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
 
     def test_only_single_cat_skill_read_is_passive_before_boot(self) -> None:
-        cat_skill_started = {
-            "type": "item.started",
-            "item": {
-                "id": "skill",
-                "type": "command_execution",
-                "status": "in_progress",
-                "command": "/bin/cat /tmp/skill/SKILL.md",
-            },
-        }
-        cat_skill = {
-            "type": "item.completed",
-            "item": {
-                "id": "skill",
-                "type": "command_execution",
-                "status": "completed",
-                "exit_code": 0,
-                "command": "/bin/cat /tmp/skill/SKILL.md",
-            },
-        }
-        bootstrap = {
-            "type": "item.completed",
-            "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实"},
-        }
-        allowed = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (cat_skill_started, cat_skill, bootstrap))),
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skill = root / "skill" / "SKILL.md"
+            skill.parent.mkdir()
+            skill.write_text("skill contract\n", encoding="utf-8")
+            cat_skill_started = {
+                "type": "item.started",
+                "item": {
+                    "id": "skill",
+                    "type": "command_execution",
+                    "status": "in_progress",
+                    "command": f"/bin/cat {skill}",
+                },
+            }
+            cat_skill = {
+                "type": "item.completed",
+                "item": {
+                    "id": "skill",
+                    "type": "command_execution",
+                    "status": "completed",
+                    "exit_code": 0,
+                    "command": f"/bin/cat {skill}",
+                },
+            }
+            bootstrap = {
+                "type": "item.completed",
+                "item": {"type": "assistant_message", "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实"},
+            }
+            allowed = runner.contract_failures(
+                self.base_case(),
+                runner.event_surface(
+                    "\n".join(
+                        map(json.dumps, (cat_skill_started, cat_skill, bootstrap))
+                    ),
+                    "",
+                    installed_skill_path=skill,
+                ),
+            )
+            self.assertNotIn("task action preceded COS_BOOT_RECEIPT", allowed)
+            observed = runner.event_surface(
+                "\n".join(map(json.dumps, (cat_skill_started, cat_skill))),
                 "",
-                installed_skill_path=Path("/tmp/skill/SKILL.md"),
-            ),
-        )
-        self.assertNotIn("task action preceded COS_BOOT_RECEIPT", allowed)
-        observed = runner.event_surface(
-            "\n".join(map(json.dumps, (cat_skill_started, cat_skill))),
-            "",
-            installed_skill_path=Path("/tmp/skill/SKILL.md"),
-        )
-        self.assertEqual(observed["passive_skill_reads_completed"], 1)
-        smuggled = dict(cat_skill)
-        smuggled["item"] = {**cat_skill["item"], "command": "touch x; /bin/cat /tmp/skill/SKILL.md"}
-        rejected = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (smuggled, bootstrap))),
-                "",
-                installed_skill_path=Path("/tmp/skill/SKILL.md"),
-            ),
-        )
-        self.assertIn("task action preceded COS_BOOT_RECEIPT", rejected)
-        foreign_skill = dict(cat_skill)
-        foreign_skill["item"] = {
-            **cat_skill["item"],
-            "command": "/bin/cat /tmp/foreign/SKILL.md",
-        }
-        foreign = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (foreign_skill, bootstrap))),
-                "",
-                installed_skill_path=Path("/tmp/skill/SKILL.md"),
-            ),
-        )
-        self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
+                installed_skill_path=skill,
+            )
+            self.assertEqual(observed["passive_skill_reads_completed"], 1)
+            smuggled = dict(cat_skill)
+            smuggled["item"] = {
+                **cat_skill["item"],
+                "command": f"touch x; /bin/cat {skill}",
+            }
+            rejected = runner.contract_failures(
+                self.base_case(),
+                runner.event_surface(
+                    "\n".join(map(json.dumps, (smuggled, bootstrap))),
+                    "",
+                    installed_skill_path=skill,
+                ),
+            )
+            self.assertIn("task action preceded COS_BOOT_RECEIPT", rejected)
+            foreign_skill = dict(cat_skill)
+            foreign_skill["item"] = {
+                **cat_skill["item"],
+                "command": f"/bin/cat {root / 'foreign' / 'SKILL.md'}",
+            }
+            foreign = runner.contract_failures(
+                self.base_case(),
+                runner.event_surface(
+                    "\n".join(map(json.dumps, (foreign_skill, bootstrap))),
+                    "",
+                    installed_skill_path=skill,
+                ),
+            )
+            self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
 
     def test_complete_sed_skill_read_through_shell_is_passive(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1400,9 +1410,21 @@ class ModelEvalRunnerTests(unittest.TestCase):
             skill = fixture / ".agents" / "skills" / "agency-chief-of-staff" / "SKILL.md"
             skill.parent.mkdir(parents=True)
             skill.write_text("one\ntwo\nthree\n", encoding="utf-8")
+            reference = skill.parent / "references" / "team-orchestration.md"
+            reference.parent.mkdir()
+            reference.write_text("team\nroles\nwaves\n", encoding="utf-8")
 
             def observed(command: str) -> dict[str, object]:
-                event = {
+                started = {
+                    "type": "item.started",
+                    "item": {
+                        "id": "skill",
+                        "type": "command_execution",
+                        "status": "in_progress",
+                        "command": command,
+                    },
+                }
+                completed = {
                     "type": "item.completed",
                     "item": {
                         "id": "skill",
@@ -1413,7 +1435,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
                     },
                 }
                 return runner.event_surface(
-                    json.dumps(event),
+                    "\n".join(map(json.dumps, (started, completed))),
                     "",
                     installed_skill_path=skill,
                     fixture_root=fixture,
@@ -1430,6 +1452,13 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "sed -n '1,240p' .agents/skills/agency-chief-of-staff/SKILL.md\""
             )
             self.assertEqual(counted_complete["passive_skill_reads_completed"], 1)
+            chained_reference = observed(
+                "/bin/zsh -lc \"sed -n '1,260p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '1,320p' "
+                ".agents/skills/agency-chief-of-staff/references/team-orchestration.md\""
+            )
+            self.assertEqual(chained_reference["passive_skill_reads_completed"], 1)
             counted_mismatch = observed(
                 "/bin/zsh -lc \"wc -l README.md && "
                 "sed -n '1,240p' .agents/skills/agency-chief-of-staff/SKILL.md\""
@@ -1440,11 +1469,71 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
             )
             self.assertEqual(partial["passive_skill_reads_completed"], 0)
+            partial_reference = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '1,2p' "
+                ".agents/skills/agency-chief-of-staff/references/team-orchestration.md\""
+            )
+            self.assertEqual(partial_reference["passive_skill_reads_completed"], 0)
             injected = observed(
                 "/bin/zsh -lc \"sed -n '1,240p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md; touch escaped\""
             )
             self.assertEqual(injected["passive_skill_reads_completed"], 0)
+            for unsafe_suffix in (
+                " && touch escaped",
+                " | tee escaped",
+                " > escaped",
+                " && cat /etc/passwd",
+            ):
+                with self.subTest(unsafe_suffix=unsafe_suffix):
+                    unsafe = observed(
+                        "/bin/zsh -lc \"sed -n '1,240p' "
+                        ".agents/skills/agency-chief-of-staff/SKILL.md"
+                        f"{unsafe_suffix}\""
+                    )
+                    self.assertEqual(unsafe["passive_skill_reads_completed"], 0)
+            missing = observed(
+                "/bin/cat "
+                ".agents/skills/agency-chief-of-staff/references/missing.md"
+            )
+            self.assertEqual(missing["passive_skill_reads_completed"], 0)
+            external = fixture / "external.md"
+            external.write_text("outside\n", encoding="utf-8")
+            external_read = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                f"cat {external}\""
+            )
+            self.assertEqual(external_read["passive_skill_reads_completed"], 0)
+            symlink = reference.parent / "outside-link.md"
+            symlink.symlink_to(external)
+            symlink_read = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "cat .agents/skills/agency-chief-of-staff/"
+                "references/outside-link.md\""
+            )
+            self.assertEqual(symlink_read["passive_skill_reads_completed"], 0)
+            exploit_base = reference.parent / "ref"
+            exploit_base.write_text("reference\n", encoding="utf-8")
+            exploit_literal = reference.parent / "ref&touch${IFS}escaped"
+            exploit_literal.write_text("literal\n", encoding="utf-8")
+            exploit_inner = (
+                f"cat {skill} && cat {exploit_base}&touch${{IFS}}escaped"
+            )
+            exploit_command = f"/bin/sh -lc '{exploit_inner}'"
+            subprocess.run(
+                ["/bin/sh", "-lc", exploit_inner],
+                cwd=fixture,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertTrue((fixture / "escaped").is_file())
+            exploit = observed(exploit_command)
+            self.assertEqual(exploit["passive_skill_reads_completed"], 0)
             untrusted_shell = observed(
                 "/tmp/zsh -lc \"sed -n '1,240p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
@@ -1457,6 +1546,16 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.assertEqual(untrusted_sed["passive_skill_reads_completed"], 0)
 
     def test_activation_contract_requires_or_forbids_observed_skill_read(self) -> None:
+        skill_path = ROOT / "SKILL.md"
+        skill_read_started = {
+            "type": "item.started",
+            "item": {
+                "id": "skill",
+                "type": "command_execution",
+                "status": "in_progress",
+                "command": f"/bin/cat {skill_path}",
+            },
+        }
         skill_read = {
             "type": "item.completed",
             "item": {
@@ -1464,18 +1563,151 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "type": "command_execution",
                 "status": "completed",
                 "exit_code": 0,
-                "command": "/bin/cat /tmp/skill/SKILL.md",
+                "command": f"/bin/cat {skill_path}",
             },
         }
         parsed = runner.event_surface(
-            json.dumps(skill_read),
+            "\n".join(map(json.dumps, (skill_read_started, skill_read))),
             "done",
-            installed_skill_path=Path("/tmp/skill/SKILL.md"),
+            installed_skill_path=skill_path,
         )
         required = self.base_case()
         required.pop("require_takeover")
         required["require_skill_read"] = True
         self.assertNotIn("required Skill read was not observed", runner.contract_failures(required, parsed))
+        unpaired = runner.event_surface(
+            json.dumps(skill_read),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertIn(
+            "required Skill read was not observed",
+            runner.contract_failures(required, unpaired),
+        )
+        malformed_start = json.loads(json.dumps(skill_read_started))
+        malformed_start["item"]["status"] = "completed"
+        malformed_pair = runner.event_surface(
+            "\n".join(map(json.dumps, (malformed_start, skill_read))),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertIn(
+            "required Skill read was not observed",
+            runner.contract_failures(required, malformed_pair),
+        )
+        failed_completion = json.loads(json.dumps(skill_read))
+        failed_completion["item"]["status"] = "failed"
+        failed_completion["item"]["exit_code"] = 1
+        failed_then_success = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (skill_read_started, failed_completion, skill_read),
+                )
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        failed_then_success_failures = runner.contract_failures(
+            required, failed_then_success
+        )
+        self.assertIn(
+            "required Skill read was not observed", failed_then_success_failures
+        )
+        self.assertIn(
+            "duplicate passive Skill read completion observed",
+            failed_then_success_failures,
+        )
+        success_then_duplicate = runner.event_surface(
+            "\n".join(
+                map(json.dumps, (skill_read_started, skill_read, skill_read))
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertIn(
+            "duplicate passive Skill read completion observed",
+            runner.contract_failures(required, success_then_duplicate),
+        )
+        duplicate_start = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (skill_read_started, skill_read_started, skill_read),
+                )
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertIn(
+            "duplicate passive Skill read start observed",
+            runner.contract_failures(required, duplicate_start),
+        )
+        valid_then_unmatched = json.loads(json.dumps(skill_read))
+        valid_then_unmatched["item"]["id"] = "unmatched"
+        valid_pair_plus_unmatched = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (skill_read_started, skill_read, valid_then_unmatched),
+                )
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertIn(
+            "passive Skill read protocol error observed",
+            runner.contract_failures(required, valid_pair_plus_unmatched),
+        )
+        malformed_completion = json.loads(json.dumps(skill_read))
+        malformed_completion["item"]["status"] = "in_progress"
+        malformed_completion["item"].pop("exit_code")
+        second_started = json.loads(json.dumps(skill_read_started))
+        second_started["item"]["id"] = "second"
+        second_completed = json.loads(json.dumps(skill_read))
+        second_completed["item"]["id"] = "second"
+        malformed_then_valid = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (
+                        skill_read_started,
+                        malformed_completion,
+                        second_started,
+                        second_completed,
+                    ),
+                )
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertEqual(malformed_then_valid["passive_skill_reads_completed"], 1)
+        self.assertIn(
+            "passive Skill read protocol error observed",
+            runner.contract_failures(required, malformed_then_valid),
+        )
+        nonzero_completion = json.loads(json.dumps(skill_read))
+        nonzero_completion["item"]["exit_code"] = 1
+        nonzero_then_valid = runner.event_surface(
+            "\n".join(
+                map(
+                    json.dumps,
+                    (
+                        skill_read_started,
+                        nonzero_completion,
+                        second_started,
+                        second_completed,
+                    ),
+                )
+            ),
+            "done",
+            installed_skill_path=skill_path,
+        )
+        self.assertEqual(nonzero_then_valid["passive_skill_reads_completed"], 1)
+        self.assertNotIn(
+            "passive Skill read protocol error observed",
+            runner.contract_failures(required, nonzero_then_valid),
+        )
         self.assertIn("required Skill read was not observed", runner.contract_failures(required, "done"))
         excluded = self.base_case()
         excluded.update(
@@ -1566,6 +1798,10 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "command": f"/bin/cat {skill_path}",
             },
         }
+        skill_read_started = json.loads(json.dumps(skill_read))
+        skill_read_started["type"] = "item.started"
+        skill_read_started["item"]["status"] = "in_progress"
+        skill_read_started["item"].pop("exit_code")
         boot = {
             "type": "item.completed",
             "item": {
@@ -1575,7 +1811,12 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         def surface_for(*announcements: dict[str, object]) -> dict[str, object]:
             return runner.event_surface(
-                "\n".join(map(json.dumps, (*announcements, skill_read, boot))),
+                "\n".join(
+                    map(
+                        json.dumps,
+                        (*announcements, skill_read_started, skill_read, boot),
+                    )
+                ),
                 "",
                 installed_skill_path=skill_path,
                 fixture_root=ROOT,
@@ -1658,13 +1899,23 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
         read_before_announcement = runner.event_surface(
-            "\n".join(map(json.dumps, (skill_read, announcement, boot))),
+            "\n".join(
+                map(
+                    json.dumps,
+                    (skill_read_started, skill_read, announcement, boot),
+                )
+            ),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,
         )
         read_after_boot = runner.event_surface(
-            "\n".join(map(json.dumps, (announcement, boot, skill_read))),
+            "\n".join(
+                map(
+                    json.dumps,
+                    (announcement, boot, skill_read_started, skill_read),
+                )
+            ),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,
@@ -1674,31 +1925,51 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
         no_announcement = runner.event_surface(
-            "\n".join(map(json.dumps, (skill_read, boot))),
+            "\n".join(map(json.dumps, (skill_read_started, skill_read, boot))),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,
         )
         second_read = json.loads(json.dumps(skill_read))
         second_read["item"]["id"] = "skill-read-2"
+        second_read_started = json.loads(json.dumps(skill_read_started))
+        second_read_started["item"]["id"] = "skill-read-2"
         early_then_valid_read = runner.event_surface(
-            "\n".join(map(json.dumps, (skill_read, announcement, second_read, boot))),
+            "\n".join(
+                map(
+                    json.dumps,
+                    (
+                        skill_read_started,
+                        skill_read,
+                        announcement,
+                        second_read_started,
+                        second_read,
+                        boot,
+                    ),
+                )
+            ),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,
         )
-        started_read = json.loads(json.dumps(skill_read))
-        started_read["type"] = "item.started"
-        started_read["item"]["status"] = "in_progress"
-        started_read["item"].pop("exit_code")
         split_read = runner.event_surface(
-            "\n".join(map(json.dumps, (started_read, announcement, skill_read, boot))),
+            "\n".join(
+                map(
+                    json.dumps,
+                    (skill_read_started, announcement, skill_read, boot),
+                )
+            ),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,
         )
         duplicate_completion = runner.event_surface(
-            "\n".join(map(json.dumps, (announcement, skill_read, skill_read, boot))),
+            "\n".join(
+                map(
+                    json.dumps,
+                    (announcement, skill_read_started, skill_read, skill_read, boot),
+                )
+            ),
             "",
             installed_skill_path=skill_path,
             fixture_root=ROOT,

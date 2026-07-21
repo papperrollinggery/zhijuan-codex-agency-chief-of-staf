@@ -1061,62 +1061,85 @@ def is_passive_skill_read(
     ):
         trusted_shell = True
         try:
-            parts = shlex.split(parts[2])
+            lexer = shlex.shlex(
+                parts[2], posix=True, punctuation_chars=";&|<>()"
+            )
+            lexer.whitespace_split = True
+            lexer.commenters = ""
+            parts = list(lexer)
         except ValueError:
             return False
-    candidate: Path | None = None
-    complete_read = False
-    if len(parts) == 2 and parts[0] in {"/bin/cat", "cat"}:
-        candidate = Path(parts[1])
-        complete_read = True
-    elif (
-        len(parts) == 4
-        and parts[0] in {"/usr/bin/sed", "sed"}
-        and parts[1] == "-n"
-    ):
-        match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", parts[2])
-        candidate = Path(parts[3])
-        if match is not None:
+    segments: list[list[str]] = [[]]
+    for part in parts:
+        if part == "&&":
+            if not trusted_shell or not segments[-1]:
+                return False
+            segments.append([])
+            continue
+        if any(operator in part for operator in ("&", ";", "|", "<", ">", "(", ")")):
+            return False
+        segments[-1].append(part)
+    if not segments[-1] or len(segments) > 8:
+        return False
+
+    skill_path = installed_skill_path.resolve(strict=False)
+    skill_root = skill_path.parent
+
+    def resolved_bundle_target(raw: str) -> Path | None:
+        if re.search(r"[\x00-\x1f\x7f$`*?\[\]{}!~\\#]", raw):
+            return None
+        candidate = Path(raw)
+        if not candidate.is_absolute():
+            if fixture_root is None:
+                return None
+            candidate = fixture_root / candidate
+        resolved = candidate.resolve(strict=False)
+        if resolved != skill_root and not resolved.is_relative_to(skill_root):
+            return None
+        if not candidate.exists() or candidate.is_symlink() or not candidate.is_file():
+            return None
+        return resolved
+
+    canonical_complete = False
+    for segment in segments:
+        target: Path | None = None
+        complete = False
+        if len(segment) == 2 and segment[0] in {"/bin/cat", "cat"}:
+            target = resolved_bundle_target(segment[1])
+            complete = target is not None
+        elif (
+            len(segment) == 4
+            and segment[0] in {"/usr/bin/sed", "sed"}
+            and segment[1] == "-n"
+        ):
+            match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", segment[2])
+            target = resolved_bundle_target(segment[3])
+            if match is None or target is None:
+                return False
             if match.group(1) == "$":
-                complete_read = True
+                complete = True
             else:
                 try:
-                    line_count = len(
-                        installed_skill_path.read_text(encoding="utf-8").splitlines()
-                    )
+                    line_count = len(target.read_text(encoding="utf-8").splitlines())
                 except OSError:
                     return False
-                complete_read = int(match.group(1)) >= line_count
-    elif (
-        trusted_shell
-        and len(parts) == 8
-        and parts[0] in {"/usr/bin/wc", "wc"}
-        and parts[1] == "-l"
-        and parts[3] == "&&"
-        and parts[4] in {"/usr/bin/sed", "sed"}
-        and parts[5] == "-n"
-        and parts[2] == parts[7]
-    ):
-        match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", parts[6])
-        candidate = Path(parts[7])
-        if match is not None:
-            if match.group(1) == "$":
-                complete_read = True
-            else:
-                try:
-                    line_count = len(
-                        installed_skill_path.read_text(encoding="utf-8").splitlines()
-                    )
-                except OSError:
-                    return False
-                complete_read = int(match.group(1)) >= line_count
-    if candidate is not None and not candidate.is_absolute() and fixture_root is not None:
-        candidate = fixture_root / candidate
-    return (
-        complete_read
-        and candidate is not None
-        and candidate.resolve(strict=False) == installed_skill_path.resolve(strict=False)
-    )
+                complete = int(match.group(1)) >= line_count
+        elif (
+            len(segment) == 3
+            and segment[0] in {"/usr/bin/wc", "wc"}
+            and segment[1] == "-l"
+        ):
+            target = resolved_bundle_target(segment[2])
+            if target is None:
+                return False
+            continue
+        else:
+            return False
+        if not complete:
+            return False
+        if target == skill_path:
+            canonical_complete = True
+    return canonical_complete
 
 
 def execution_cwd_matches(value: object, fixture: Path) -> bool:
@@ -1552,11 +1575,14 @@ def event_surface(
     task_action_event_indexes: list[int] = []
     collaboration_event_indexes: list[int] = []
     last_file_change_event_index = -1
-    passive_skill_read_ids: set[str] = set()
     passive_skill_reads_completed: set[str] = set()
+    passive_skill_read_started_commands: dict[str, str] = {}
+    passive_skill_read_terminal_ids: set[str] = set()
     passive_skill_read_first_event_indexes: dict[str, int] = {}
     passive_skill_read_completion_event_indexes: dict[str, int] = {}
+    duplicate_passive_skill_read_starts: set[str] = set()
     duplicate_passive_skill_read_completions: set[str] = set()
+    passive_skill_read_protocol_errors: set[str] = set()
     jsonl_parse_errors = 0
     thread_started_ids: list[str] = []
     turn_started_count = 0
@@ -1612,25 +1638,83 @@ def event_surface(
                     and type(exit_code) is int
                     and exit_code == 0
                 )
+                valid_command_terminal = (
+                    status == "completed"
+                    and type(exit_code) is int
+                ) or (
+                    status == "failed"
+                    and type(exit_code) is int
+                    and exit_code != 0
+                )
             else:
                 tool_success = status == "completed"
+                valid_command_terminal = False
             passive_skill_read = is_passive_skill_read(
                 item, installed_skill_path, fixture_root
             )
             # The startup contract is about attempted task actions, not only
             # successful ones: a started or failed edit/read before boot is still an action.
             item_id = item.get("id")
-            if passive_skill_read:
-                if isinstance(item_id, str):
-                    passive_skill_read_ids.add(item_id)
-                    passive_skill_read_first_event_indexes.setdefault(item_id, index)
-                    if completed and tool_success:
-                        if item_id in passive_skill_read_completion_event_indexes:
-                            duplicate_passive_skill_read_completions.add(item_id)
-                        else:
+            command = item.get("command")
+            passive_event = False
+            if not completed:
+                if (
+                    passive_skill_read
+                    and isinstance(item_id, str)
+                    and item_id
+                    and isinstance(command, str)
+                    and status == "in_progress"
+                    and exit_code is None
+                ):
+                    if (
+                        item_id in passive_skill_read_started_commands
+                        or item_id in passive_skill_read_terminal_ids
+                    ):
+                        duplicate_passive_skill_read_starts.add(item_id)
+                        passive_skill_read_protocol_errors.add(
+                            f"duplicate-start:{item_id}"
+                        )
+                    else:
+                        passive_skill_read_started_commands[item_id] = command
+                        passive_skill_read_first_event_indexes[item_id] = index
+                        passive_event = True
+                elif passive_skill_read:
+                    passive_skill_read_protocol_errors.add(
+                        f"invalid-start:{item_id!r}"
+                    )
+            elif (
+                isinstance(item_id, str)
+                and item_id in passive_skill_read_started_commands
+            ):
+                if item_id in passive_skill_read_terminal_ids:
+                    duplicate_passive_skill_read_completions.add(item_id)
+                    passive_skill_read_protocol_errors.add(
+                        f"duplicate-completion:{item_id}"
+                    )
+                else:
+                    passive_skill_read_terminal_ids.add(item_id)
+                    if not valid_command_terminal:
+                        passive_skill_read_protocol_errors.add(
+                            f"invalid-completion:{item_id}"
+                        )
+                    elif (
+                        passive_skill_read
+                        and isinstance(command, str)
+                        and passive_skill_read_started_commands[item_id] == command
+                    ):
+                        passive_event = True
+                        if tool_success:
                             passive_skill_read_completion_event_indexes[item_id] = index
                             passive_skill_reads_completed.add(item_id)
-            else:
+                    else:
+                        passive_skill_read_protocol_errors.add(
+                            f"mismatched-completion:{item_id}"
+                        )
+            elif passive_skill_read:
+                passive_skill_read_protocol_errors.add(
+                    f"unmatched-completion:{item_id!r}"
+                )
+            if not passive_event:
                 task_action_event_indexes.append(index)
             if completed and tool_success:
                 tool_item_ids.add(str(item.get("id", f"event-{index}")))
@@ -1675,6 +1759,9 @@ def event_surface(
                         "sender_thread_id": item.get("sender_thread_id"),
                         "receiver_declared": receiver_id in receiver_ids,
                     }
+
+    for item_id in passive_skill_read_started_commands.keys() - passive_skill_read_terminal_ids:
+        passive_skill_read_protocol_errors.add(f"unterminated-start:{item_id}")
 
     root_thread_id = (
         thread_started_ids[0]
@@ -1748,6 +1835,12 @@ def event_surface(
         ),
         "duplicate_passive_skill_read_completion_count": len(
             duplicate_passive_skill_read_completions
+        ),
+        "duplicate_passive_skill_read_start_count": len(
+            duplicate_passive_skill_read_starts
+        ),
+        "passive_skill_read_protocol_errors": sorted(
+            passive_skill_read_protocol_errors
         ),
     }
 
@@ -1880,6 +1973,16 @@ def contract_failures(
             surface_or_events.get("duplicate_passive_skill_read_completion_count", 0)
         )
     )
+    duplicate_passive_read_starts = (
+        0
+        if isinstance(surface_or_events, str)
+        else int(surface_or_events.get("duplicate_passive_skill_read_start_count", 0))
+    )
+    passive_read_protocol_errors = (
+        []
+        if isinstance(surface_or_events, str)
+        else surface_or_events.get("passive_skill_read_protocol_errors", [])
+    )
     require_skill_read = bool(
         case.get(
             "require_skill_read",
@@ -1896,7 +1999,13 @@ def contract_failures(
     )
     if require_skill_read and passive_reads < 1:
         failures.append("required Skill read was not observed")
-    if forbid_skill_read and passive_reads:
+    if duplicate_passive_read_starts:
+        failures.append("duplicate passive Skill read start observed")
+    if duplicate_passive_read_completions:
+        failures.append("duplicate passive Skill read completion observed")
+    if passive_read_protocol_errors:
+        failures.append("passive Skill read protocol error observed")
+    if forbid_skill_read and (passive_reads or passive_read_first_indexes):
         failures.append("excluded case read the Chief-of-Staff Skill")
     if case.get("require_takeover") and case["should_trigger"] and not booted:
         failures.append("required lifecycle takeover line was not observed")
