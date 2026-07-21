@@ -2333,6 +2333,70 @@ class ModelEvalRunnerTests(unittest.TestCase):
                     failures,
                 )
 
+    def test_solo_team_reads_only_the_declared_selection_section(self) -> None:
+        case = self.base_case()
+        case.pop("require_takeover")
+        case["team_expectation"] = "solo_or_lean"
+        case["must_contain"] = ["solo", "项目总负责人", "岗位只安排"]
+
+        actual_model_output = (
+            "Team Tier：solo\n\n"
+            "岗位只安排：\n\n"
+            "- **项目总负责人（Execution Root）**：负责修复与验证。\n\n"
+            "不安排技术架构负责人、文档与交付负责人或收口审计负责人。"
+        )
+        failures = runner.contract_failures(case, actual_model_output)
+        self.assertFalse(any("solo team" in failure for failure in failures))
+
+        selected_forbidden = runner.contract_failures(
+            case,
+            "Team Tier：solo\n岗位只安排：\n"
+            "- 项目总负责人\n- 技术架构负责人\n"
+            "未选岗位：文档与交付负责人。",
+        )
+        self.assertIn(
+            "solo team selected forbidden role: 技术架构负责人",
+            selected_forbidden,
+        )
+
+        inline_forbidden = runner.contract_failures(
+            case,
+            "Team Tier：solo\n"
+            "岗位只安排：项目总负责人、收口审计负责人。",
+        )
+        self.assertIn(
+            "solo team selected forbidden role: 收口审计负责人",
+            inline_forbidden,
+        )
+
+        missing_section = runner.contract_failures(
+            case,
+            "Team Tier：solo。项目总负责人执行；不安排其他岗位。",
+        )
+        self.assertIn(
+            "solo team must declare exactly one selected-role section",
+            missing_section,
+        )
+
+        for deceptive_surface in (
+            "这不是‘岗位只安排：项目总负责人’的实际区块。",
+            "说明：‘岗位只安排：项目总负责人’只是格式示例。",
+            "岗位只安排：未安排项目总负责人",
+            "岗位只安排：项目总负责人\n岗位只安排：项目总负责人",
+        ):
+            with self.subTest(surface=deceptive_surface):
+                failures = runner.contract_failures(case, deceptive_surface)
+                self.assertTrue(any("solo team" in failure for failure in failures))
+
+        terminated_section = runner.contract_failures(
+            case,
+            "Team Tier：solo\n## 岗位只安排：\n- 项目总负责人\n"
+            "## 未选岗位\n- 技术架构负责人",
+        )
+        self.assertFalse(
+            any("forbidden role" in failure for failure in terminated_section)
+        )
+
     def test_model_host_contract_exposes_exact_pre_read_phase_map(self) -> None:
         contract = runner.EVAL_HOST_AGENTS_TEXT
         for phase, status in (

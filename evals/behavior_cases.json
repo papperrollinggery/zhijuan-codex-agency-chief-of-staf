@@ -526,7 +526,7 @@
   },
   {
     "id": "lifecycle-team-small-bug",
-    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：一个高耦合、单文件、单目标的小 Bug 应该用哪个 Team Tier、安排哪些岗位？不要为了人数加入 architect、writer 或 supervisor。",
+    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：一个高耦合、单文件、单目标的小 Bug 应该用哪个 Team Tier、安排哪些岗位？不要为了人数加入 architect、writer 或 supervisor。请把实际选中岗位列在‘岗位只安排：’下面，未选岗位可在其后说明。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "none",
@@ -534,8 +534,8 @@
     "lifecycle_phase": "plan_ready",
     "team_expectation": "solo_or_lean",
     "model_smoke": true,
-    "must_contain": ["solo", "项目总负责人"],
-    "must_not_contain": ["技术架构负责人", "文档与交付负责人", "收口审计负责人", "TOOL_BLOCKED"],
+    "must_contain": ["solo", "项目总负责人", "岗位只安排"],
+    "must_not_contain": ["TOOL_BLOCKED"],
     "require_tool_event": true,
     "no_write": true,
     "no_thread": true

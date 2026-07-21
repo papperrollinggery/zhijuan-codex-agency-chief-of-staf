@@ -2076,6 +2076,81 @@ def is_platform_skill_announcement(text: str) -> bool:
     return any(re.fullmatch(pattern, normalized, flags=re.IGNORECASE) for pattern in patterns)
 
 
+SOLO_SELECTED_ROLE_HEADING = "岗位只安排"
+SOLO_TEAM_ROLE_TITLES = (
+    "项目总负责人",
+    "研究负责人",
+    "技术架构负责人",
+    "实施负责人",
+    "文档与交付负责人",
+    "测试诊断负责人",
+    "独立质量负责人",
+    "收口审计负责人",
+)
+SOLO_FORBIDDEN_SELECTED_ROLES = (
+    "技术架构负责人",
+    "文档与交付负责人",
+    "收口审计负责人",
+)
+
+
+def selected_team_roles(surface: str) -> tuple[int, set[str]]:
+    """Read actual selections from one explicit, user-visible team section."""
+
+    selected: set[str] = set()
+    in_selection = False
+    heading_count = 0
+    for raw_line in surface.splitlines():
+        line = raw_line.strip()
+        header_candidate = re.sub(r"^(?:#{1,6}\s*|[-+*]\s+)", "", line)
+        header_candidate = header_candidate.strip(" *_`")
+        header_match = re.fullmatch(
+            re.escape(SOLO_SELECTED_ROLE_HEADING) + r"\s*(?:(?:[:：])\s*(.*))?",
+            header_candidate,
+        )
+        if header_match is not None:
+            heading_count += 1
+            in_selection = True
+            tail = (header_match.group(1) or "").strip(" *_`")
+            if not re.search(r"(?:不安排|未安排|没有安排|无需|不需要|排除|未选)", tail):
+                for role in SOLO_TEAM_ROLE_TITLES:
+                    if role in tail:
+                        selected.add(role)
+            continue
+        if not in_selection or not line:
+            continue
+        markdown_heading = re.match(r"^#{1,6}\s*", line)
+        if markdown_heading is not None:
+            heading_text = line[markdown_heading.end() :].strip(" *_`")
+            heading_role = next(
+                (
+                    role
+                    for role in SOLO_TEAM_ROLE_TITLES
+                    if heading_text.startswith(role)
+                ),
+                None,
+            )
+            if heading_role is None:
+                in_selection = False
+            else:
+                selected.add(heading_role)
+            continue
+        structured_line = re.match(
+            r"^(?:[-*+]\s+|\|\s*|\d+[.)、]\s*)", line
+        )
+        normalized = line.lstrip(" -*+|#\t`_")
+        starts_with_role = any(
+            normalized.startswith(role) for role in SOLO_TEAM_ROLE_TITLES
+        )
+        if structured_line is None and not starts_with_role:
+            in_selection = False
+            continue
+        for role in SOLO_TEAM_ROLE_TITLES:
+            if role in line:
+                selected.add(role)
+    return heading_count, selected
+
+
 def contract_failures(
     case: dict[str, Any], surface_or_events: str | dict[str, object]
 ) -> list[str]:
@@ -2352,6 +2427,20 @@ def contract_failures(
             for claim in forbidden_claims:
                 if isinstance(claim, str) and claim in surface:
                     failures.append(f"visualization output makes forbidden claim {claim!r}")
+    selection_markers = case.get("must_contain", [])
+    if (
+        case.get("team_expectation") == "solo_or_lean"
+        and isinstance(selection_markers, list)
+        and SOLO_SELECTED_ROLE_HEADING in selection_markers
+    ):
+        selection_count, selected_roles = selected_team_roles(surface)
+        if selection_count != 1:
+            failures.append("solo team must declare exactly one selected-role section")
+        elif "项目总负责人" not in selected_roles:
+            failures.append("solo team did not select the project root")
+        for role in SOLO_FORBIDDEN_SELECTED_ROLES:
+            if role in selected_roles:
+                failures.append(f"solo team selected forbidden role: {role}")
     if case.get("team_expectation") == "multiple_researcher_instances":
         lines = [line.strip() for line in surface.splitlines() if line.strip()]
         scoped_line_indexes: list[int] = []
