@@ -1053,11 +1053,13 @@ def is_passive_skill_read(
         parts = shlex.split(command)
     except ValueError:
         return False
+    trusted_shell = False
     if (
         len(parts) == 3
         and parts[0] in {"/bin/bash", "/bin/sh", "/bin/zsh"}
         and parts[1] == "-lc"
     ):
+        trusted_shell = True
         try:
             parts = shlex.split(parts[2])
         except ValueError:
@@ -1074,6 +1076,29 @@ def is_passive_skill_read(
     ):
         match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", parts[2])
         candidate = Path(parts[3])
+        if match is not None:
+            if match.group(1) == "$":
+                complete_read = True
+            else:
+                try:
+                    line_count = len(
+                        installed_skill_path.read_text(encoding="utf-8").splitlines()
+                    )
+                except OSError:
+                    return False
+                complete_read = int(match.group(1)) >= line_count
+    elif (
+        trusted_shell
+        and len(parts) == 8
+        and parts[0] in {"/usr/bin/wc", "wc"}
+        and parts[1] == "-l"
+        and parts[3] == "&&"
+        and parts[4] in {"/usr/bin/sed", "sed"}
+        and parts[5] == "-n"
+        and parts[2] == parts[7]
+    ):
+        match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", parts[6])
+        candidate = Path(parts[7])
         if match is not None:
             if match.group(1) == "$":
                 complete_read = True
@@ -2004,6 +2029,11 @@ def contract_failures(
             for claim in forbidden_claims:
                 if isinstance(claim, str) and claim in surface:
                     failures.append(f"visualization output makes forbidden claim {claim!r}")
+    if (
+        case.get("team_expectation") == "multiple_researcher_instances"
+        and surface.count("研究负责人") < 3
+    ):
+        failures.append("team output did not enumerate three researcher positions")
     return failures
 
 

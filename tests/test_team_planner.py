@@ -112,6 +112,36 @@ class TeamPlannerTests(unittest.TestCase):
         self.assertIn("developer", selected)
         self.assertIn("reviewer", selected)
 
+    def test_single_cross_module_integration_gets_one_developer(self) -> None:
+        item = work_item(
+            "W-01",
+            work_type="integration",
+            title="Cross-module interface migration",
+            read_scope=["api/", "domain/", "persistence/"],
+            write_scope=["api/handler.py", "domain/model.py", "persistence/store.py"],
+            risk="medium",
+            context_coupling="medium",
+        )
+        team = resolve_team_plan(task_plan(items=[item], title="Cross-module migration"))
+        selected = profiles(team)
+        self.assertIn("technical-architect", selected)
+        self.assertEqual(selected.count("developer"), 1)
+        self.assertIn("reviewer", selected)
+
+    def test_high_coupling_cross_module_implementation_stays_root_owned(self) -> None:
+        item = work_item(
+            "W-01",
+            work_type="integration",
+            title="Cross-module interface migration",
+            read_scope=["api/", "domain/"],
+            write_scope=["api/handler.py", "domain/model.py"],
+            risk="medium",
+            context_coupling="high",
+        )
+        team = resolve_team_plan(task_plan(items=[item], title="Cross-module migration"))
+        self.assertNotIn("developer", profiles(team))
+        self.assertIn("W-01", team["root_owned_work_items"])
+
     def test_three_independent_research_streams_keep_three_profile_instances(self) -> None:
         items = [
             work_item(
@@ -278,6 +308,54 @@ class TeamPlannerTests(unittest.TestCase):
         self.assertIn("technical-architect", selected)
         self.assertIn("reviewer", selected)
         self.assertEqual(selected.count("codebase-researcher"), 2)
+        self.assertLessEqual(len(team["positions"]), MAX_ACTIVE_POSITIONS)
+
+    def test_required_cross_module_developer_is_not_crowded_out_by_researchers(self) -> None:
+        items = [
+            work_item(
+                f"W-0{index}",
+                work_type="research",
+                read_scope=[f"area-{index}/"],
+                parallelizable=True,
+            )
+            for index in range(1, 5)
+        ]
+        items.append(
+            work_item(
+                "W-05",
+                work_type="integration",
+                read_scope=["api/", "domain/", "persistence/"],
+                write_scope=["api/handler.py", "domain/model.py", "persistence/store.py"],
+                title="Cross-module interface migration",
+                context_coupling="medium",
+            )
+        )
+        team = resolve_team_plan(task_plan(items=items, title="Cross-module migration"))
+        selected = profiles(team)
+        self.assertIn("technical-architect", selected)
+        self.assertIn("developer", selected)
+        self.assertIn("reviewer", selected)
+        self.assertEqual(selected.count("codebase-researcher"), 1)
+        self.assertLessEqual(len(team["positions"]), MAX_ACTIVE_POSITIONS)
+
+    def test_parallel_cross_module_developers_do_not_crowd_out_reviewer(self) -> None:
+        items = [
+            work_item(
+                f"W-0{index}",
+                title=f"Cross-module implementation stream {index}",
+                read_scope=[f"module-{index}/"],
+                write_scope=[f"module-{index}/feature.py"],
+                parallelizable=True,
+                isolated_worktree_required=True,
+                context_coupling="low",
+            )
+            for index in range(1, 5)
+        ]
+        team = resolve_team_plan(task_plan(items=items, title="Cross-module migration"))
+        selected = profiles(team)
+        self.assertIn("technical-architect", selected)
+        self.assertIn("reviewer", selected)
+        self.assertEqual(selected.count("developer"), 2)
         self.assertLessEqual(len(team["positions"]), MAX_ACTIVE_POSITIONS)
 
     def test_required_release_supervisor_is_not_crowded_out_by_researchers(self) -> None:

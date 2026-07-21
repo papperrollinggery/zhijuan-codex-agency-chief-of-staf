@@ -497,7 +497,7 @@
     "lifecycle_phase": "plan_ready",
     "team_expectation": "solo_or_lean",
     "model_smoke": true,
-    "must_contain": ["Solo", "项目总负责人"],
+    "must_contain": ["solo", "项目总负责人"],
     "must_not_contain": ["技术架构负责人", "文档与交付负责人", "收口审计负责人", "TOOL_BLOCKED"],
     "require_tool_event": true,
     "no_write": true,
@@ -528,7 +528,7 @@
     "lifecycle_phase": "plan_ready",
     "team_expectation": "multiple_researcher_instances",
     "model_smoke": true,
-    "must_contain": ["研究负责人", "实例 1", "实例 2", "实例 3"],
+    "must_contain": ["研究负责人", "三个", "移动端", "服务端", "部署配置"],
     "must_not_contain": ["合并为一个", "固定最低人数", "TOOL_BLOCKED"],
     "require_tool_event": true,
     "no_write": true

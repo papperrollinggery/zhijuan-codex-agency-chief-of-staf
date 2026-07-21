@@ -1424,6 +1424,17 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
             )
             self.assertEqual(complete["passive_skill_reads_completed"], 1)
+            counted_complete = observed(
+                "/bin/zsh -lc \"wc -l "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '1,240p' .agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(counted_complete["passive_skill_reads_completed"], 1)
+            counted_mismatch = observed(
+                "/bin/zsh -lc \"wc -l README.md && "
+                "sed -n '1,240p' .agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(counted_mismatch["passive_skill_reads_completed"], 0)
             partial = observed(
                 "/bin/zsh -lc \"sed -n '1,2p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
@@ -1715,6 +1726,25 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertNotIn("should_trigger=true but no takeover line was observed", failures)
         self.assertNotIn("boot marker and first visible takeover line are not atomic", failures)
         self.assertNotIn("main session must emit exactly one takeover line", failures)
+
+    def test_multiple_researcher_expectation_requires_three_visible_positions(self) -> None:
+        case = self.base_case()
+        case.pop("require_takeover")
+        case["team_expectation"] = "multiple_researcher_instances"
+        missing = runner.contract_failures(
+            case,
+            "三个独立研究流由研究负责人使用同一 Profile 完成。",
+        )
+        self.assertIn(
+            "team output did not enumerate three researcher positions", missing
+        )
+        enumerated = runner.contract_failures(
+            case,
+            "研究负责人·移动端\n研究负责人·服务端\n研究负责人·部署配置",
+        )
+        self.assertNotIn(
+            "team output did not enumerate three researcher positions", enumerated
+        )
 
     def test_direct_content_case_does_not_require_takeover_ritual(self) -> None:
         case = self.base_case()

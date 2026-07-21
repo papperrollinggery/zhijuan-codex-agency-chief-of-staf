@@ -272,7 +272,7 @@ def _parallel_implementation_streams(
 
 
 def _developer_positions(
-    items: list[dict[str, Any]], signals: dict[str, Any]
+    items: list[dict[str, Any]], plan: dict[str, Any], signals: dict[str, Any]
 ) -> list[dict[str, Any]]:
     implementation = [
         item for item in items if item["work_type"] in {"implementation", "integration"}
@@ -280,7 +280,15 @@ def _developer_positions(
     if not implementation:
         return []
     parallel_streams = _parallel_implementation_streams(implementation)
-    if not parallel_streams and signals.get("explicit_delegate_implementation") is not True:
+    cross_module_delivery = (
+        is_cross_module(items, plan)
+        and not all(item["context_coupling"] == "high" for item in implementation)
+    )
+    if (
+        not parallel_streams
+        and not cross_module_delivery
+        and signals.get("explicit_delegate_implementation") is not True
+    ):
         return []
     if parallel_streams:
         return [
@@ -303,7 +311,7 @@ def _candidate_positions(
         ] or items
         candidates.append(_position("technical-architect", architecture_items, 1))
 
-    candidates.extend(_developer_positions(items, signals))
+    candidates.extend(_developer_positions(items, plan, signals))
     writing = [item for item in items if item["work_type"] == "writing"]
     if len(writing) > 1:
         candidates.append(_position("writer", writing, 1))
@@ -395,13 +403,36 @@ def resolve_team_plan(
         "test-debugger": 55,
         "supervisor": 90,
     }
-    if signals.get("explicit_delegate_implementation") is True:
+    if is_cross_module(items, plan):
+        profile_priority["developer"] = 97
+    elif signals.get("explicit_delegate_implementation") is True:
         profile_priority["developer"] = 90
     candidates = sorted(
         candidates,
         key=lambda item: (-profile_priority[item["profile"]], item["instance"], item["position_id"]),
     )
-    chosen = candidates[: MAX_ACTIVE_POSITIONS - 1]
+    required_profiles = {
+        profile
+        for profile in {"technical-architect", "reviewer", "supervisor"}
+        if any(candidate["profile"] == profile for candidate in candidates)
+    }
+    if is_cross_module(items, plan) and any(
+        candidate["profile"] == "developer" for candidate in candidates
+    ):
+        required_profiles.add("developer")
+    required: list[dict[str, Any]] = []
+    remaining: list[dict[str, Any]] = []
+    selected_required_profiles: set[str] = set()
+    for candidate in candidates:
+        profile = candidate["profile"]
+        if profile in required_profiles and profile not in selected_required_profiles:
+            required.append(candidate)
+            selected_required_profiles.add(profile)
+        else:
+            remaining.append(candidate)
+    available_slots = MAX_ACTIVE_POSITIONS - 1
+    chosen = required[:available_slots]
+    chosen.extend(remaining[: max(0, available_slots - len(chosen))])
     selected = [root] + sorted(
         chosen,
         key=lambda item: (PROFILE_WAVES[item["profile"]], item["position_id"]),
