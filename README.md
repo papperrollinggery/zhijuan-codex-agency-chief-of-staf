@@ -35,7 +35,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | `v0.2.0-rc.2` prerelease | 包含五角色 RC、旧 visualization/data contract 与 native-task receipt |
 | `v0.2.0-rc.3` prerelease | 七角色、current-catalog direct 路由/readback、可恢复 native routing 配置和 fragment/fallback/manifest 流程；named profile 与 host mount 仍按宿主能力 fail closed |
 | `v0.3.0-rc.2` 本地源码候选 | 在 rc.1 生命周期上增加内容优先执行面、净执行价值门、懒资产、递归 fail-closed、单命令完成收口和结果/开销评测；尚未发布，真实 Model/Native 行为仍需单独 smoke |
-| `v0.3.0-rc.3` 本地源码候选 | 在 rc.2 上补齐 Native `create_thread` transport 解包、user-owned source 证明与 v1.0 raw session 兼容回填；尚未发布，安装态 Model/Native 行为仍需单独 smoke |
+| `v0.3.0-rc.3` 本地源码候选 | 在 rc.2 上补齐 Native `create_thread` transport 解包、user-owned source 证明与已绑定当前 Packet 缺失 transport readback 字段的兼容回填；尚未发布，安装态 Model/Native 行为仍需单独 smoke |
 | `v0.3.0-rc.4` 本地源码候选 | 用真实生命周期 trace 把持久执行收敛为内容优先快路径，增加失败调用也计数的 tool-event 预算、无歧义完成证据 argv、恢复/归档边界与评测防伪；尚未发布，安装态 Native 行为仍需单独 readback |
 
 ## v0.3 迁移
@@ -61,6 +61,8 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 - 明确要求真实 Codex task/thread、隔离 worktree、thread id、receipt 或 cleanup 证明。
 
 单句翻译、普通问答、简单代码修改、单文件明确修复，以及只出现 `thread` / `release readiness` 字样但没有工作意图的文本，不应隐式触发本 Skill。合法 Worker Packet 和本 Skill 自身源码维护也排除在外。
+
+`allow_implicit_invocation: true` 是路由许可，不是宿主运行证明。若 Codex 新会话报告 `Exceeded skills context budget of 2%. All skill descriptions were removed`，当前宿主已经在推理前移除了自然语言匹配所需的 Description；本 Skill 的发现桥也不能单独越过这一宿主级限制。此时使用显式 `$agency-chief-of-staff`，或由用户自行停用不需要的 Skills/Plugins 后重开会话。安装器不会为修复宿主预算而删除、停用或改写其他全局资产。
 
 ## 核心工作流
 
@@ -96,7 +98,7 @@ Discussion 可以合法停在讨论；Plan 用一次确定性调用在隐藏 sta
 
 1. 显式 `$agency-chief-of-staff`；
 2. Canonical frontmatter `description` 的隐式匹配；
-3. 早排序的动作型发现入口 `$agency-discuss-plan-execute-progress-archive`，在宿主因 Skill 目录过大而裁掉 Description 或后排名称时，只把真正的项目生命周期请求转交 Canonical；
+3. 早排序的动作型发现入口 `$agency-discuss-plan-execute-progress-archive`，在其名称或 Description 仍进入宿主可见目录时，只把真正的项目生命周期请求转交 Canonical；
 4. `agents/openai.yaml` 中的 UI metadata 和 default prompt；
 5. 仅为旧 prompt 保留的显式兼容入口 `$zhijuan-codex-agency-chief-of-staf`。
 
@@ -133,7 +135,7 @@ python3 scripts/install_skill.py
 ~/.agents/skills/agency-discuss-plan-execute-progress-archive
 ```
 
-前者是 canonical 入口；第二个只兼容旧显式调用；`agency-discuss-plan-execute-progress-archive` 只解决大型 Skill 目录下 Description 或后排名称被宿主预算裁掉后的自然语言发现，不是第三份运行实现。
+前者是 canonical 入口；第二个只兼容旧显式调用；`agency-discuss-plan-execute-progress-archive` 提高大型 Skill 目录下的自然语言可发现性，但在宿主删除全部 Description 时不能保证隐式调用，也不是第三份运行实现。Execution Session Packet 会显式携带 `$agency-chief-of-staff`，所以已创建的新执行任务不依赖 Description 预算。
 
 覆盖不同版本：
 

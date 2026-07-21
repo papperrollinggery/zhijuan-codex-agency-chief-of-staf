@@ -103,12 +103,59 @@ class ExecutionSessionTests(unittest.TestCase):
             project = Path(raw)
             packet = execution_packet(project, "task-session-001")
             parsed = parse_execution_session_packet(packet.rstrip("\n"))
+            self.assertEqual(
+                packet.splitlines()[:2],
+                [
+                    "AGENCY_EXECUTION_SESSION: true",
+                    "执行 Skill：$agency-chief-of-staff",
+                ],
+            )
             self.assertEqual(parsed["执行模型请求"], "GPT-5.6 Sol")
             self.assertEqual(parsed["推理强度请求"], "ultra")
             self.assertEqual(parsed["编排深度"], "0")
+            self.assertEqual(parsed["执行 Skill"], "$agency-chief-of-staff")
             self.assertNotIn("AGENCY_WORKER: true", packet)
+            with self.assertRaisesRegex(ValueError, "explicitly invoke"):
+                parse_execution_session_packet(
+                    packet.replace(
+                        "$agency-chief-of-staff",
+                        "$zhijuan-codex-agency-chief-of-staf",
+                        1,
+                    ).rstrip("\n")
+                )
             with self.assertRaises(ValueError):
                 parse_execution_session_packet("\n" + packet.rstrip("\n"))
+
+    def test_pre_canonical_skill_raw_packet_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            packet = execution_packet(Path(raw), "task-session-old-raw-001")
+            old_packet = packet.replace(
+                "执行 Skill：$agency-chief-of-staff\n", "", 1
+            )
+
+            with self.assertRaises(ValueError):
+                parse_execution_session_packet(old_packet.rstrip("\n"))
+            self.assertIsNone(
+                match_execution_session_transport(old_packet, packet)
+            )
+
+    def test_pre_canonical_skill_envelope_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            packet = execution_packet(Path(raw), "task-session-old-envelope-001")
+            old_packet = packet.replace(
+                "执行 Skill：$agency-chief-of-staff\n", "", 1
+            )
+            source = "019f7a4e-f1be-7771-9f67-38fcde417f49"
+            old_envelope = (
+                "<codex_delegation>\n"
+                f"  <source_thread_id>{source}</source_thread_id>\n"
+                f"  <input>{old_packet}</input>\n"
+                "</codex_delegation>"
+            )
+
+            self.assertIsNone(
+                match_execution_session_transport(old_envelope, packet)
+            )
 
     def test_execution_prompt_match_accepts_exact_codex_delegation_transport(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -151,6 +198,40 @@ class ExecutionSessionTests(unittest.TestCase):
                 (task_dir / "progress.jsonl").read_text(encoding="utf-8"),
             )
             self.assertIn("execution_ready", (task_dir / "PROGRESS.md").read_text(encoding="utf-8"))
+
+    def test_reprepare_execution_ready_replaces_pre_canonical_skill_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw).resolve()
+            task_id, task_dir = create_fixture_task(
+                project, "task-reprepare-old-packet-001"
+            )
+            kwargs = {
+                "task_id": task_id,
+                "catalog": live_catalog(),
+                "native_capabilities": {"task_thread_create": False},
+                "catalog_mechanically_verified": True,
+            }
+            first = prepare_execution_launch(project, **kwargs)
+            self.assertEqual(first["lifecycle_status"], "execution_ready")
+            launch_path = task_dir / "EXECUTION_LAUNCH_PROMPT.md"
+            old_packet = launch_path.read_text(encoding="utf-8").replace(
+                "执行 Skill：$agency-chief-of-staff\n", "", 1
+            )
+            launch_path.write_text(old_packet, encoding="utf-8")
+
+            second = prepare_execution_launch(project, **kwargs)
+
+            self.assertEqual(second["status"], "manual_launch_ready")
+            self.assertEqual(second["lifecycle_status"], "execution_ready")
+            regenerated = launch_path.read_text(encoding="utf-8")
+            self.assertEqual(
+                regenerated.splitlines()[:2],
+                [
+                    "AGENCY_EXECUTION_SESSION: true",
+                    "执行 Skill：$agency-chief-of-staff",
+                ],
+            )
+            parse_execution_session_packet(regenerated.rstrip("\n"))
 
     def test_launch_and_progress_share_the_task_state_transaction_lock(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -549,7 +630,7 @@ class ExecutionSessionTests(unittest.TestCase):
             self.assertIn("mechanically read back", (task_dir / "progress.jsonl").read_text())
 
     @unittest.skipIf(jsonschema is None, "jsonschema is unavailable")
-    def test_legacy_raw_executing_session_is_compatible_and_backfilled(self) -> None:
+    def test_bound_current_packet_missing_transport_readback_is_backfilled(self) -> None:
         schema = json.loads(
             (ROOT / "assets/execution-session.schema.json").read_text(encoding="utf-8")
         )
@@ -581,6 +662,8 @@ class ExecutionSessionTests(unittest.TestCase):
                 )
             session_path = task_dir / "execution-session.json"
             legacy_session = read_json(session_path)
+            # This emulates only an already-bound current packet whose stored
+            # readback predates transport fields. It is not an old launch prompt.
             for field in bind_execution_session_module.TRANSPORT_READBACK_FIELDS:
                 legacy_session["native_readback"].pop(field)
             atomic_write_json(session_path, legacy_session)

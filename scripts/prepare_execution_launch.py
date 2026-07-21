@@ -25,6 +25,7 @@ from agency_task import (
 from protocol_contract import (
     EXECUTION_SESSION_DUTY,
     EXECUTION_SESSION_HEADER,
+    EXECUTION_SESSION_SKILL,
     EXECUTION_SESSION_STOP,
     parse_execution_session_packet,
 )
@@ -53,6 +54,7 @@ def execution_packet(project: Path, task_id: str) -> str:
     text = "\n".join(
         [
             EXECUTION_SESSION_HEADER,
+            f"执行 Skill：{EXECUTION_SESSION_SKILL}",
             f"任务 ID：{task_id}",
             "编排深度：0",
             f"项目根目录：{project}",

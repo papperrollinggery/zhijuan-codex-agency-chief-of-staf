@@ -29,7 +29,7 @@ Discussion 显示状态后停在讨论，不执行、不写文件、不创建 Ag
 
 Machine rule: the first line is AGENCY_WORKER: true. 只有首行精确为 `AGENCY_WORKER: true` 才进入 worker 路径，不能用“首个非空行”替代。
 
-如果首行是 `AGENCY_EXECUTION_SESSION: true`，或 Codex 原生 `create_thread` 的精确 `<codex_delegation>` envelope 中 `<input>` 首行是该 marker，读取已有计划并作为唯一 Execution Root 推进；不重新讨论、不重建清单、不创建第二个 Root。Envelope 只是宿主传输层，必须严格读回 user-owned source task 与完整 packet；不能承载 Worker，也不能由 Subagent/Worker 继续创建 Root。Root 派发的所有 Subagent 都必须是终端 worker，不能再次调用本 Skill 或继续派发。
+如果首行是 `AGENCY_EXECUTION_SESSION: true`，或 Codex 原生 `create_thread` 的精确 `<codex_delegation>` envelope 中 `<input>` 首行是该 marker，读取已有计划并作为唯一 Execution Root 推进；不重新讨论、不重建清单、不创建第二个 Root。合法 packet 第二行必须是 `执行 Skill：$agency-chief-of-staff`，用于在宿主裁剪 Skill 描述时仍显式注入 Canonical Runtime，不代表创建第二个 Root。Envelope 只是宿主传输层，必须严格读回 user-owned source task 与完整 packet；不能承载 Worker，也不能由 Subagent/Worker 继续创建 Root。Root 派发的所有 Subagent 都必须是终端 worker，不能再次调用本 Skill 或继续派发。
 
 除上述精确宿主 envelope 外，任一 marker 作为独立行出现但不是物理首行，或 header/envelope 正确但 packet 无效时 fail closed，返回 `INVALID_PACKET`；正文中的行内引用不算 packet marker，不得把无效 packet 回退成普通主会话。
 

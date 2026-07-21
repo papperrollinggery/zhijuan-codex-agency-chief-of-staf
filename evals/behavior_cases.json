@@ -476,7 +476,7 @@
       },
       {
         "path_glob": ".agency/tasks/active/task-model-smoke-launch/EXECUTION_LAUNCH_PROMPT.md",
-        "must_contain": ["AGENCY_EXECUTION_SESSION: true", "推理强度请求：ultra"],
+        "must_contain": ["AGENCY_EXECUTION_SESSION: true", "执行 Skill：$agency-chief-of-staff", "推理强度请求：ultra"],
         "must_contain_any": [],
         "must_not_contain": ["AGENCY_WORKER: true"]
       },
@@ -491,7 +491,7 @@
   },
   {
     "id": "lifecycle-execution-session-resume",
-    "prompt": "AGENCY_EXECUTION_SESSION: true\n任务 ID：task-model-smoke-resume\n编排深度：0\n项目根目录：__FIXTURE_ROOT__\n任务清单：.agency/tasks/active/task-model-smoke-resume/task-plan.json\n团队计划：.agency/tasks/active/task-model-smoke-resume/TEAM_PLAN.json\n进度文件：.agency/tasks/active/task-model-smoke-resume/PROGRESS.md\n执行模型请求：GPT-5.6 Sol\n推理强度请求：ultra\n执行职责：作为本任务 Execution Root，按清单执行、调度、验证并更新进度。\n停止条件：全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。",
+    "prompt": "AGENCY_EXECUTION_SESSION: true\n执行 Skill：$agency-chief-of-staff\n任务 ID：task-model-smoke-resume\n编排深度：0\n项目根目录：__FIXTURE_ROOT__\n任务清单：.agency/tasks/active/task-model-smoke-resume/task-plan.json\n团队计划：.agency/tasks/active/task-model-smoke-resume/TEAM_PLAN.json\n进度文件：.agency/tasks/active/task-model-smoke-resume/PROGRESS.md\n执行模型请求：GPT-5.6 Sol\n推理强度请求：ultra\n执行职责：作为本任务 Execution Root，按清单执行、调度、验证并更新进度。\n停止条件：全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents_optional",

@@ -132,6 +132,7 @@ class ProtocolRecursionTests(unittest.TestCase):
         return "\n".join(
             [
                 "AGENCY_EXECUTION_SESSION: true",
+                "执行 Skill：$agency-chief-of-staff",
                 "任务 ID：task-recursion-001",
                 f"编排深度：{depth}",
                 "项目根目录：/tmp/project",

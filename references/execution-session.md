@@ -26,6 +26,7 @@
 
 ```text
 AGENCY_EXECUTION_SESSION: true
+执行 Skill：$agency-chief-of-staff
 任务 ID：<task-id>
 编排深度：0
 项目根目录：<absolute-project-root>
@@ -37,6 +38,8 @@ AGENCY_EXECUTION_SESSION: true
 执行职责：作为本任务 Execution Root，按清单执行、调度、验证并更新进度。
 停止条件：全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。
 ```
+
+`执行 Skill` 是传输协议的一部分，不是第二个 Root。它让 Codex 在 Skill 元数据因宿主预算被裁剪时仍能显式注入 Canonical Runtime；marker 仍必须是 packet 与原生 `<codex_delegation>` 的 `<input>` 首行。
 
 `protocol_contract.py` 对它使用独立 parser。它不是 `AGENCY_WORKER: true`：
 
@@ -59,7 +62,8 @@ Root 使用独立的 `execution-model-policy.json`，不属于 Efficient/Balance
 - Native spawn 后必须读回实际 provider/model/effort；不一致为 FAIL，不能进入 executing。
 - 单独传给准备 helper 的 `native_readback` 只返回 `fields_consistent_unverified` 诊断；不会写入 session，也不能产生证明。没有机械绑定时，`new_conversation_created` 必须保持 `false`。
 - `session_status=executing` 的 schema 只负责结构约束，不能把固定字符串变成宿主证明。唯一公共写入路径是 `bind_execution_session.py`：它内部读取 App Server、canonical state 与 rollout，校验顶层/嵌套 Task、模型、Effort、CWD 和 packet 语义一致后写入 `app-server-canonical-state-mechanically-bound`。调用方不能上传一个 JSON 来替代该读取。
-- 早期 v1.0 raw session 可继续读取；下次 binder 机械重验 raw prompt 后才会原子回填 transport 字段。部分字段、envelope 伪装或无当前 readback 均不迁移。
+- 缺少 `执行 Skill` 的旧 raw 或 envelope Prompt 一律 fail closed，不能重新绑定。尚未绑定的 `plan_ready` / `execution_ready` 任务必须重新运行 `prepare_execution_launch.py` 生成新 Packet；若旧 Prompt 已启动 Native Task 但尚未绑定，先关闭该 Task 或记录 Cleanup Blocker，再创建替代任务。
+- 已经用当前 Packet 绑定并处于 `executing` 的 session，若只是持久化 readback 缺少早期 transport 字段，可在 binder 对当前 Host、Prompt 与模型再次机械验证完全一致后原子回填。这个兼容面不包含旧 Prompt；部分字段、envelope 伪装或无当前 readback 均不迁移。
 - canonical state 没有稳定的“当前正在采样”字段，绑定状态精确写为 `active-unarchived`，不把未归档误报为正在运行。任务完成或清理仍需后续 readback 证据。
 - Subagent 仍按原有能力档路由，不要求全部使用 Ultra。
 

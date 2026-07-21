@@ -42,7 +42,9 @@ WORKER_PACKET_FORBIDDEN_TERMS = (
     "guard read",
 )
 EXECUTION_SESSION_HEADER = "AGENCY_EXECUTION_SESSION: true"
+EXECUTION_SESSION_SKILL = "$agency-chief-of-staff"
 EXECUTION_SESSION_FIELDS = (
+    "执行 Skill",
     "任务 ID",
     "编排深度",
     "项目根目录",
@@ -148,6 +150,8 @@ def parse_execution_session_packet(text: str) -> dict[str, str]:
         if not value or value != value.strip():
             raise ValueError(f"execution session field is empty or padded: {label}")
         result[label] = value
+    if result["执行 Skill"] != EXECUTION_SESSION_SKILL:
+        raise ValueError("execution session must explicitly invoke the canonical Skill")
     task_id = result["任务 ID"]
     if not re.fullmatch(r"[a-z0-9][a-z0-9._-]{2,95}", task_id):
         raise ValueError("execution session task id is unsafe")

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Make every Execution Session packet explicitly inject `$agency-chief-of-staff` while preserving `AGENCY_EXECUTION_SESSION: true` as the physical first line and orchestration depth zero. This closes a real Native `create_thread` failure where Codex's hard 2% Skill metadata budget removed all descriptions and the new Root otherwise followed the checklist without loading Canonical. Old packets without the field now fail closed: unbound tasks regenerate the packet, launched-but-unbound Native tasks require cleanup before replacement, and only current-packet sessions already bound with an older transport-field readback may be mechanically reverified and backfilled. Document that implicit policy and the discovery bridge cannot, by themselves, override total host metadata removal; no installer path prunes unrelated global Skills or Plugins.
 - Expose the complete lifecycle intent-to-status map in Canonical and discovery metadata, keep both descriptions below the host's 1024-character limit, and mirror the map in the isolated host contract after a real GPT-5.6 Sol Ultra run paraphrased a pre-read phase label. Keep event-order evaluation strict; accept deployment wording and clean scope-specific titles, but reject one-line pseudo-teams, partial or duplicate instance IDs, same-instance claims, and three nominal positions assigned to one explicit actor.
 - Fixed a real installed-state Plan smoke failure: `agency_task.py create` now stages and validates the full eight-file nonexecuting task bundle, publishes the formal task directory with one atomic rename, serializes competing creators, and uses a recovery journal to reconcile an interrupted directory/index window. Pending Team, zero-event progress, launch, and evidence scaffolds preserve the cross-conversation contract without selecting roles, querying the model catalog, starting execution, or adding model-side bookkeeping.
 - Reject unknown completion/readback fields plus caller-precompleted work, evidence, blockers, waivers, role assignments, acceptance evidence, and resolved model claims at Plan creation; retain permissive legacy reads and keep the new model-request property optional in the v1.0 JSON Schema. `EVIDENCE.md` is a stable canonical-location index instead of a stale current-state mirror.
@@ -25,7 +26,7 @@
 
 ## v0.3.0-rc.3 - 2026-07-21 (source candidate, unpublished)
 
-- Accepted the exact `<codex_delegation>` transport envelope emitted by native `create_thread` while keeping raw Execution Session markers strict and Worker recursion fail closed; standalone malformed transport tags cannot fall back to ordinary activation, the source must be a user-owned Root in App Server and canonical state, and legacy v1.0 raw readbacks are backfilled only after fresh mechanical verification.
+- Accepted the exact `<codex_delegation>` transport envelope emitted by native `create_thread` while keeping raw Execution Session markers strict and Worker recursion fail closed; standalone malformed transport tags cannot fall back to ordinary activation, the source must be a user-owned Root in App Server and canonical state, and already-bound current-packet sessions with missing transport readback fields are backfilled only after fresh mechanical verification.
 
 ## v0.3.0-rc.2 - 2026-07-21 (source candidate, unpublished)
 
