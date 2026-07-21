@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -81,6 +82,46 @@ def managed_snapshot(project: Path, task_dir: Path) -> dict[str, str | None]:
 
 
 class TaskCompletionTests(unittest.TestCase):
+    def test_cli_item_pairs_preserve_delimiters_and_untrusted_text(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = executing_fixture(project)
+            criterion = "Output preserves A::B notation"
+            plan = read_json(task_dir / "task-plan.json")
+            plan["acceptance_criteria"] = [criterion]
+            atomic_write_json(task_dir / "task-plan.json", plan)
+            marker = project / "must-not-exist"
+            evidence = f"artifact.txt readback::x'; touch {marker}; : '"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/complete_task.py"),
+                    "--project",
+                    str(project),
+                    "--task-id",
+                    task_id,
+                    "--criterion-evidence-item",
+                    criterion,
+                    evidence,
+                    "--validation-item",
+                    "unit::validation",
+                    "unit test exit 0",
+                    "--artifact",
+                    "artifact.txt",
+                    "--cleanup-status",
+                    "not_applicable",
+                    "--apply",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists())
+            completed = read_json(task_dir / "task-plan.json")
+            self.assertEqual(completed["acceptance_evidence"], {criterion: [evidence]})
+
     def test_check_only_does_not_mutate_task(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)

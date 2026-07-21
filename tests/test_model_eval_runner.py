@@ -783,6 +783,10 @@ class ModelEvalRunnerTests(unittest.TestCase):
             plan = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
             self.assertEqual(plan["status"], "completed")
             self.assertEqual(plan["work_items"][0]["status"], "completed")
+            index = json.loads(
+                (fixture / ".agency/task-index.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(index["tasks"]["task-model-fixture"]["status"], "completed")
             self.assertTrue((task_dir / "closure.json").is_file())
             self.assertTrue((task_dir / "knowledge-candidates-input.json").is_file())
             self.assertTrue((fixture / "docs/testing/lifecycle.md").is_file())
@@ -1459,6 +1463,15 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 ".agents/skills/agency-chief-of-staff/references/team-orchestration.md\""
             )
             self.assertEqual(chained_reference["passive_skill_reads_completed"], 1)
+            chunked_skill = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '241,480p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '481,960p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(chunked_skill["passive_skill_reads_completed"], 1)
             counted_mismatch = observed(
                 "/bin/zsh -lc \"wc -l README.md && "
                 "sed -n '1,240p' .agents/skills/agency-chief-of-staff/SKILL.md\""
@@ -1475,7 +1488,24 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "sed -n '1,2p' "
                 ".agents/skills/agency-chief-of-staff/references/team-orchestration.md\""
             )
-            self.assertEqual(partial_reference["passive_skill_reads_completed"], 0)
+            self.assertEqual(partial_reference["passive_skill_reads_completed"], 1)
+            gapped_skill = observed(
+                "/bin/zsh -lc \"sed -n '1,1p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md && "
+                "sed -n '3,3p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(gapped_skill["passive_skill_reads_completed"], 0)
+            oversized_start = observed(
+                "/bin/zsh -lc \"sed -n '" + ("9" * 5000) + ",5001p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(oversized_start["passive_skill_reads_completed"], 0)
+            oversized_end = observed(
+                "/bin/zsh -lc \"sed -n '1," + ("9" * 5000) + "p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(oversized_end["passive_skill_reads_completed"], 0)
             injected = observed(
                 "/bin/zsh -lc \"sed -n '1,240p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md; touch escaped\""

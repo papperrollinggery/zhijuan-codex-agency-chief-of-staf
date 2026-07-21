@@ -56,3 +56,35 @@
 没有匹配文档或目录时写入 `docs/knowledge/<topic-slug>.md`。自动匹配同时使用英文词与中文文件名/标题 n-gram；命中已有文档时只做最小追加，不新建重复文档、不改写原文、不复制完整任务计划。
 
 `deposit_knowledge.py` 默认输出计划；只有明确 `--apply` 才写文档。多文档补丁与 deposit report 属于同一回滚边界；任一写入失败都恢复本次目标，避免文档已改而报告伪阴性。Archive 命令只有同时显式 `--deposit-knowledge` 时才在归档后执行写入；若归档移动后沉淀仍发生 I/O 失败，归档保留并返回 `archived_with_blocker`、写入 blocker report、CLI 退出非零，不宣称知识沉淀成功。
+
+## Archive 快速路径
+
+下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已读取的 Canonical `SKILL.md` 所在目录。
+
+读取一次 active task 的 `closure.json` 后，先检查项目状态，再用一个命令完成归档。没有长期知识候选时不创建占位候选文件，也不传候选或 deposit 参数：
+
+```bash
+python3 <skill-root>/scripts/validate_task_state.py --project . --json
+
+python3 <skill-root>/scripts/archive_task.py \
+  --project . --task-id <task-id> \
+  --closure .agency/tasks/active/<task-id>/closure.json \
+  --apply --json
+```
+
+只有经过检查、确有可沉淀候选时，才在同一个 archive 命令追加：
+
+```text
+--knowledge-candidates .agency/tasks/active/<task-id>/knowledge-candidates-input.json --deposit-knowledge
+```
+
+这是“一次命令中的归档 + 归档提交后的可选沉淀”，不是一个原子事务。归档成功后知识写入仍可能失败；此时命令返回 `archived_with_blocker` 和非零退出码，保留已完成 archive，并且不得宣称知识沉淀成功。
+
+从第二个命令的 JSON 读回实际 `destination`，然后只做一次终态校验：
+
+```bash
+python3 <skill-root>/scripts/validate_task_archive.py \
+  --archive-dir <destination> --json
+```
+
+这些 CLI 是稳定 Runtime 契约。命令未报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码、不先单独调用 `deposit_knowledge.py`，也不通过手改 `task-index.json` 或 `task-plan.json` 修补非法前置状态。前置校验失败时保留 active task 并报告真实 blocker；不要把排障工作混进归档阶段。

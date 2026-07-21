@@ -250,12 +250,48 @@ def _pairs(values: list[str], label: str) -> dict[str, list[str]]:
     return grouped
 
 
+def _pair_items(values: list[list[str]], label: str) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for value in values:
+        if len(value) != 2:
+            raise ValueError(f"{label} must provide exactly <name> <evidence>")
+        name, evidence = (part.strip() for part in value)
+        if not name or not evidence:
+            raise ValueError(f"{label} name and evidence must be non-empty")
+        grouped.setdefault(name, []).append(evidence)
+    return grouped
+
+
+def _merge_pair_groups(*groups: dict[str, list[str]]) -> dict[str, list[str]]:
+    merged: dict[str, list[str]] = {}
+    for group in groups:
+        for name, evidence in group.items():
+            merged.setdefault(name, []).extend(evidence)
+    return merged
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate evidence and complete an Agency task.")
     parser.add_argument("--project", type=Path, default=Path.cwd())
     parser.add_argument("--task-id", required=True)
     parser.add_argument("--criterion-evidence", action="append", default=[], metavar="CRITERION::EVIDENCE")
+    parser.add_argument(
+        "--criterion-evidence-item",
+        action="append",
+        nargs=2,
+        default=[],
+        metavar=("CRITERION", "EVIDENCE"),
+        help="Unambiguous criterion/evidence argv pair; preferred over the legacy :: form.",
+    )
     parser.add_argument("--validation", action="append", default=[], metavar="SUMMARY::EVIDENCE")
+    parser.add_argument(
+        "--validation-item",
+        action="append",
+        nargs=2,
+        default=[],
+        metavar=("SUMMARY", "EVIDENCE"),
+        help="Unambiguous validation/evidence argv pair; preferred over the legacy :: form.",
+    )
     parser.add_argument("--artifact", action="append", default=[])
     parser.add_argument("--review-evidence", action="append", default=[])
     parser.add_argument(
@@ -268,10 +304,17 @@ def main() -> None:
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    acceptance = _pairs(args.criterion_evidence, "criterion evidence")
+    acceptance = _merge_pair_groups(
+        _pairs(args.criterion_evidence, "criterion evidence"),
+        _pair_items(args.criterion_evidence_item, "criterion evidence item"),
+    )
+    validation_evidence = _merge_pair_groups(
+        _pairs(args.validation, "validation"),
+        _pair_items(args.validation_item, "validation item"),
+    )
     validations = [
         {"status": "passed", "summary": summary, "evidence_refs": refs}
-        for summary, refs in _pairs(args.validation, "validation").items()
+        for summary, refs in validation_evidence.items()
     ]
     result = complete_task(
         args.project,

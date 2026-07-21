@@ -37,6 +37,42 @@
 
 通用 `agency_task.py transition` 和公开进度命令不能写 `completed` / `archived` 或 terminal event；这些终态只能由 `complete_task.py` 与 `archive_task.py` 在证据门禁通过后写入。Task 创建、状态转换、进度事件、归档和知识沉淀的多文件提交都带故障回滚；失败不能留下 plan/index、文档/report 或 active/archive 的半状态。
 
+#### Execution Root 快速路径
+
+Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 Team Plan，只读一次当前分工并确认是否包含 Reviewer，不反复扫描完整计划。`PROGRESS.md` 在首个真实事件前可能尚不存在，这不是错误。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
+
+下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入，包括 skill root、project、task/work ID、summary、完成标准、证据和路径；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把尖括号占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已完整读取的 Canonical `SKILL.md` 所在目录。
+
+```bash
+python3 <skill-root>/scripts/update_task_progress.py \
+  --project . --task-id <task-id> --event-type work_started \
+  --work-id <work-id> --summary '<真实开始动作>' --json
+
+# 在这里完成项目研究、判断、实现或写作，并运行当前验证。
+
+python3 <skill-root>/scripts/update_task_progress.py \
+  --project . --task-id <task-id> --event-type work_completed \
+  --work-id <work-id> --summary '<实际结果>' \
+  --artifact '<项目相对产物>' --verification '<当前验证证据>' --json
+```
+
+`work_completed` 已同时接收 artifact 与 verification；没有独立的新事实时，不再追加 `artifact_generated` 或重复进度事件。全部工作项完成后才运行一次收口命令。每一条完成标准都必须用其在 plan 中的精确文本重复传一个 `--criterion-evidence-item '<完成标准>' '<证据引用>'`；该双 argv 形式允许文本本身含 `::`，不要在新调用中使用有歧义的旧 `CRITERION::EVIDENCE` 形式。当前验证用可重复的 `--validation-item '<验证摘要>' '<证据引用>'`，产物也可重复传入。
+
+以下任一条件成立就必须追加至少一个 `--review-evidence`：Team Plan 选择了 Reviewer、任何 Work Item 为 high/critical risk，或 work type 为 review/release。收口前只确认这一布尔要求，不为此读取无关 Team Plan 内容。
+
+```bash
+python3 <skill-root>/scripts/complete_task.py \
+  --project . --task-id <task-id> \
+  --criterion-evidence-item '<完成标准>' '<证据引用>' \
+  --validation-item '<验证摘要>' '<证据引用>' \
+  --artifact '<项目相对产物>' --cleanup-status not_applicable \
+  --apply --json
+```
+
+上例的 `not_applicable` 只适用于没有 Native Task/Thread 的任务。存在 Native Task/Thread 时必须把这一段替换为以下二者之一：已关闭时传 `--cleanup-status closed` 并至少重复一个 `--cleanup-evidence '<关闭读回证据>'`；确有清理阻塞时传 `--cleanup-status cleanup_blocked --cleanup-blocker '<真实阻塞>'`。不得为通过门禁虚构关闭证据或阻塞。
+
+以上 CLI 是稳定 Runtime 契约。helper 没有报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码，也不反复读回整个 `.agency`；只读与当前完成标准有关的项目产物和最终状态。只有 helper 返回的具体错误无法从输入修正时，才检查对应实现。
+
 ### 独立执行对话
 
 用户明确请求启动时才生成 Team Plan、解析 Root 模型、准备 selected-only Profile，并创建真实 Task/Thread 或给出手动启动提示词。详细协议见 [execution-session.md](execution-session.md)。

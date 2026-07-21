@@ -647,6 +647,13 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
         completed["acceptance_criteria"][0]: ["README.md readback"]
     }
     atomic_write_json(task_dir / "task-plan.json", completed)
+    index_path = fixture / ".agency" / "task-index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    now = datetime.now(timezone.utc).isoformat()
+    index["tasks"][task_id]["status"] = "completed"
+    index["tasks"][task_id]["updated_at"] = now
+    index["updated_at"] = now
+    atomic_write_json(index_path, index)
     atomic_write_json(
         task_dir / "TEAM_PLAN.json",
         {
@@ -1101,29 +1108,46 @@ def is_passive_skill_read(
         return resolved
 
     canonical_complete = False
+    canonical_line_count: int | None = None
+    canonical_intervals: list[tuple[int, int]] = []
     for segment in segments:
         target: Path | None = None
-        complete = False
         if len(segment) == 2 and segment[0] in {"/bin/cat", "cat"}:
             target = resolved_bundle_target(segment[1])
-            complete = target is not None
+            if target is None:
+                return False
+            if target == skill_path:
+                canonical_complete = True
         elif (
             len(segment) == 4
             and segment[0] in {"/usr/bin/sed", "sed"}
             and segment[1] == "-n"
         ):
-            match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", segment[2])
+            match = re.fullmatch(
+                r"([1-9][0-9]{0,8}),(\$|[1-9][0-9]{0,8})p", segment[2]
+            )
             target = resolved_bundle_target(segment[3])
             if match is None or target is None:
                 return False
-            if match.group(1) == "$":
-                complete = True
-            else:
+            start = int(match.group(1))
+            end_token = match.group(2)
+            if end_token != "$" and int(end_token) < start:
+                return False
+            if target == skill_path:
                 try:
-                    line_count = len(target.read_text(encoding="utf-8").splitlines())
+                    if canonical_line_count is None:
+                        canonical_line_count = len(target.read_bytes().splitlines())
                 except OSError:
                     return False
-                complete = int(match.group(1)) >= line_count
+                if canonical_line_count < 1:
+                    return False
+                end = (
+                    canonical_line_count
+                    if end_token == "$"
+                    else min(int(end_token), canonical_line_count)
+                )
+                if start <= end:
+                    canonical_intervals.append((start, end))
         elif (
             len(segment) == 3
             and segment[0] in {"/usr/bin/wc", "wc"}
@@ -1135,11 +1159,18 @@ def is_passive_skill_read(
             continue
         else:
             return False
-        if not complete:
+    if canonical_complete:
+        return True
+    if canonical_line_count is None or not canonical_intervals:
+        return False
+    next_required = 1
+    for start, end in sorted(canonical_intervals):
+        if start > next_required:
             return False
-        if target == skill_path:
-            canonical_complete = True
-    return canonical_complete
+        next_required = max(next_required, end + 1)
+        if next_required > canonical_line_count:
+            return True
+    return False
 
 
 def execution_cwd_matches(value: object, fixture: Path) -> bool:

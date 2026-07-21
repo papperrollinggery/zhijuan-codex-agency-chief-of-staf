@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -45,6 +46,38 @@ class ProgressUpdateTests(unittest.TestCase):
             self.assertEqual(first["status"], "recorded")
             self.assertEqual(second["status"], "duplicate")
             self.assertEqual(len(load_events(task_dir / "progress.jsonl")), 1)
+
+    def test_cli_argv_preserves_untrusted_summary_without_shell_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            marker = project / "must-not-exist"
+            payload = f"x'; touch {marker}; : ' && echo compromised"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/update_task_progress.py"),
+                    "--project",
+                    str(project),
+                    "--task-id",
+                    task_id,
+                    "--event-type",
+                    "work_started",
+                    "--work-id",
+                    "W-01",
+                    "--summary",
+                    payload,
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(marker.exists())
+            self.assertEqual(
+                load_events(task_dir / "progress.jsonl")[0]["summary"], payload
+            )
 
     def test_subagent_cannot_update_global_task_state(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

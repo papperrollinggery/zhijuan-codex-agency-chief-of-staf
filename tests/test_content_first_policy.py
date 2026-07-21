@@ -35,6 +35,47 @@ class ContentFirstPolicyTests(unittest.TestCase):
         self.assertIn("模型请求不属于 Plan 必填项", lifecycle)
         self.assertIn("complete_task.py", lifecycle)
 
+    def test_durable_execution_has_a_no_spelunking_fast_path(self) -> None:
+        lifecycle = (ROOT / "references/task-lifecycle.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Execution Root 快速路径", lifecycle)
+        self.assertIn("--event-type work_started", lifecycle)
+        self.assertIn("--event-type work_completed", lifecycle)
+        self.assertIn("`PROGRESS.md` 在首个真实事件前可能尚不存在", lifecycle)
+        self.assertIn("不运行 `--help`", lifecycle)
+        self.assertIn("不读取 helper 源码", lifecycle)
+        self.assertIn("--criterion-evidence-item", lifecycle)
+        self.assertIn("文本本身含 `::`", lifecycle)
+        self.assertIn("--validation-item", lifecycle)
+        self.assertIn("--review-evidence", lifecycle)
+        self.assertIn("high/critical risk", lifecycle)
+        self.assertIn("review/release", lifecycle)
+        self.assertIn("--cleanup-status closed", lifecycle)
+        self.assertIn("--cleanup-status cleanup_blocked", lifecycle)
+        self.assertIn("按单个 argv 传入", lifecycle)
+        self.assertIn("不得使用 `eval`", lifecycle)
+
+    def test_archive_has_one_command_fast_path_with_optional_deposit(self) -> None:
+        archive = (ROOT / "references/knowledge-archiving.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Archive 快速路径", archive)
+        self.assertIn("没有长期知识候选时", archive)
+        self.assertIn("--knowledge-candidates", archive)
+        self.assertIn("--deposit-knowledge", archive)
+        self.assertIn("不是一个原子事务", archive)
+        self.assertIn("`destination`", archive)
+        self.assertIn("validate_task_archive.py", archive)
+        self.assertIn("不先单独调用 `deposit_knowledge.py`", archive)
+        self.assertIn("不通过手改 `task-index.json`", archive)
+        self.assertIn("按单个 argv 传入", archive)
+        fast_path = archive.split("## Archive 快速路径", 1)[1]
+        base_command = fast_path.split("只有经过检查、确有可沉淀候选时", 1)[0]
+        self.assertNotIn("--knowledge-candidates", base_command)
+        self.assertNotIn("--deposit-knowledge", base_command)
+        self.assertNotIn("`archive_dir`", fast_path)
+
     def test_behavior_suite_measures_outcomes_and_overhead(self) -> None:
         cases = {
             case["id"]: case
