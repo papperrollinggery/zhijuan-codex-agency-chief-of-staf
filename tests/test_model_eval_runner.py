@@ -1454,6 +1454,63 @@ class ModelEvalRunnerTests(unittest.TestCase):
         failures = runner.contract_failures(self.base_case(), parsed)
         self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
+        natural_announcement = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": (
+                    "我会先用 `agency-chief-of-staff` 的需求澄清流程来推进："
+                    "这一轮只把目标和边界聊清楚，不提前进入执行；"
+                    "现在先按它的流程读取协作规范。"
+                ),
+            },
+        }
+        natural = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (natural_announcement, boot))), ""
+            ),
+        )
+        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", natural)
+
+        for text in (
+            (
+                "我会采用 `agency-chief-of-staff`，因为这个需求需要它的工作流；"
+                "我会先查看完整 Skill 说明。"
+            ),
+            (
+                "I'll use `agency-chief-of-staff` because this request matches its "
+                "workflow; I'll read the Skill instructions first."
+            ),
+            (
+                "Using agency-chief-of-staff for this task, "
+                "read the Skill instructions first."
+            ),
+        ):
+            with self.subTest(text=text):
+                accepted = runner.contract_failures(
+                    self.base_case(),
+                    runner.event_surface(
+                        "\n".join(
+                            map(
+                                json.dumps,
+                                (
+                                    {
+                                        "type": "item.completed",
+                                        "item": {
+                                            "type": "assistant_message",
+                                            "text": text,
+                                        },
+                                    },
+                                    boot,
+                                ),
+                            )
+                        ),
+                        "",
+                    ),
+                )
+                self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", accepted)
+
         progress_disguised_as_announcement = {
             "type": "item.completed",
             "item": {
@@ -1477,7 +1534,15 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertIn("assistant message preceded COS_BOOT_RECEIPT", duplicate)
 
-        for suffix in ("然后修改文件。", "已经发现启动校验有缺口。", "计划完成后发布。"):
+        for suffix in (
+            "然后修改文件。",
+            "已经发现启动校验有缺口。",
+            "计划完成后发布。",
+            "下一步调用工具。",
+            "README 当前版本是 v2，测试全部通过。",
+            "随后删除 README.md。",
+            "证据：tests: 364 passed；git diff clean。",
+        ):
             smuggled = {
                 "type": "item.completed",
                 "item": {

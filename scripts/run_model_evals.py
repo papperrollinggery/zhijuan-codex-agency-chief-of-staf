@@ -1707,11 +1707,39 @@ def atomic_boot_block(text: str) -> bool:
 
 def is_platform_skill_announcement(text: str) -> bool:
     """Recognize one narrow, pre-boot host-required Skill usage notice."""
-    normalized = " ".join(text.strip().split()).lower()
-    return normalized == (
-        "我会使用 agency-chief-of-staff skill，因为本任务匹配它的职责；"
-        "先完整读取 skill 说明。"
+    normalized = " ".join(text.strip().split())
+    if normalized == (
+        "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；"
+        "先完整读取 Skill 说明。"
+    ):
+        return True
+    skill = re.escape(SKILL_NAME)
+    patterns = (
+        (
+            rf"我会(?:先)?(?:使用|采用|启用|用)\s*`?{skill}`?(?:\s*[Ss]kill)?\s*[，,]\s*"
+            rf"因为(?:本|这个|这项)?(?:任务|请求|需求)(?:匹配|需要)(?:它的|该)?"
+            rf"(?:职责|流程|工作流)[；;]\s*(?:现在)?(?:我)?(?:会)?(?:先)?(?:完整)?"
+            rf"(?:读取|查看)(?:完整)?\s*(?:它的|该)?(?:[Ss]kill\s*)?"
+            rf"(?:说明|指引|规范|协作规范|工作流说明)[。.]?"
+        ),
+        (
+            rf"我会(?:先)?用\s*`?{skill}`?\s*(?:的需求澄清流程来推进|来组织这次需求澄清)"
+            rf"[：:]\s*这一轮只(?:把)?(?:目标、范围、约束和验收标准|目标和边界)"
+            rf"(?:聊清楚)?[，,]"
+            rf"不提前进入执行(?:计划)?[；;。.]\s*"
+            rf"(?:等(?:这些对齐|我们共同确认需求基线)后[，,]再"
+            rf"(?:把讨论收敛成|单独整理)执行清单[；;。.]\s*)?"
+            rf"现在(?:我)?先按它的流程读取协作规范[。.]?"
+        ),
+        (
+            rf"(?:I(?:'ll| will) (?:use|apply)|Using)\s+`?{skill}`?(?:\s+[Ss]kill)?\s+"
+            rf"(?:because (?:this|the) (?:request|task) (?:matches|needs) "
+            rf"(?:its )?(?:workflow|responsibilities)|for (?:this|the) (?:request|task))"
+            rf"[;,]\s*(?:I(?:'ll| will) )?(?:read|review) (?:the )?(?:complete )?"
+            rf"(?:[Ss]kill )?instructions first[.]?"
+        ),
     )
+    return any(re.fullmatch(pattern, normalized) is not None for pattern in patterns)
 
 
 def contract_failures(
