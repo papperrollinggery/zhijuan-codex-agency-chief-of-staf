@@ -42,9 +42,18 @@ class ContentFirstPolicyTests(unittest.TestCase):
         self.assertIn("Execution Root 快速路径", lifecycle)
         self.assertIn("--event-type work_started", lifecycle)
         self.assertIn("--event-type work_completed", lifecycle)
-        self.assertIn("`PROGRESS.md` 在首个真实事件前可能尚不存在", lifecycle)
+        self.assertIn("首个事件前也不要尝试读取尚不存在的 `PROGRESS.md`", lifecycle)
         self.assertIn("不运行 `--help`", lifecycle)
         self.assertIn("不读取 helper 源码", lifecycle)
+        self.assertIn("不用 `rg` / `find` 枚举 `.agency`", lifecycle)
+        self.assertIn("只要求进度更新时到此停止", lifecycle)
+        self.assertIn("该 CLI 没有 `--task-id`", lifecycle)
+        execution = (ROOT / "references/execution-session.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("单次读取 canonical `progress.jsonl`", execution)
+        self.assertIn("`review_returned`", execution)
+        self.assertIn("全新、全部 pending", execution)
         self.assertIn("--criterion-evidence-item", lifecycle)
         self.assertIn("文本本身含 `::`", lifecycle)
         self.assertIn("--validation-item", lifecycle)
@@ -70,6 +79,10 @@ class ContentFirstPolicyTests(unittest.TestCase):
         self.assertIn("不先单独调用 `deposit_knowledge.py`", archive)
         self.assertIn("不通过手改 `task-index.json`", archive)
         self.assertIn("按单个 argv 传入", archive)
+        self.assertIn("不做前置 `git status`", archive)
+        self.assertIn("不再逐一重读 task index", archive)
+        self.assertIn("目标文档尚不存在时不要先做一次必失败读取", archive)
+        self.assertIn("`docs/knowledge/<slug>.md` fallback 创建", archive)
         fast_path = archive.split("## Archive 快速路径", 1)[1]
         base_command = fast_path.split("只有经过检查、确有可沉淀候选时", 1)[0]
         self.assertNotIn("--knowledge-candidates", base_command)
@@ -95,6 +108,9 @@ class ContentFirstPolicyTests(unittest.TestCase):
             cases["content-first-explicit-small-write"]["expected_file_content"],
             'LABEL = "the"\n',
         )
+        self.assertEqual(cases["lifecycle-execution-session-resume"]["max_tool_events"], 13)
+        self.assertEqual(cases["lifecycle-progress-update"]["max_tool_events"], 9)
+        self.assertEqual(cases["lifecycle-archive-knowledge"]["max_tool_events"], 11)
         self.assertEqual(
             cases["invalid-reserved-worker-packet"]["must_contain"],
             ["INVALID_PACKET"],

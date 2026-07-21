@@ -2,6 +2,10 @@
 
 执行会话把已经确认的任务清单交给一个新的 Execution Root。它不会重新讨论需求、重新建清单或再创建另一个 Chief-of-Staff 根任务。
 
+已绑定且状态为 `executing` 的 Packet 是执行入口，不是启动入口：读取一次 packet 指向的 task plan，只有委派或 Reviewer 判断需要时才读 Team Plan，然后直接使用 `task-lifecycle.md` 的 Execution Root 快速路径。不要重查 catalog、Profile、launch 文件，不要读取 `PROGRESS.md` 镜像，也不要枚举 `.agency`。
+
+跨会话恢复不能丢失真实事件：如果 plan 中任一 Work Item 已不是 `pending`、任务/Work Item 处于 blocked，或 Team Plan/风险门要求 Reviewer，就在执行新动作前按精确路径单次读取 canonical `progress.jsonl`，恢复已有 blocker、verification、`review_returned` 与 `team_plan_changed` 证据；本轮后续不重复读取。全新、全部 pending 且无 Reviewer 要求的任务跳过该读取。
+
 ## 启动顺序
 
 用户明确请求“创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行并更新进度”时：

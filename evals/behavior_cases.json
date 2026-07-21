@@ -469,6 +469,7 @@
     "must_contain": ["任务已接管｜团队执行中"],
     "must_not_contain": ["重新讨论需求", "重新创建任务清单", "另一个 Execution Root", "TOOL_BLOCKED"],
     "require_tool_event": true,
+    "max_tool_events": 13,
     "require_progress": true,
     "allowed_changed_prefixes": [".agency/"],
     "expected_artifacts": [
@@ -548,6 +549,7 @@
     "must_contain": ["任务已接管｜团队执行中"],
     "must_not_contain": ["100%", "TOOL_BLOCKED"],
     "require_tool_event": true,
+    "max_tool_events": 9,
     "require_progress": true,
     "allowed_changed_prefixes": [".agency/"],
     "expected_artifacts": [
@@ -581,6 +583,7 @@
     "must_contain": ["任务已接管｜正在归档"],
     "must_not_contain": ["未验证知识已沉淀", "TOOL_BLOCKED"],
     "require_tool_event": true,
+    "max_tool_events": 11,
     "require_archive": true,
     "require_knowledge_patch": true,
     "allowed_changed_prefixes": [".agency/", "docs/"],

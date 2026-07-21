@@ -39,7 +39,7 @@
 
 #### Execution Root 快速路径
 
-Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 Team Plan，只读一次当前分工并确认是否包含 Reviewer，不反复扫描完整计划。`PROGRESS.md` 在首个真实事件前可能尚不存在，这不是错误。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
+Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 Team Plan，只在确需委派或确认 Reviewer 时读一次当前分工。task ID 与 plan 路径已给出时，不用 `rg` / `find` 枚举 `.agency`，不读作为人类视图的 checklist；首个事件前也不要尝试读取尚不存在的 `PROGRESS.md`。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
 
 下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入，包括 skill root、project、task/work ID、summary、完成标准、证据和路径；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把尖括号占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已完整读取的 Canonical `SKILL.md` 所在目录。
 
@@ -56,7 +56,7 @@ python3 <skill-root>/scripts/update_task_progress.py \
   --artifact '<项目相对产物>' --verification '<当前验证证据>' --json
 ```
 
-`work_completed` 已同时接收 artifact 与 verification；没有独立的新事实时，不再追加 `artifact_generated` 或重复进度事件。全部工作项完成后才运行一次收口命令。每一条完成标准都必须用其在 plan 中的精确文本重复传一个 `--criterion-evidence-item '<完成标准>' '<证据引用>'`；该双 argv 形式允许文本本身含 `::`，不要在新调用中使用有歧义的旧 `CRITERION::EVIDENCE` 形式。当前验证用可重复的 `--validation-item '<验证摘要>' '<证据引用>'`，产物也可重复传入。
+`work_completed` 已同时接收 artifact 与 verification；它的 exit 0 JSON 就是本次状态读回。没有独立的新事实时，不再追加 `artifact_generated`、重读 progress/checklist，或为管理文件运行 `git status` / `git diff`。只要求进度更新时到此停止；不要再运行 task validator。全部工作项完成且用户要求收口时才运行一次 completion。每一条完成标准都必须用其在 plan 中的精确文本重复传一个 `--criterion-evidence-item '<完成标准>' '<证据引用>'`；该双 argv 形式允许文本本身含 `::`，不要在新调用中使用有歧义的旧 `CRITERION::EVIDENCE` 形式。当前验证用可重复的 `--validation-item '<验证摘要>' '<证据引用>'`，产物也可重复传入。
 
 以下任一条件成立就必须追加至少一个 `--review-evidence`：Team Plan 选择了 Reviewer、任何 Work Item 为 high/critical risk，或 work type 为 review/release。收口前只确认这一布尔要求，不为此读取无关 Team Plan 内容。
 
@@ -70,6 +70,8 @@ python3 <skill-root>/scripts/complete_task.py \
 ```
 
 上例的 `not_applicable` 只适用于没有 Native Task/Thread 的任务。存在 Native Task/Thread 时必须把这一段替换为以下二者之一：已关闭时传 `--cleanup-status closed` 并至少重复一个 `--cleanup-evidence '<关闭读回证据>'`；确有清理阻塞时传 `--cleanup-status cleanup_blocked --cleanup-blocker '<真实阻塞>'`。不得为通过门禁虚构关闭证据或阻塞。
+
+completion exit 0 后只做一次全项目状态校验：`python3 <skill-root>/scripts/validate_task_state.py --project . --json`。该 CLI 没有 `--task-id`；不要先试探参数。completion JSON 已给出 closure 与 terminal event，不再枚举目录或重读这些文件。
 
 以上 CLI 是稳定 Runtime 契约。helper 没有报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码，也不反复读回整个 `.agency`；只读与当前完成标准有关的项目产物和最终状态。只有 helper 返回的具体错误无法从输入修正时，才检查对应实现。
 

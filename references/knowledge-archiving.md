@@ -61,7 +61,7 @@
 
 下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已读取的 Canonical `SKILL.md` 所在目录。
 
-读取一次 active task 的 `closure.json` 后，先检查项目状态，再用一个命令完成归档。没有长期知识候选时不创建占位候选文件，也不传候选或 deposit 参数：
+task ID、closure、候选与目标文档路径已给出时，读取 closure、实际存在的候选文件和现有目标文档各一次；目标文档尚不存在时不要先做一次必失败读取，也不要手工创建，直接交给 archive/deposit helper 按 `recommended_target` 或 `docs/knowledge/<slug>.md` fallback 创建。不用 `rg` / `find` 枚举 `.agency` 或 docs，也不做前置 `git status`。先检查项目状态，再用一个命令完成归档。没有长期知识候选时不创建占位候选文件，也不传候选或 deposit 参数：
 
 ```bash
 python3 <skill-root>/scripts/validate_task_state.py --project . --json
@@ -87,4 +87,4 @@ python3 <skill-root>/scripts/validate_task_archive.py \
   --archive-dir <destination> --json
 ```
 
-这些 CLI 是稳定 Runtime 契约。命令未报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码、不先单独调用 `deposit_knowledge.py`，也不通过手改 `task-index.json` 或 `task-plan.json` 修补非法前置状态。前置校验失败时保留 active task 并报告真实 blocker；不要把排障工作混进归档阶段。
+archive JSON 与 validator exit 0 JSON 已证明 destination、active 移除、index、manifest 与 deposit report 的契约。除非用户的完成标准另有项目验证，不再逐一重读 task index、manifest、目标文档或 active 路径，也不追加 `git status`、`git diff`、`grep` 计数。命令未报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码、不先单独调用 `deposit_knowledge.py`，也不通过手改 `task-index.json` 或 `task-plan.json` 修补非法前置状态。前置校验失败时保留 active task 并报告真实 blocker；不要把排障工作混进归档阶段。

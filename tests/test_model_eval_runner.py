@@ -31,6 +31,14 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "require_takeover": True,
         }
 
+    def test_runtime_case_accepts_only_non_negative_tool_event_budget(self) -> None:
+        case = self.base_case()
+        case["max_tool_events"] = 7
+        self.assertEqual(runner.validate_runtime_case(case)["max_tool_events"], 7)
+        case["max_tool_events"] = -1
+        with self.assertRaisesRegex(RuntimeError, "max_tool_events"):
+            runner.validate_runtime_case(case)
+
     def test_eval_host_contract_normalizes_notice_without_selecting_a_skill(self) -> None:
         self.assertIn("<skill-name>", runner.EVAL_HOST_AGENTS_TEXT)
         self.assertNotIn(runner.SKILL_NAME, runner.EVAL_HOST_AGENTS_TEXT)
@@ -2070,9 +2078,41 @@ class ModelEvalRunnerTests(unittest.TestCase):
         }
         parsed = runner.event_surface("\n".join(map(json.dumps, (event, boot))), "done")
         self.assertEqual(parsed["tool_events"], 0)
+        self.assertEqual(parsed["tool_events_attempted"], 1)
         self.assertIn(
             "task action preceded COS_BOOT_RECEIPT",
             runner.contract_failures(self.base_case(), parsed),
+        )
+
+    def test_tool_event_budget_counts_failures_once_and_enforces_boundary(self) -> None:
+        events: list[dict[str, object]] = []
+        for index in range(3):
+            item = {
+                "id": f"cmd-{index}",
+                "type": "command_execution",
+                "command": "false",
+            }
+            events.extend(
+                [
+                    {
+                        "type": "item.started",
+                        "item": {**item, "status": "in_progress"},
+                    },
+                    {
+                        "type": "item.completed",
+                        "item": {**item, "status": "completed", "exit_code": 1},
+                    },
+                ]
+            )
+        parsed = runner.event_surface(
+            "\n".join(json.dumps(item) for item in events), ""
+        )
+        self.assertEqual(parsed["tool_events"], 0)
+        self.assertEqual(parsed["tool_events_attempted"], 3)
+        self.assertIsNone(runner.tool_event_budget_failure({"max_tool_events": 3}, parsed))
+        self.assertEqual(
+            runner.tool_event_budget_failure({"max_tool_events": 2}, parsed),
+            "tool-event attempt budget exceeded: 3 > 2",
         )
 
     def test_event_stream_and_tool_success_fields_fail_closed(self) -> None:
@@ -2099,6 +2139,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertEqual(parsed["turn_completed_count"], 1)
         self.assertEqual(parsed["jsonl_parse_errors"], 0)
         self.assertEqual(parsed["tool_events"], 1)
+        self.assertEqual(parsed["tool_events_attempted"], 1)
 
         missing_fields = [
             {
@@ -2119,6 +2160,7 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "",
         )
         self.assertEqual(rejected["tool_events"], 0)
+        self.assertEqual(rejected["tool_events_attempted"], 3)
         self.assertEqual(rejected["jsonl_parse_errors"], 1)
 
     def test_contract_uses_trigger_mode_and_collaboration_fields(self) -> None:

@@ -1434,7 +1434,7 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
             raise RuntimeError(f"case {case_id} {key} must be boolean")
     if case.get("require_skill_read") and case.get("forbid_skill_read"):
         raise RuntimeError(f"case {case_id} has conflicting Skill-read requirements")
-    for key in ("max_collab_spawns", "max_management_files"):
+    for key in ("max_collab_spawns", "max_management_files", "max_tool_events"):
         if key in case and (type(case[key]) is not int or case[key] < 0):
             raise RuntimeError(f"case {case_id} {key} must be a non-negative integer")
     setup = case.get("fixture_setup")
@@ -1598,6 +1598,7 @@ def event_surface(
     messages: list[str] = []
     message_events: list[dict[str, object]] = []
     tool_item_ids: set[str] = set()
+    tool_attempt_ids: set[str] = set()
     spawns: dict[str, dict[str, object]] = {}
     waits: dict[str, dict[str, object]] = {}
     spawn_counts: dict[str, int] = {}
@@ -1663,6 +1664,12 @@ def event_surface(
         if item_type in TOOL_ITEM_TYPES:
             status = item.get("status")
             exit_code = item.get("exit_code")
+            item_id = item.get("id")
+            tool_attempt_ids.add(
+                f"{item_type}:{item_id}"
+                if isinstance(item_id, str) and item_id
+                else f"{item_type}:event-{index}"
+            )
             if item_type == "command_execution":
                 tool_success = (
                     status == "completed"
@@ -1685,7 +1692,6 @@ def event_surface(
             )
             # The startup contract is about attempted task actions, not only
             # successful ones: a started or failed edit/read before boot is still an action.
-            item_id = item.get("id")
             command = item.get("command")
             passive_event = False
             if not completed:
@@ -1844,6 +1850,7 @@ def event_surface(
         "surface": "\n".join(messages),
         "assistant_messages": message_events,
         "tool_events": len(tool_item_ids),
+        "tool_events_attempted": len(tool_attempt_ids),
         "spawn_completed": spawns,
         "reviews_completed": completed_reviews,
         "successful_tool_event_indexes": successful_tool_event_indexes,
@@ -1874,6 +1881,16 @@ def event_surface(
             passive_skill_read_protocol_errors
         ),
     }
+
+
+def tool_event_budget_failure(
+    case: dict[str, Any], parsed: dict[str, object]
+) -> str | None:
+    limit = case.get("max_tool_events")
+    attempts = parsed.get("tool_events_attempted")
+    if isinstance(limit, int) and isinstance(attempts, int) and attempts > limit:
+        return f"tool-event attempt budget exceeded: {attempts} > {limit}"
+    return None
 
 
 def atomic_boot_block(text: str) -> bool:
@@ -2602,6 +2619,9 @@ def run_case(
             failures.append(f"assistant output unexpectedly contains {marker!r}")
     if case.get("require_tool_event") and parsed["tool_events"] == 0:
         failures.append("no completed tool event observed")
+    budget_failure = tool_event_budget_failure(case, parsed)
+    if budget_failure is not None:
+        failures.append(budget_failure)
     if case.get("no_thread") and parsed["collaboration_event_indexes"]:
         failures.append("discussion case attempted a collaboration or task/thread action")
     if events_leak or stderr_leak or final_leak:
@@ -2821,6 +2841,7 @@ def run_case(
             "activation": case["activation"],
         },
         "tool_events_completed": parsed["tool_events"],
+        "tool_events_attempted": parsed["tool_events_attempted"],
         "passive_skill_reads_completed": parsed["passive_skill_reads_completed"],
         "collab_spawns_completed": len(parsed["spawn_completed"]),
         "reviewer_results_completed": len(review_ids),

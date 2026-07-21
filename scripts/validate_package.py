@@ -598,7 +598,7 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
             fail(f"behavior case {case_id} {key} must be boolean")
     if case.get("require_skill_read") and case.get("forbid_skill_read"):
         fail(f"behavior case {case_id} has conflicting Skill-read requirements")
-    for key in ("max_collab_spawns", "max_management_files"):
+    for key in ("max_collab_spawns", "max_management_files", "max_tool_events"):
         if key in case and (type(case[key]) is not int or case[key] < 0):
             fail(f"behavior case {case_id} {key} must be a non-negative integer")
     setup = case.get("fixture_setup")

@@ -93,6 +93,28 @@ class ProgressUpdateTests(unittest.TestCase):
                     summary="Subagent attempted a global update",
                 )
 
+    def test_review_returned_resume_evidence_lives_in_canonical_log(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="review_returned",
+                work_id=None,
+                actor="execution-root",
+                summary="Independent review returned PASS",
+                verification=["reviewer task current-diff PASS"],
+            )
+            plan_text = (task_dir / "task-plan.json").read_text(encoding="utf-8")
+            events = load_events(task_dir / "progress.jsonl")
+            self.assertNotIn("reviewer task current-diff PASS", plan_text)
+            self.assertEqual(events[-1]["status_before"], "executing")
+            self.assertEqual(events[-1]["status_after"], "executing")
+            self.assertEqual(
+                events[-1]["verification"], ["reviewer task current-diff PASS"]
+            )
+
     def test_progress_markdown_is_current_state_first_without_percentage(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
