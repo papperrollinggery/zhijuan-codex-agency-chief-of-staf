@@ -2272,6 +2272,23 @@ class ModelEvalRunnerTests(unittest.TestCase):
             scoped_titles,
         )
 
+        real_table = runner.contract_failures(
+            case,
+            "| Position Instance | 工作流 | 独立读取范围 | 独立输出 |\n"
+            "|---|---|---|---|\n"
+            "| `researcher_mobile` | 移动端研究 | 移动端源码 | 移动端报告 |\n"
+            "| `researcher_server` | 服务端研究 | 服务端源码 | 服务端报告 |\n"
+            "| `researcher_deployment` | 部署配置研究 | CI/CD | 部署报告 |",
+        )
+        self.assertNotIn(
+            "team output did not enumerate three scoped researcher positions",
+            real_table,
+        )
+        self.assertNotIn(
+            "team output did not prove three unique researcher position instances",
+            real_table,
+        )
+
         one_line = runner.contract_failures(
             case,
             "移动端由研究负责人处理，服务端由研究负责人处理，部署由研究负责人处理。",

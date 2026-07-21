@@ -2463,7 +2463,14 @@ def contract_failures(
             matching = [
                 (index, line)
                 for index, line in enumerate(lines)
-                if ("研究负责人" in line or re.search(r"\bResearcher\b", line, re.IGNORECASE))
+                if (
+                    "研究负责人" in line
+                    or re.search(
+                        r"\bResearcher(?:[-_·][A-Za-z0-9_-]+)?\b",
+                        line,
+                        re.IGNORECASE,
+                    )
+                )
                 and any(alias.lower() in line.lower() for alias in aliases)
             ]
             if matching:
