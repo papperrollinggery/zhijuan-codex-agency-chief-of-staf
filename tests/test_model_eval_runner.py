@@ -2289,6 +2289,149 @@ class ModelEvalRunnerTests(unittest.TestCase):
             real_table,
         )
 
+        suffix_id_table = runner.contract_failures(
+            case,
+            "保留 3 个独立 Researcher position instance。\n"
+            "| Position instance | 读取范围 | 独立输出 |\n"
+            "|---|---|---|\n"
+            "| `mobile_researcher` | 移动端源码 | 移动端报告 |\n"
+            "| `backend_researcher` | 服务端源码 | 服务端报告 |\n"
+            "| `deployment_researcher` | 部署配置 | 部署报告 |",
+        )
+        self.assertNotIn(
+            "team output did not enumerate three scoped researcher positions",
+            suffix_id_table,
+        )
+        self.assertNotIn(
+            "team output did not prove three unique researcher position instances",
+            suffix_id_table,
+        )
+
+        explicit_case = dict(case)
+        explicit_case["must_contain"] = ["Position Instances:", "position_instance:"]
+        explicit_missing_ids = runner.contract_failures(
+            explicit_case,
+            "Position Instances:\nposition_instance:\n"
+            "移动端研究负责人\n服务端研究负责人\n部署研究负责人",
+        )
+        self.assertIn(
+            "team output did not prove three unique researcher position instances",
+            explicit_missing_ids,
+        )
+        valid_position_block = (
+            "Position Instances:\n"
+            "position_instance: mobile | 研究负责人 | 移动端 | read-a | out-a\n"
+            "position_instance: server | 研究负责人 | 服务端 | read-b | out-b\n"
+            "position_instance: deploy | 研究负责人 | 部署 | read-c | out-c"
+        )
+        explicit_instances = runner.contract_failures(
+            explicit_case,
+            valid_position_block,
+        )
+        self.assertFalse(
+            any(
+                "structured researcher" in failure
+                or "Position Instances block" in failure
+                for failure in explicit_instances
+            )
+        )
+
+        invalid_structured_blocks = (
+            (
+                "position_instance: mobile | 研究负责人 | 移动端 | r | o\n"
+                "position_instance: server | 研究负责人 | 服务端 | r | o\n"
+                "position_instance: deploy | 研究负责人 | 部署 | r | o",
+                "exactly one Position Instances block",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 移动端 | r | o\n"
+                "position_instance: server | 研究负责人 | 服务端 | r | o\n"
+                "position_instance: deploy | 研究负责人 | 部署 | r | o\n"
+                "position_instance: extra | 研究负责人 | 部署 | r | o",
+                "exactly three structured researcher rows",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile-a | 研究负责人 | 移动端 | r | o\n"
+                "position_instance: mobile-b | 研究负责人 | 移动端 | r | o\n"
+                "position_instance: server | 研究负责人 | 服务端 | r | o",
+                "one structured row per researcher scope",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | developer | 移动端 | r | o\n"
+                "position_instance: server | 研究负责人 | 服务端 | r | o\n"
+                "position_instance: deploy | 研究负责人 | 部署 | r | o",
+                "invalid structured researcher row",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 移动端\n"
+                "position_instance: server | 研究负责人 | 服务端 | r | o\n"
+                "position_instance: deploy | 研究负责人 | 部署 | r | o",
+                "invalid structured researcher row",
+            ),
+            (
+                "说明 position_instance: 只是格式。\n"
+                "mobile_researcher 移动端研究负责人\n"
+                "backend_researcher 服务端研究负责人\n"
+                "deployment_researcher 部署研究负责人",
+                "exactly one Position Instances block",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 移动端 | same-read | same-output\n"
+                "position_instance: server | 研究负责人 | 服务端 | same-read | same-output\n"
+                "position_instance: deploy | 研究负责人 | 部署 | same-read | same-output",
+                "distinct structured read scopes",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 移动端 | TBD | out-a\n"
+                "position_instance: server | 研究负责人 | 服务端 | read-b | N/A\n"
+                "position_instance: deploy | 研究负责人 | 部署 | 待定 | out-c",
+                "invalid structured researcher row",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 非移动端 | read-a | out-a\n"
+                "position_instance: server | 研究负责人 | 不含服务端 | read-b | out-b\n"
+                "position_instance: deploy | 研究负责人 | 无部署内容 | read-c | out-c",
+                "invalid structured researcher row",
+            ),
+            (
+                "Position Instances:\n"
+                "position_instance: mobile | 研究负责人 | 移动端 | read-a | out-a\n"
+                "position_instance: server | 研究负责人 | 服务端 | read-b | out-b\n"
+                "position_instance: deploy | 研究负责人 | 部署 | read-c | out-c\n"
+                "> position_instance: extra | 研究负责人 | 部署 | read-d | out-d",
+                "exactly three structured researcher rows",
+            ),
+        )
+        for invalid_surface, expected_failure in invalid_structured_blocks:
+            with self.subTest(expected_failure=expected_failure):
+                failures = runner.contract_failures(explicit_case, invalid_surface)
+                self.assertTrue(
+                    any(expected_failure in failure for failure in failures), failures
+                )
+
+        for hidden_extra in (
+            "1. position_instance: fourth | 研究负责人 | 部署 | read-d | out-d",
+            "1) position_instance: fourth | 研究负责人 | 部署 | read-d | out-d",
+            "| position_instance: fourth | 研究负责人 | 部署 | read-d | out-d |",
+            "补充 position_instance: fourth | 研究负责人 | 部署 | read-d | out-d",
+            "<blockquote>position_instance: fourth | 研究负责人 | 部署 | read-d | out-d",
+        ):
+            with self.subTest(hidden_extra=hidden_extra):
+                failures = runner.contract_failures(
+                    explicit_case, valid_position_block + "\n" + hidden_extra
+                )
+                self.assertIn(
+                    "team output did not provide exactly three structured researcher rows",
+                    failures,
+                )
+
         one_line = runner.contract_failures(
             case,
             "移动端由研究负责人处理，服务端由研究负责人处理，部署由研究负责人处理。",

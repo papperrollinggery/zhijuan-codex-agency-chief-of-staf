@@ -2092,6 +2092,118 @@ SOLO_FORBIDDEN_SELECTED_ROLES = (
     "文档与交付负责人",
     "收口审计负责人",
 )
+RESEARCHER_INSTANCE_ID_RE = re.compile(
+    r"\b(?:Researcher[-_·][A-Za-z0-9_-]+|[A-Za-z0-9_-]+[-_·]Researcher)\b",
+    re.IGNORECASE,
+)
+
+
+def _position_block_line(line: str) -> str:
+    normalized = re.sub(
+        r"^(?:(?:>\s*)|(?:[-*+]\s+))+", "", line.strip()
+    )
+    return normalized.strip()
+
+
+def researcher_position_block_failures(surface: str) -> list[str]:
+    """Validate the exact, stable model-smoke contract for researcher instances."""
+
+    lines = surface.splitlines()
+    heading_indexes: list[int] = []
+    for index, raw_line in enumerate(lines):
+        candidate = re.sub(r"^#{1,6}\s*", "", raw_line.strip()).strip(" *_`")
+        if candidate.casefold() == "position instances:":
+            heading_indexes.append(index)
+    if len(heading_indexes) != 1:
+        return ["team output did not provide exactly one Position Instances block"]
+
+    block_rows: list[str] = []
+    started = False
+    for raw_line in lines[heading_indexes[0] + 1 :]:
+        candidate = _position_block_line(raw_line)
+        if not candidate or candidate.startswith("```"):
+            continue
+        if candidate.lstrip("`").casefold().startswith("position_instance:"):
+            started = True
+            block_rows.append(candidate)
+            continue
+        if started:
+            break
+        break
+
+    marker_count = len(
+        re.findall(r"position_instance\s*:", surface, flags=re.IGNORECASE)
+    )
+    failures: list[str] = []
+    if len(block_rows) != 3 or marker_count != 3:
+        failures.append("team output did not provide exactly three structured researcher rows")
+
+    instance_ids: list[str] = []
+    scopes: list[str] = []
+    read_scopes: list[str] = []
+    outputs: list[str] = []
+    invalid_rows = 0
+    scope_values = {
+        "移动端": "移动端",
+        "服务端": "服务端",
+        "部署": "部署",
+        "部署配置": "部署",
+    }
+    placeholder_values = {
+        "-",
+        "—",
+        "n/a",
+        "na",
+        "tbd",
+        "todo",
+        "unknown",
+        "待定",
+        "未知",
+    }
+    for row in block_rows:
+        fields = [field.strip(" `*_") for field in row.split("|")]
+        if len(fields) != 5:
+            invalid_rows += 1
+            continue
+        instance_match = re.fullmatch(
+            r"position_instance:\s*([A-Za-z0-9][A-Za-z0-9_-]{0,63})",
+            fields[0],
+            re.IGNORECASE,
+        )
+        scope = scope_values.get(fields[2])
+        read_scope, output = fields[3], fields[4]
+        normalized_read = " ".join(read_scope.split()).casefold()
+        normalized_output = " ".join(output.split()).casefold()
+        placeholders = (
+            any(char in read_scope + output for char in "<>")
+            or normalized_read in placeholder_values
+            or normalized_output in placeholder_values
+        )
+        if (
+            instance_match is None
+            or fields[1] != "研究负责人"
+            or scope is None
+            or not read_scope
+            or not output
+            or placeholders
+        ):
+            invalid_rows += 1
+            continue
+        instance_ids.append(instance_match.group(1).casefold())
+        scopes.append(scope)
+        read_scopes.append(normalized_read)
+        outputs.append(normalized_output)
+    if invalid_rows:
+        failures.append("team output contains invalid structured researcher row")
+    if len(instance_ids) != 3 or len(set(instance_ids)) != 3:
+        failures.append("team output did not prove three unique structured researcher instances")
+    if set(scopes) != {"移动端", "服务端", "部署"}:
+        failures.append("team output did not prove one structured row per researcher scope")
+    if len(read_scopes) != 3 or len(set(read_scopes)) != 3:
+        failures.append("team output did not prove distinct structured read scopes")
+    if len(outputs) != 3 or len(set(outputs)) != 3:
+        failures.append("team output did not prove distinct structured outputs")
+    return failures
 
 
 def selected_team_roles(surface: str) -> tuple[int, set[str]]:
@@ -2442,6 +2554,11 @@ def contract_failures(
             if role in selected_roles:
                 failures.append(f"solo team selected forbidden role: {role}")
     if case.get("team_expectation") == "multiple_researcher_instances":
+        requires_explicit_instances = "position_instance:" in case.get(
+            "must_contain", []
+        )
+        if requires_explicit_instances:
+            failures.extend(researcher_position_block_failures(surface))
         lines = [line.strip() for line in surface.splitlines() if line.strip()]
         scoped_line_indexes: list[int] = []
         scoped_instance_ids: list[str] = []
@@ -2452,7 +2569,7 @@ def contract_failures(
             ("部署", "Deployment"),
         )
         instance_patterns = (
-            re.compile(r"\bResearcher[-_·][A-Za-z0-9_-]+\b", re.IGNORECASE),
+            RESEARCHER_INSTANCE_ID_RE,
             re.compile(
                 r"(?:position_id|position_instance|职位实例|岗位实例|实例)"
                 r"\s*[:=：#-]?\s*`?([A-Za-z0-9_\-\u4e00-\u9fff]+)",
@@ -2465,11 +2582,8 @@ def contract_failures(
                 for index, line in enumerate(lines)
                 if (
                     "研究负责人" in line
-                    or re.search(
-                        r"\bResearcher(?:[-_·][A-Za-z0-9_-]+)?\b",
-                        line,
-                        re.IGNORECASE,
-                    )
+                    or re.search(r"\bResearcher\b", line, re.IGNORECASE)
+                    or RESEARCHER_INSTANCE_ID_RE.search(line) is not None
                 )
                 and any(alias.lower() in line.lower() for alias in aliases)
             ]
@@ -2523,9 +2637,10 @@ def contract_failures(
         )
         if len(scoped_line_indexes) != 3 or len(set(scoped_line_indexes)) != 3:
             failures.append("team output did not enumerate three scoped researcher positions")
-        if scoped_instance_ids and (
-            len(scoped_instance_ids) != 3 or len(set(scoped_instance_ids)) != 3
-        ):
+        unique_instances = (
+            len(scoped_instance_ids) == 3 and len(set(scoped_instance_ids)) == 3
+        )
+        if (requires_explicit_instances or scoped_instance_ids) and not unique_instances:
             failures.append("team output did not prove three unique researcher position instances")
         if len(scoped_actor_ids) != len(set(scoped_actor_ids)):
             failures.append("team output assigned independent research streams to one actor")

@@ -557,7 +557,7 @@
   },
   {
     "id": "lifecycle-team-research-instances",
-    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：移动端、服务端和部署配置是三个读取范围、输出都不同且可并行的独立研究流。保留三个 Researcher position instance，不要按 Profile 名去重。",
+    "prompt": "使用 $agency-chief-of-staff。只规划团队，不执行：移动端、服务端和部署配置是三个读取范围、输出都不同且可并行的独立研究流。保留三个 Researcher position instance，不要按 Profile 名去重。请在唯一的 `Position Instances:` 区块逐行使用 `position_instance: <唯一ID> | 研究负责人 | <移动端/服务端/部署> | <独立读取范围> | <独立输出>`，正好列出三项，不要使用 Markdown 表格。",
     "should_trigger": true,
     "mode": "structured",
     "collaboration": "native_subagents_optional",
@@ -565,7 +565,7 @@
     "lifecycle_phase": "plan_ready",
     "team_expectation": "multiple_researcher_instances",
     "model_smoke": true,
-    "must_contain": ["研究负责人", "三个", "移动端", "服务端", "部署"],
+    "must_contain": ["研究负责人", "三个", "移动端", "服务端", "部署", "Position Instances:", "position_instance:"],
     "must_not_contain": ["合并为一个", "固定最低人数", "TOOL_BLOCKED"],
     "require_tool_event": true,
     "no_write": true
