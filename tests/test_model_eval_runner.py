@@ -1231,6 +1231,18 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertIn("main progress preceded COS_BOOT_RECEIPT", failures)
         self.assertIn("reviewer spawn preceded COS_BOOT_RECEIPT", failures)
 
+        boot_with_followup = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": "任务已接管｜团队执行中\n\n我先读取既有进度证据。",
+            },
+        }
+        boot_failures = runner.contract_failures(
+            self.base_case(), runner.event_surface(json.dumps(boot_with_followup), "")
+        )
+        self.assertNotIn("main progress preceded COS_BOOT_RECEIPT", boot_failures)
+
     def test_boot_precedes_task_action_and_worker_cannot_progress_or_delegate(self) -> None:
         started_task_action = {
             "type": "item.started",

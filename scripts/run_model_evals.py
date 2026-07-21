@@ -2111,7 +2111,7 @@ def contract_failures(
             for item in message_events
             if PROGRESS_RE.search(str(item.get("text", "")))
         ]
-        if any(index <= boot_index for index in progress_indexes):
+        if any(index < boot_index for index in progress_indexes):
             failures.append("main progress preceded COS_BOOT_RECEIPT")
         if any(index <= boot_index for index in task_actions):
             failures.append("task action preceded COS_BOOT_RECEIPT")
