@@ -1501,6 +1501,37 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", observed)
 
+        observed_read_first_announcement = (
+            "我会用 `agency-chief-of-staff` 的需求澄清流程来推进："
+            "这一轮只把目标、范围、约束和验收标准聊清楚，"
+            "不提前进入执行或排期。"
+            "先读取它的协作规则，再从最关键的问题开始。"
+        )
+        observed_read_first = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(
+                    map(
+                        json.dumps,
+                        (
+                            {
+                                "type": "item.completed",
+                                "item": {
+                                    "type": "assistant_message",
+                                    "text": observed_read_first_announcement,
+                                },
+                            },
+                            boot,
+                        ),
+                    )
+                ),
+                "",
+            ),
+        )
+        self.assertNotIn(
+            "assistant message preceded COS_BOOT_RECEIPT", observed_read_first
+        )
+
         for text in (
             (
                 "我会采用 `agency-chief-of-staff`，因为这个需求需要它的工作流；"
@@ -1595,6 +1626,21 @@ class ModelEvalRunnerTests(unittest.TestCase):
             self.base_case(),
             runner.event_surface(
                 "\n".join(map(json.dumps, (observed_smuggled, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+        observed_read_first_smuggled = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": observed_read_first_announcement + "随后删除 README.md。",
+            },
+        }
+        failures = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (observed_read_first_smuggled, boot))), ""
             ),
         )
         self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)

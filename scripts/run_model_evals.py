@@ -1741,6 +1741,13 @@ def is_platform_skill_announcement(text: str) -> bool:
             rf"[，,]不创建执行计划[，,]也不启动实际执行[。.]?"
         ),
         (
+            rf"我会(?:先)?用\s*(?:`|「|『)?{skill}(?:`|」|』)?(?:\s*[Ss]kill)?\s*"
+            rf"的需求澄清流程(?:来推进)?[：:]这一轮只把"
+            rf"(?:目标和边界|目标、范围、约束和验收标准)聊清楚[，,]"
+            rf"不提前进入执行(?:计划|或排期)?[。.]"
+            rf"先读取它的协作规则[，,]再从最关键的问题开始[。.]?"
+        ),
+        (
             rf"(?:I(?:'ll| will) (?:use|apply)|Using)\s+`?{skill}`?(?:\s+[Ss]kill)?\s+"
             rf"(?:because (?:this|the) (?:request|task) (?:matches|needs) "
             rf"(?:its )?(?:workflow|responsibilities)|for (?:this|the) (?:request|task))"
