@@ -227,7 +227,14 @@ EVAL_TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 EVAL_HOST_AGENTS_TEXT = """# Model Smoke Host Contract
 
 This file does not select or activate any Skill.
-If, and only if, you independently decide an installed Skill applies to a staged lifecycle phase, send exactly one status-first pre-read message. Its first non-empty visible line must be the phase status required by the installed Skill, and its remaining line must use this template with `<skill-name>` replaced by the exact name:
+If, and only if, you independently decide an installed Skill applies to a staged lifecycle phase, send exactly one status-first pre-read message. Copy the first line verbatim from this intent map; do not translate, abbreviate, prefix, or paraphrase it:
+- Discussion: `任务已接管｜需求讨论中`
+- Plan creation: `任务已接管｜正在创建执行清单`
+- Execution launch: `任务已接管｜正在启动执行对话`
+- Execution session or progress: `任务已接管｜团队执行中`
+- Verification: `任务已接管｜正在验证`
+- Archive: `任务已接管｜正在归档`
+The second and only remaining line of that same message must use this template with `<skill-name>` replaced by the exact name:
 `我会使用 <skill-name> Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。`
 Then read the Skill. Do not put an announcement, explanation, lookup, or tool call before the phase status.
 For a matched non-lifecycle request, send exactly one pre-read announcement using this template and replace `<skill-name>` with its exact name:
@@ -2340,11 +2347,89 @@ def contract_failures(
             for claim in forbidden_claims:
                 if isinstance(claim, str) and claim in surface:
                     failures.append(f"visualization output makes forbidden claim {claim!r}")
-    if (
-        case.get("team_expectation") == "multiple_researcher_instances"
-        and surface.count("研究负责人") < 3
-    ):
-        failures.append("team output did not enumerate three researcher positions")
+    if case.get("team_expectation") == "multiple_researcher_instances":
+        lines = [line.strip() for line in surface.splitlines() if line.strip()]
+        scoped_line_indexes: list[int] = []
+        scoped_instance_ids: list[str] = []
+        scoped_actor_ids: list[str] = []
+        scope_aliases = (
+            ("移动端", "Mobile"),
+            ("服务端", "Backend"),
+            ("部署", "Deployment"),
+        )
+        instance_patterns = (
+            re.compile(r"\bResearcher[-_·][A-Za-z0-9_-]+\b", re.IGNORECASE),
+            re.compile(
+                r"(?:position_id|position_instance|职位实例|岗位实例|实例)"
+                r"\s*[:=：#-]?\s*`?([A-Za-z0-9_\-\u4e00-\u9fff]+)",
+                re.IGNORECASE,
+            ),
+        )
+        for aliases in scope_aliases:
+            matching = [
+                (index, line)
+                for index, line in enumerate(lines)
+                if ("研究负责人" in line or re.search(r"\bResearcher\b", line, re.IGNORECASE))
+                and any(alias.lower() in line.lower() for alias in aliases)
+            ]
+            if matching:
+                index, line = matching[0]
+                scoped_line_indexes.append(index)
+                instance_id = next(
+                    (
+                        match.group(1) if match.lastindex else match.group(0)
+                        for pattern in instance_patterns
+                        if (match := pattern.search(line)) is not None
+                    ),
+                    "",
+                )
+                if instance_id:
+                    scoped_instance_ids.append(instance_id.casefold())
+                actor_match = re.search(
+                    r"研究负责人\s*(?:[:：·（(]\s*)?"
+                    r"([^|｜,，;；:：/（）()·\s]{1,24})",
+                    line,
+                )
+                if actor_match is None:
+                    actor_match = re.search(
+                        r"\bResearcher(?:\s+|[:：·（(]\s*)"
+                        r"([A-Za-z][A-Za-z0-9_-]{0,23})",
+                        line,
+                        re.IGNORECASE,
+                    )
+                if actor_match is not None:
+                    actor_id = actor_match.group(1).casefold()
+                    generic_actor_ids = {
+                        "lead",
+                        "position",
+                        "instance",
+                        "profile",
+                        "role",
+                        "stream",
+                    }
+                    if actor_id not in generic_actor_ids and not any(
+                        alias.lower() in actor_id
+                        for scope in scope_aliases
+                        for alias in scope
+                    ):
+                        scoped_actor_ids.append(actor_id)
+        merged_role = re.search(
+            r"(?:单一|同一|一个)研究负责人|不另列研究负责人|"
+            r"(?:合并|统一)(?:为|给|到)?(?:一个|同一)?研究负责人|"
+            r"(?:同一|same)\s*position[_ ]instance",
+            surface,
+            re.IGNORECASE,
+        )
+        if len(scoped_line_indexes) != 3 or len(set(scoped_line_indexes)) != 3:
+            failures.append("team output did not enumerate three scoped researcher positions")
+        if scoped_instance_ids and (
+            len(scoped_instance_ids) != 3 or len(set(scoped_instance_ids)) != 3
+        ):
+            failures.append("team output did not prove three unique researcher position instances")
+        if len(scoped_actor_ids) != len(set(scoped_actor_ids)):
+            failures.append("team output assigned independent research streams to one actor")
+        if merged_role is not None:
+            failures.append("team output merged independent research streams into one position")
     return failures
 
 

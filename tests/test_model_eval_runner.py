@@ -2218,15 +2218,108 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "三个独立研究流由研究负责人使用同一 Profile 完成。",
         )
         self.assertIn(
-            "team output did not enumerate three researcher positions", missing
+            "team output did not enumerate three scoped researcher positions", missing
         )
         enumerated = runner.contract_failures(
             case,
-            "研究负责人·移动端\n研究负责人·服务端\n研究负责人·部署配置",
+            "Researcher-Mobile｜研究负责人｜移动端\n"
+            "Researcher-Backend｜研究负责人｜服务端\n"
+            "Researcher-Deployment｜研究负责人｜部署配置",
         )
         self.assertNotIn(
-            "team output did not enumerate three researcher positions", enumerated
+            "team output did not enumerate three scoped researcher positions", enumerated
         )
+        self.assertNotIn(
+            "team output did not prove three unique researcher position instances",
+            enumerated,
+        )
+
+        scoped_titles = runner.contract_failures(
+            case,
+            "移动端研究负责人\n服务端研究负责人\n部署研究负责人",
+        )
+        self.assertNotIn(
+            "team output did not enumerate three scoped researcher positions",
+            scoped_titles,
+        )
+        self.assertNotIn(
+            "team output did not prove three unique researcher position instances",
+            scoped_titles,
+        )
+
+        one_line = runner.contract_failures(
+            case,
+            "移动端由研究负责人处理，服务端由研究负责人处理，部署由研究负责人处理。",
+        )
+        self.assertIn(
+            "team output did not enumerate three scoped researcher positions", one_line
+        )
+
+        merged = runner.contract_failures(
+            case,
+            "单一研究负责人同时负责移动端、服务端与部署；"
+            "研究负责人 Profile 复用，不另列研究负责人实例。",
+        )
+        self.assertIn(
+            "team output merged independent research streams into one position", merged
+        )
+
+        repeated_instance = runner.contract_failures(
+            case,
+            "position_instance: researcher-shared｜研究负责人｜移动端\n"
+            "position_instance: researcher-shared｜研究负责人｜服务端\n"
+            "position_instance: researcher-shared｜研究负责人｜部署",
+        )
+        self.assertIn(
+            "team output did not prove three unique researcher position instances",
+            repeated_instance,
+        )
+
+        unlabeled_people = runner.contract_failures(
+            case,
+            "研究负责人甲｜移动端\n研究负责人甲｜服务端\n研究负责人甲｜部署",
+        )
+        self.assertIn(
+            "team output assigned independent research streams to one actor",
+            unlabeled_people,
+        )
+
+        unique_ids_same_actor = runner.contract_failures(
+            case,
+            "position_instance: mobile｜研究负责人甲｜移动端\n"
+            "position_instance: backend｜研究负责人甲｜服务端\n"
+            "position_instance: deploy｜研究负责人甲｜部署",
+        )
+        self.assertIn(
+            "team output assigned independent research streams to one actor",
+            unique_ids_same_actor,
+        )
+
+        for same_actor_surface in (
+            "移动端｜研究负责人：甲\n服务端｜研究负责人：甲\n部署｜研究负责人：甲",
+            "移动端｜研究负责人·甲\n服务端｜研究负责人·甲\n部署｜研究负责人·甲",
+            "Researcher Alice | Mobile\nResearcher Alice | Backend\n"
+            "Researcher Alice | Deployment",
+        ):
+            with self.subTest(surface=same_actor_surface):
+                failures = runner.contract_failures(case, same_actor_surface)
+                self.assertIn(
+                    "team output assigned independent research streams to one actor",
+                    failures,
+                )
+
+    def test_model_host_contract_exposes_exact_pre_read_phase_map(self) -> None:
+        contract = runner.EVAL_HOST_AGENTS_TEXT
+        for phase, status in (
+            ("Discussion", "任务已接管｜需求讨论中"),
+            ("Plan creation", "任务已接管｜正在创建执行清单"),
+            ("Execution launch", "任务已接管｜正在启动执行对话"),
+            ("Execution session or progress", "任务已接管｜团队执行中"),
+            ("Verification", "任务已接管｜正在验证"),
+            ("Archive", "任务已接管｜正在归档"),
+        ):
+            self.assertIn(f"{phase}: `{status}`", contract)
+        self.assertIn("do not translate, abbreviate, prefix, or paraphrase", contract)
 
     def test_direct_content_case_does_not_require_takeover_ritual(self) -> None:
         case = self.base_case()

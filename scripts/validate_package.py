@@ -109,6 +109,7 @@ PROHIBITED_ROUTING_MARKERS = (
     "AGENTS routing shim",
 )
 CASE_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}\Z")
+MAX_SKILL_DESCRIPTION_CHARS = 1024
 SKILL_SLUG_RE = re.compile(r"\$(?:[a-z][a-z0-9]*)(?:-[a-z0-9]+)+")
 WORKER_PACKET_LABELS = WORKER_FIELDS
 SAFE_STOP_CONDITION = WORKER_STOP_CONDITION
@@ -887,6 +888,11 @@ def main() -> None:
         fail("discovery bridge manifest drifted from the independent package contract")
 
     fields = parse_frontmatter(root / "SKILL.md")
+    if len(fields["description"].strip()) > MAX_SKILL_DESCRIPTION_CHARS:
+        fail(
+            "canonical Skill description exceeds host limit: "
+            f"{len(fields['description'].strip())} > {MAX_SKILL_DESCRIPTION_CHARS}"
+        )
     skill_text = (root / "SKILL.md").read_text(encoding="utf-8")
     line_count = len(skill_text.splitlines())
     if line_count > 500:
@@ -902,6 +908,11 @@ def main() -> None:
     discovery_fields = parse_frontmatter(discovery_path, DISCOVERY_SKILL_NAME)
     discovery_text = discovery_path.read_text(encoding="utf-8")
     description = discovery_fields["description"]
+    if len(description.strip()) > MAX_SKILL_DESCRIPTION_CHARS:
+        fail(
+            "discovery Skill description exceeds host limit: "
+            f"{len(description.strip())} > {MAX_SKILL_DESCRIPTION_CHARS}"
+        )
     for cue in (
         "discuss goals and boundaries before planning",
         "ordinary questions",
@@ -911,7 +922,13 @@ def main() -> None:
         "a valid AGENCY_WORKER packet",
         "thread or release readiness without work intent",
         "maintenance of the Agency Chief of Staff source repository",
-        "first visible line must be exactly 任务已接管｜需求讨论中",
+        "Discussion=任务已接管｜需求讨论中",
+        "Plan=任务已接管｜正在创建执行清单",
+        "Execution Launch=任务已接管｜正在启动执行对话",
+        "Execution Session/Progress=任务已接管｜团队执行中",
+        "Verify=任务已接管｜正在验证",
+        "Archive=任务已接管｜正在归档",
+        "notice only on line 2",
         "no source-thread, history, memory, project, or Git lookup",
     ):
         if cue not in description:

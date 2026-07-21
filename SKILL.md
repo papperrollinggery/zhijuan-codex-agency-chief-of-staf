@@ -1,6 +1,6 @@
 ---
 name: agency-chief-of-staff
-description: "复杂项目的内容优先协调与跨对话生命周期。Implicitly invoke when the user wants a staged project workflow, especially ‘这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划’，or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Also use for explicit $agency-chief-of-staff invocation or an AGENCY_EXECUTION_SESSION packet. Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
+description: "内容优先的复杂项目协调与跨对话生命周期。用于多阶段复杂任务、先讨论需求再执行、根据讨论创建任务执行清单、创建新的 Codex 对话或 Task 执行、跨对话进度管理、角色化团队安排、Codex Thread/Worktree 调度、任务归档、长期知识沉淀、Goal/长期项目及验证审核交付闭环。自然触发包括“这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划”“先讨论需求”“先把需求聊清楚”“根据以上讨论创建执行清单”“整理成任务清单”“开一个新对话执行”“单独创建任务执行”“安排团队来做”“安排几个专业角色”“持续更新进度”“归档任务”“沉淀长期资产”“总结到已有文档”。Pre-read: choose only the value after = for the user's intent as the exact first line: Discussion=任务已接管｜需求讨论中; Plan=任务已接管｜正在创建执行清单; Execution Launch=任务已接管｜正在启动执行对话; Execution Session/Progress=任务已接管｜团队执行中; Verify=任务已接管｜正在验证; Archive=任务已接管｜正在归档. Required Skill notice only on line 2 of that message, then read once. Also use for explicit $agency-chief-of-staff or AGENCY_EXECUTION_SESSION. Do not implicitly trigger for 单次小问题、单句翻译、简单代码修改、单文件明确修复、普通信息问答、仅出现 thread/release readiness 而无工作意图、合法 AGENCY_WORKER packet 或本 Skill 源码维护。"
 ---
 
 # Agency Chief of Staff

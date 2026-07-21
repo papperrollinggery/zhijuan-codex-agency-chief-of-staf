@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import install_skill  # noqa: E402
+import validate_package  # noqa: E402
 
 
 class ActivationLifecycleTests(unittest.TestCase):
@@ -31,6 +32,26 @@ class ActivationLifecycleTests(unittest.TestCase):
             "总结到已有文档",
         ):
             self.assertIn(phrase, skill)
+        description = skill.splitlines()[2]
+        self.assertIn("choose only the value after =", description)
+        for phase, status in (
+            ("Discussion", "任务已接管｜需求讨论中"),
+            ("Plan", "任务已接管｜正在创建执行清单"),
+            ("Execution Launch", "任务已接管｜正在启动执行对话"),
+            ("Execution Session/Progress", "任务已接管｜团队执行中"),
+            ("Verify", "任务已接管｜正在验证"),
+            ("Archive", "任务已接管｜正在归档"),
+        ):
+            self.assertIn(f"{phase}={status}", description)
+        self.assertIn("notice only on line 2", description)
+        self.assertIn("choose only the value after =", description)
+        canonical_description = validate_package.parse_frontmatter(ROOT / "SKILL.md")[
+            "description"
+        ]
+        self.assertLessEqual(
+            len(canonical_description.strip()),
+            validate_package.MAX_SKILL_DESCRIPTION_CHARS,
+        )
 
     def test_host_metadata_describes_the_staged_lifecycle(self) -> None:
         metadata = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -62,7 +83,23 @@ class ActivationLifecycleTests(unittest.TestCase):
             self.assertIn(exclusion, skill)
             self.assertIn(exclusion, description)
         self.assertIn("thread or release readiness without work intent", description)
-        self.assertIn("first visible line must be exactly 任务已接管｜需求讨论中", description)
+        for phase, status in (
+            ("Discussion", "任务已接管｜需求讨论中"),
+            ("Plan", "任务已接管｜正在创建执行清单"),
+            ("Execution Launch", "任务已接管｜正在启动执行对话"),
+            ("Execution Session/Progress", "任务已接管｜团队执行中"),
+            ("Verify", "任务已接管｜正在验证"),
+            ("Archive", "任务已接管｜正在归档"),
+        ):
+            self.assertIn(f"{phase}={status}", description)
+        self.assertIn("notice only on line 2", description)
+        bridge_description = validate_package.parse_frontmatter(
+            bridge_root / "SKILL.md", install_skill.DISCOVERY_SKILL_NAME
+        )["description"]
+        self.assertLessEqual(
+            len(bridge_description.strip()),
+            validate_package.MAX_SKILL_DESCRIPTION_CHARS,
+        )
         self.assertIn("no source-thread, history, memory, project, or Git lookup", description)
         self.assertIn("before any other commentary", skill)
         self.assertIn("delegation envelope", skill)
