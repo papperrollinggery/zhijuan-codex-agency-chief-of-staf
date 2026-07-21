@@ -227,7 +227,10 @@ EVAL_TOOL_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 EVAL_HOST_AGENTS_TEXT = """# Model Smoke Host Contract
 
 This file does not select or activate any Skill.
-If, and only if, you independently decide an installed Skill applies, send exactly one pre-read announcement using this template and replace `<skill-name>` with its exact name:
+If, and only if, you independently decide an installed Skill applies to a staged lifecycle phase, send exactly one status-first pre-read message. Its first non-empty visible line must be the phase status required by the installed Skill, and its remaining line must use this template with `<skill-name>` replaced by the exact name:
+`我会使用 <skill-name> Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。`
+Then read the Skill. Do not put an announcement, explanation, lookup, or tool call before the phase status.
+For a matched non-lifecycle request, send exactly one pre-read announcement using this template and replace `<skill-name>` with its exact name:
 `我会使用 <skill-name> Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。`
 Do not add task status, findings, evidence, actions, or results to that announcement.
 """
@@ -260,6 +263,16 @@ ALLOWED_LIFECYCLE_PHASES = {
     "executing",
     "archive",
 }
+EXACT_LIFECYCLE_TAKEOVER_LINES = frozenset(
+    {
+        "任务已接管｜需求讨论中",
+        "任务已接管｜正在创建执行清单",
+        "任务已接管｜正在启动执行对话",
+        "任务已接管｜团队执行中",
+        "任务已接管｜正在验证",
+        "任务已接管｜正在归档",
+    }
+)
 ALLOWED_TEAM_EXPECTATIONS = {
     "none",
     "solo_or_lean",
@@ -360,6 +373,8 @@ REQUIRED_SMOKE_CONTRACT = {
         "collaboration": "none",
         "activation": "implicit",
         "lifecycle_phase": "discussion",
+        "expected_takeover_line": "任务已接管｜需求讨论中",
+        "forbid_task_actions": True,
     },
     "lifecycle-discussion-implicit": {
         "should_trigger": True,
@@ -367,6 +382,8 @@ REQUIRED_SMOKE_CONTRACT = {
         "collaboration": "none",
         "activation": "implicit",
         "lifecycle_phase": "discussion",
+        "expected_takeover_line": "任务已接管｜需求讨论中",
+        "forbid_task_actions": True,
     },
     "lifecycle-plan-creation": {
         "should_trigger": True,
@@ -375,6 +392,7 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "implicit",
         "lifecycle_phase": "plan_ready",
         "sandbox": "workspace-write",
+        "expected_takeover_line": "任务已接管｜正在创建执行清单",
     },
     "lifecycle-execution-launch": {
         "should_trigger": True,
@@ -383,6 +401,7 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "implicit",
         "lifecycle_phase": "execution_launch",
         "sandbox": "workspace-write",
+        "expected_takeover_line": "任务已接管｜正在启动执行对话",
     },
     "lifecycle-execution-session-resume": {
         "should_trigger": True,
@@ -391,6 +410,7 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "execution_session",
         "lifecycle_phase": "executing",
         "sandbox": "workspace-write",
+        "expected_takeover_line": "任务已接管｜团队执行中",
     },
     "lifecycle-team-small-bug": {
         "should_trigger": True,
@@ -420,6 +440,7 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "explicit",
         "lifecycle_phase": "executing",
         "sandbox": "workspace-write",
+        "expected_takeover_line": "任务已接管｜团队执行中",
     },
     "lifecycle-archive-knowledge": {
         "should_trigger": True,
@@ -428,6 +449,7 @@ REQUIRED_SMOKE_CONTRACT = {
         "activation": "implicit",
         "lifecycle_phase": "archive",
         "sandbox": "workspace-write",
+        "expected_takeover_line": "任务已接管｜正在归档",
     },
     "lifecycle-small-task-exclusion": {
         "should_trigger": False,
@@ -1047,19 +1069,19 @@ def is_valid_worker_packet(prompt: str) -> bool:
     return package_valid_worker_packet(prompt)
 
 
-def is_passive_skill_read(
+def classify_passive_skill_bundle_read(
     item: dict[str, object], installed_skill_path: Path | None, fixture_root: Path | None
-) -> bool:
-    """Allow only a complete, read-only host read of the installed skill."""
+) -> tuple[bool, bool]:
+    """Return (safe bundle read, complete canonical SKILL read)."""
     if item.get("type") != "command_execution" or installed_skill_path is None:
-        return False
+        return False, False
     command = item.get("command")
     if not isinstance(command, str):
-        return False
+        return False, False
     try:
         parts = shlex.split(command)
     except ValueError:
-        return False
+        return False, False
     trusted_shell = False
     if (
         len(parts) == 3
@@ -1075,19 +1097,19 @@ def is_passive_skill_read(
             lexer.commenters = ""
             parts = list(lexer)
         except ValueError:
-            return False
+            return False, False
     segments: list[list[str]] = [[]]
     for part in parts:
         if part == "&&":
             if not trusted_shell or not segments[-1]:
-                return False
+                return False, False
             segments.append([])
             continue
         if any(operator in part for operator in ("&", ";", "|", "<", ">", "(", ")")):
-            return False
+            return False, False
         segments[-1].append(part)
     if not segments[-1] or len(segments) > 8:
-        return False
+        return False, False
 
     skill_path = installed_skill_path.resolve(strict=False)
     skill_root = skill_path.parent
@@ -1110,12 +1132,28 @@ def is_passive_skill_read(
     canonical_complete = False
     canonical_line_count: int | None = None
     canonical_intervals: list[tuple[int, int]] = []
+    canonical_order_violation = False
+
+    def canonical_coverage_complete() -> bool:
+        if canonical_complete:
+            return True
+        if canonical_line_count is None or not canonical_intervals:
+            return False
+        next_required = 1
+        for interval_start, interval_end in sorted(canonical_intervals):
+            if interval_start > next_required:
+                return False
+            next_required = max(next_required, interval_end + 1)
+            if next_required > canonical_line_count:
+                return True
+        return False
+
     for segment in segments:
         target: Path | None = None
         if len(segment) == 2 and segment[0] in {"/bin/cat", "cat"}:
             target = resolved_bundle_target(segment[1])
             if target is None:
-                return False
+                return False, False
             if target == skill_path:
                 canonical_complete = True
         elif (
@@ -1128,19 +1166,19 @@ def is_passive_skill_read(
             )
             target = resolved_bundle_target(segment[3])
             if match is None or target is None:
-                return False
+                return False, False
             start = int(match.group(1))
             end_token = match.group(2)
             if end_token != "$" and int(end_token) < start:
-                return False
+                return False, False
             if target == skill_path:
                 try:
                     if canonical_line_count is None:
                         canonical_line_count = len(target.read_bytes().splitlines())
                 except OSError:
-                    return False
+                    return False, False
                 if canonical_line_count < 1:
-                    return False
+                    return False, False
                 end = (
                     canonical_line_count
                     if end_token == "$"
@@ -1155,22 +1193,26 @@ def is_passive_skill_read(
         ):
             target = resolved_bundle_target(segment[2])
             if target is None:
-                return False
-            continue
+                return False, False
         else:
-            return False
-    if canonical_complete:
-        return True
-    if canonical_line_count is None or not canonical_intervals:
-        return False
-    next_required = 1
-    for start, end in sorted(canonical_intervals):
-        if start > next_required:
-            return False
-        next_required = max(next_required, end + 1)
-        if next_required > canonical_line_count:
-            return True
-    return False
+            return False, False
+        if target != skill_path and not canonical_coverage_complete():
+            canonical_order_violation = True
+    if canonical_order_violation:
+        return True, False
+    if canonical_coverage_complete():
+        return True, True
+    return True, False
+
+
+def is_passive_skill_read(
+    item: dict[str, object], installed_skill_path: Path | None, fixture_root: Path | None
+) -> bool:
+    """Recognize a safe bundle read that completely covers canonical SKILL.md."""
+    _, canonical_complete = classify_passive_skill_bundle_read(
+        item, installed_skill_path, fixture_root
+    )
+    return canonical_complete
 
 
 def execution_cwd_matches(value: object, fixture: Path) -> bool:
@@ -1210,6 +1252,29 @@ def safe_artifact_glob(value: object, case_id: str) -> str:
         if part != "*" and re.fullmatch(r"[A-Za-z0-9._-]+", part) is None:
             raise RuntimeError(f"case {case_id} artifact glob has an unsafe component")
     return value
+
+
+def inspect_empty_artifacts(
+    fixture: Path, patterns: list[object], case_id: str
+) -> tuple[list[str], list[str]]:
+    observed: list[str] = []
+    failures: list[str] = []
+    for pattern_value in patterns:
+        pattern = safe_artifact_glob(pattern_value, case_id)
+        matches = sorted(
+            path
+            for path in fixture.glob(pattern)
+            if path.is_file() and not path.is_symlink()
+        )
+        if not matches:
+            failures.append(f"expected empty artifact glob had no file: {pattern}")
+            continue
+        for artifact in matches:
+            relative = artifact.relative_to(fixture).as_posix()
+            observed.append(relative)
+            if artifact.stat().st_size != 0:
+                failures.append(f"expected empty artifact contains data: {relative}")
+    return observed, failures
 
 
 def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, object]:
@@ -1418,6 +1483,9 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} has unsupported activation")
     if "lifecycle_phase" in case and case["lifecycle_phase"] not in ALLOWED_LIFECYCLE_PHASES:
         raise RuntimeError(f"case {case_id} has unsupported lifecycle_phase")
+    expected_takeover = case.get("expected_takeover_line")
+    if expected_takeover is not None and expected_takeover not in EXACT_LIFECYCLE_TAKEOVER_LINES:
+        raise RuntimeError(f"case {case_id} expected_takeover_line is unsupported")
     if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
         raise RuntimeError(f"case {case_id} has unsupported team_expectation")
     for key in (
@@ -1429,11 +1497,19 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         "require_takeover",
         "require_skill_read",
         "forbid_skill_read",
+        "forbid_task_actions",
     ):
         if key in case and type(case[key]) is not bool:
             raise RuntimeError(f"case {case_id} {key} must be boolean")
     if case.get("require_skill_read") and case.get("forbid_skill_read"):
         raise RuntimeError(f"case {case_id} has conflicting Skill-read requirements")
+    if expected_takeover is not None and not case["should_trigger"]:
+        raise RuntimeError(f"case {case_id} cannot require a takeover when excluded")
+    if case.get("model_smoke") and case.get("lifecycle_phase") == "discussion":
+        if expected_takeover != "任务已接管｜需求讨论中":
+            raise RuntimeError(f"case {case_id} discussion requires the exact takeover line")
+        if case.get("forbid_task_actions") is not True:
+            raise RuntimeError(f"case {case_id} discussion must forbid task actions")
     for key in ("max_collab_spawns", "max_management_files", "max_tool_events"):
         if key in case and (type(case[key]) is not int or case[key] < 0):
             raise RuntimeError(f"case {case_id} {key} must be a non-negative integer")
@@ -1458,6 +1534,11 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         raise RuntimeError(f"case {case_id} expected_absent_artifacts must be a list")
     for pattern in absent:
         safe_artifact_glob(pattern, case_id)
+    empty = case.get("expected_empty_artifacts", [])
+    if not isinstance(empty, list):
+        raise RuntimeError(f"case {case_id} expected_empty_artifacts must be a list")
+    for pattern in empty:
+        safe_artifact_glob(pattern, case_id)
     artifacts = case.get("expected_artifacts", [])
     if not isinstance(artifacts, list):
         raise RuntimeError(f"case {case_id} expected_artifacts must be a list")
@@ -1475,7 +1556,7 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
         if not artifact["must_contain"] and not artifact["must_contain_any"]:
             raise RuntimeError(f"case {case_id} artifact lacks a positive assertion")
     if case.get("no_write") and (
-        case.get("expected_file") or artifacts or prefixes
+        case.get("expected_file") or artifacts or empty or prefixes
     ):
         raise RuntimeError(f"case {case_id} no_write conflicts with artifact changes")
     sandbox = case.get("sandbox", "read-only")
@@ -1609,6 +1690,8 @@ def event_surface(
     last_file_change_event_index = -1
     passive_skill_reads_completed: set[str] = set()
     passive_skill_read_started_commands: dict[str, str] = {}
+    passive_skill_read_started_canonical: dict[str, bool] = {}
+    passive_bundle_read_first_event_indexes: dict[str, int] = {}
     passive_skill_read_terminal_ids: set[str] = set()
     passive_skill_read_first_event_indexes: dict[str, int] = {}
     passive_skill_read_completion_event_indexes: dict[str, int] = {}
@@ -1687,7 +1770,7 @@ def event_surface(
             else:
                 tool_success = status == "completed"
                 valid_command_terminal = False
-            passive_skill_read = is_passive_skill_read(
+            passive_bundle_read, passive_skill_read = classify_passive_skill_bundle_read(
                 item, installed_skill_path, fixture_root
             )
             # The startup contract is about attempted task actions, not only
@@ -1696,7 +1779,7 @@ def event_surface(
             passive_event = False
             if not completed:
                 if (
-                    passive_skill_read
+                    passive_bundle_read
                     and isinstance(item_id, str)
                     and item_id
                     and isinstance(command, str)
@@ -1713,9 +1796,12 @@ def event_surface(
                         )
                     else:
                         passive_skill_read_started_commands[item_id] = command
-                        passive_skill_read_first_event_indexes[item_id] = index
+                        passive_skill_read_started_canonical[item_id] = passive_skill_read
+                        passive_bundle_read_first_event_indexes[item_id] = index
+                        if passive_skill_read:
+                            passive_skill_read_first_event_indexes[item_id] = index
                         passive_event = True
-                elif passive_skill_read:
+                elif passive_bundle_read:
                     passive_skill_read_protocol_errors.add(
                         f"invalid-start:{item_id!r}"
                     )
@@ -1735,19 +1821,23 @@ def event_surface(
                             f"invalid-completion:{item_id}"
                         )
                     elif (
-                        passive_skill_read
+                        passive_bundle_read
                         and isinstance(command, str)
                         and passive_skill_read_started_commands[item_id] == command
                     ):
                         passive_event = True
-                        if tool_success:
+                        if (
+                            tool_success
+                            and passive_skill_read_started_canonical[item_id]
+                            and passive_skill_read
+                        ):
                             passive_skill_read_completion_event_indexes[item_id] = index
                             passive_skill_reads_completed.add(item_id)
                     else:
                         passive_skill_read_protocol_errors.add(
                             f"mismatched-completion:{item_id}"
                         )
-            elif passive_skill_read:
+            elif passive_bundle_read:
                 passive_skill_read_protocol_errors.add(
                     f"unmatched-completion:{item_id!r}"
                 )
@@ -1868,6 +1958,9 @@ def event_surface(
         "passive_skill_read_first_event_indexes": sorted(
             passive_skill_read_first_event_indexes.values()
         ),
+        "passive_bundle_read_first_event_indexes": sorted(
+            passive_bundle_read_first_event_indexes.values()
+        ),
         "passive_skill_read_completion_event_indexes": sorted(
             passive_skill_read_completion_event_indexes.values()
         ),
@@ -1893,13 +1986,32 @@ def tool_event_budget_failure(
     return None
 
 
-def atomic_boot_block(text: str) -> bool:
-    """Require a visible takeover line, optionally preceded by one hidden marker."""
+def first_visible_takeover_line(text: str) -> str:
     stripped = text.lstrip()
     match = re.match(r"<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n", stripped)
     remainder = stripped[match.end() :] if match is not None else stripped
-    first_visible = next((line.strip() for line in remainder.splitlines() if line.strip()), "")
+    return next((line.strip() for line in remainder.splitlines() if line.strip()), "")
+
+
+def atomic_boot_block(text: str, expected_line: str | None = None) -> bool:
+    """Require the first visible takeover line, optionally with an exact phase."""
+    first_visible = first_visible_takeover_line(text)
+    if expected_line is not None:
+        return first_visible == expected_line
     return first_visible.startswith("任务已接管｜")
+
+
+def status_first_skill_announcement(text: str, expected_line: str) -> bool:
+    """Recognize an exact phase line followed only by the platform Skill notice."""
+    stripped = text.lstrip()
+    marker = re.match(r"<!--\s*(?:可选：)?COS_BOOT_RECEIPT[^>]*-->\s*\n", stripped)
+    remainder = stripped[marker.end() :] if marker is not None else stripped
+    lines = remainder.splitlines()
+    first_index = next((index for index, line in enumerate(lines) if line.strip()), None)
+    if first_index is None or lines[first_index].strip() != expected_line:
+        return False
+    announcement = "\n".join(lines[first_index + 1 :]).strip()
+    return is_platform_skill_announcement(announcement)
 
 
 def is_platform_skill_announcement(text: str) -> bool:
@@ -2045,6 +2157,9 @@ def contract_failures(
             and case["activation"] in {"ordinary", "worker"},
         )
     )
+    expected_takeover = case.get("expected_takeover_line")
+    if not isinstance(expected_takeover, str):
+        expected_takeover = None
     if require_skill_read and passive_reads < 1:
         failures.append("required Skill read was not observed")
     if duplicate_passive_read_starts:
@@ -2055,7 +2170,7 @@ def contract_failures(
         failures.append("passive Skill read protocol error observed")
     if forbid_skill_read and (passive_reads or passive_read_first_indexes):
         failures.append("excluded case read the Chief-of-Staff Skill")
-    if case.get("require_takeover") and case["should_trigger"] and not booted:
+    if (case.get("require_takeover") or expected_takeover) and case["should_trigger"] and not booted:
         failures.append("required lifecycle takeover line was not observed")
     if not case["should_trigger"] and booted:
         failures.append("should_trigger=false but COS_BOOT_RECEIPT was observed")
@@ -2074,6 +2189,9 @@ def contract_failures(
             failures.append("worker or ordinary case attempted collaboration")
         return failures
 
+    if case.get("forbid_task_actions") and task_actions:
+        failures.append("discussion attempted a non-Skill tool or collaboration action")
+
     boot_message = ""
     if boot_indexes:
         boot_event = next(
@@ -2082,8 +2200,13 @@ def contract_failures(
         boot_message = str(boot_event.get("text", ""))
     elif isinstance(surface_or_events, str):
         boot_message = surface
-    if booted and not atomic_boot_block(boot_message):
-        failures.append("boot marker and first visible takeover line are not atomic")
+    if booted and not atomic_boot_block(boot_message, expected_takeover):
+        if expected_takeover is None:
+            failures.append("boot marker and first visible takeover line are not atomic")
+        else:
+            failures.append(
+                f"first visible takeover line is not exact: {expected_takeover}"
+            )
 
     if booted and message_events and len(boot_indexes) != 1:
         failures.append("main session must emit exactly one takeover line")
@@ -2092,20 +2215,51 @@ def contract_failures(
         preboot_messages = [
             item for item in message_events if int(item["event_index"]) < boot_index
         ]
-        valid_announcement_read_window = (
-            len(preboot_messages) == 1
-            and is_platform_skill_announcement(str(preboot_messages[0].get("text", "")))
-            and passive_reads == 1
-            and len(passive_read_first_indexes) == 1
-            and len(passive_read_completion_indexes) == 1
-            and duplicate_passive_read_completions == 0
-            and int(preboot_messages[0]["event_index"])
-            < passive_read_first_indexes[0]
-            <= passive_read_completion_indexes[0]
-            < boot_index
-        )
+        if expected_takeover is not None:
+            raw_bundle_indexes = surface_or_events.get(
+                "passive_bundle_read_first_event_indexes", []
+            )
+            bundle_read_indexes = (
+                [int(item) for item in raw_bundle_indexes]
+                if isinstance(raw_bundle_indexes, list)
+                else []
+            )
+            valid_announcement_read_window = (
+                not preboot_messages
+                and status_first_skill_announcement(boot_message, expected_takeover)
+                and passive_reads == 1
+                and len(passive_read_first_indexes) == 1
+                and len(passive_read_completion_indexes) == 1
+                and duplicate_passive_read_completions == 0
+                and boot_index < passive_read_first_indexes[0]
+                <= passive_read_completion_indexes[0]
+                and bool(bundle_read_indexes)
+                and passive_read_first_indexes[0] == bundle_read_indexes[0]
+                and all(
+                    index == passive_read_first_indexes[0]
+                    or passive_read_completion_indexes[0] < index
+                    for index in bundle_read_indexes
+                )
+            )
+        else:
+            valid_announcement_read_window = (
+                len(preboot_messages) == 1
+                and is_platform_skill_announcement(str(preboot_messages[0].get("text", "")))
+                and passive_reads == 1
+                and len(passive_read_first_indexes) == 1
+                and len(passive_read_completion_indexes) == 1
+                and duplicate_passive_read_completions == 0
+                and int(preboot_messages[0]["event_index"])
+                < passive_read_first_indexes[0]
+                <= passive_read_completion_indexes[0]
+                < boot_index
+            )
         if (preboot_messages or passive_reads) and not valid_announcement_read_window:
-            failures.append("assistant message preceded COS_BOOT_RECEIPT")
+            failures.append(
+                "Skill announcement/read order violated takeover contract"
+                if expected_takeover is not None
+                else "assistant message preceded COS_BOOT_RECEIPT"
+            )
         progress_indexes = [
             int(item["event_index"])
             for item in message_events
@@ -2731,6 +2885,13 @@ def run_case(
         pattern = safe_artifact_glob(pattern_value, str(case["id"]))
         if any(fixture.glob(pattern)):
             failures.append(f"artifact expected to be absent still exists: {pattern}")
+    empty_paths, empty_failures = inspect_empty_artifacts(
+        fixture,
+        case.get("expected_empty_artifacts", []),
+        str(case["id"]),
+    )
+    observed_artifact_paths.extend(empty_paths)
+    failures.extend(empty_failures)
     if case.get("require_progress") and not any(
         path.endswith("progress.jsonl") for path in observed_artifact_paths
     ):

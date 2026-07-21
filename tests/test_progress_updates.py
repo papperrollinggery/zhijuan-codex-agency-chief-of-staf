@@ -173,7 +173,9 @@ class ProgressUpdateTests(unittest.TestCase):
             task_id, task_dir = self.executing_task(project)
             outside = base / "outside.jsonl"
             outside.write_text("SENTINEL\n", encoding="utf-8")
-            (task_dir / "progress.jsonl").symlink_to(outside)
+            progress_path = task_dir / "progress.jsonl"
+            progress_path.unlink()
+            progress_path.symlink_to(outside)
             with self.assertRaisesRegex(ValueError, "symlink"):
                 update_progress(
                     project,
@@ -205,7 +207,7 @@ class ProgressUpdateTests(unittest.TestCase):
                 read_json(task_dir / "task-plan.json")["work_items"][0]["status"],
                 "pending",
             )
-            self.assertFalse((task_dir / "progress.jsonl").exists())
+            self.assertEqual((task_dir / "progress.jsonl").read_text(encoding="utf-8"), "")
 
     def test_terminal_index_failure_rolls_back_completion_event(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

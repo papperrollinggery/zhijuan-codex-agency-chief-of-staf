@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import subprocess
 import tempfile
@@ -16,6 +17,72 @@ import install_skill  # noqa: E402
 
 
 class InstallSkillTests(unittest.TestCase):
+    def test_sealed_installed_runtime_cannot_generate_python_bytecode(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            target_root = Path(raw) / "skills"
+            install_skill.replace_many_from_staging(
+                ROOT,
+                {
+                    name: target_root / name
+                    for name in install_skill.MANAGED_INSTALL_NAMES
+                },
+            )
+            canonical = target_root / install_skill.CANONICAL_SKILL_NAME
+            environment = os.environ.copy()
+            environment.pop("PYTHONDONTWRITEBYTECODE", None)
+            environment.pop("PYTHONPYCACHEPREFIX", None)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(canonical / "scripts" / "validate_task_state.py"),
+                    "--self-test",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env=environment,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(list(canonical.rglob("*.pyc")))
+            self.assertTrue(install_skill.runtime_permissions_current(canonical))
+            self.assertEqual(
+                install_skill.installed_manifest(canonical),
+                install_skill.runtime_manifest(ROOT),
+            )
+
+    def test_permission_drift_is_reported_as_different(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            target_root = Path(raw) / "skills"
+            installed = self.run_installer("--target-root", str(target_root), "--json")
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            canonical = target_root / install_skill.CANONICAL_SKILL_NAME
+            script = canonical / "scripts" / "agency_task.py"
+            script.chmod(0o644)
+            self.assertFalse(install_skill.runtime_permissions_current(canonical))
+            checked = self.run_installer(
+                "--target-root", str(target_root), "--dry-run", "--json"
+            )
+            self.assertEqual(checked.returncode, 0, checked.stderr)
+            payload = json.loads(checked.stdout)
+            self.assertEqual(payload["status"], "would-replace")
+            self.assertEqual(
+                payload["states_before"][install_skill.CANONICAL_SKILL_NAME],
+                "different",
+            )
+            self.assertFalse(
+                payload["permissions_before"][install_skill.CANONICAL_SKILL_NAME][
+                    "current"
+                ]
+            )
+            self.assertTrue(
+                any(
+                    "agency_task.py" in item
+                    for item in payload["permissions_before"][
+                        install_skill.CANONICAL_SKILL_NAME
+                    ]["mismatches"]
+                )
+            )
+
     def run_installer(self, *args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["python3", str(INSTALLER), *args],
@@ -88,6 +155,8 @@ class InstallSkillTests(unittest.TestCase):
             self.assertEqual(first.returncode, 0, first.stderr)
             installed = target_root / "zhijuan-codex-agency-chief-of-staf"
             discovery = target_root / install_skill.DISCOVERY_SKILL_NAME
+            install_skill.make_runtime_tree_writable(installed)
+            install_skill.make_runtime_tree_writable(discovery)
             (installed / "stale.txt").write_text("stale", encoding="utf-8")
             (discovery / "stale.txt").write_text("stale", encoding="utf-8")
 
@@ -104,6 +173,7 @@ class InstallSkillTests(unittest.TestCase):
             first = self.run_installer("--target-root", str(target_root))
             self.assertEqual(first.returncode, 0, first.stderr)
             canonical = target_root / install_skill.CANONICAL_SKILL_NAME
+            install_skill.make_runtime_tree_writable(canonical)
             stale = canonical / "stale.txt"
             stale.write_text("USER SENTINEL\n", encoding="utf-8")
 
@@ -135,6 +205,7 @@ class InstallSkillTests(unittest.TestCase):
             self.assertEqual(json.loads(canonical.stdout)["status"], "already-installed")
 
             discovery = target_root / install_skill.DISCOVERY_SKILL_NAME
+            install_skill.make_runtime_tree_writable(discovery)
             (discovery / "stale.txt").write_text("stale", encoding="utf-8")
             repaired = subprocess.run(
                 [

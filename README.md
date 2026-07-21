@@ -73,7 +73,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
   → 任务归档与长期知识沉淀
 ```
 
-Discussion 可以合法停在讨论；Plan 初始只创建 `task-plan.json`、用户清单和项目 index，不预建 Team、Session、Progress 或 Evidence 占位文件；Execution 优先真实 Codex Task/Thread，Native 创建面不可用时生成可复制的手动启动提示词；准备阶段不认调用方 JSON，只有 `bind_execution_session.py` 从 App Server、canonical state 与 rollout 机械读回后才进入执行；`complete_task.py` 用可回滚事务把当前验收、验证、Review 与 cleanup 一次收口；Archive 再执行归档和可选知识沉淀。普通单次请求不创建 `.agency`，也不要求每次建 Thread。
+Discussion 可以合法停在讨论；Plan 用一次确定性调用在隐藏 staging 中生成并校验完整八文件任务 bundle，再原子发布正式目录并用恢复 journal 协调项目 index，其中 Team 为 `pending`、进度为零事件、Evidence 只是稳定索引，不查询模型、不选岗、不启动；Execution 优先真实 Codex Task/Thread，Native 创建面不可用时生成可复制的手动启动提示词；准备阶段不认调用方 JSON，只有 `bind_execution_session.py` 从 App Server、canonical state 与 rollout 机械读回后才进入执行；`complete_task.py` 用可回滚事务把当前验收、验证、Review 与 cleanup 一次收口；Archive 再执行归档和可选知识沉淀。普通单次请求不创建 `.agency`，也不要求每次建 Thread。
 
 关键设计：
 
@@ -144,7 +144,7 @@ python3 scripts/install_skill.py --force
 从准备交付的源码 checkout 独立读回安装态；只有 `status` 为
 `already-installed`，且 canonical、legacy 和 discovery 三个 `states_before` 都为 `current`，
 当前 checkout 的 Runtime 能力才可归属于本机已安装 Skill。输出同时包含两套
-runtime 与发现入口的逐文件 SHA-256 manifest，不能只看目录存在或 Skill 名称：
+runtime 与发现入口的逐文件 SHA-256 manifest 以及只读权限 readback；任一文件不是 `0444`、任一目录不是 `0555`，都会显示 `different`，不能只看目录存在或 Skill 名称：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/install_skill.py --dry-run --json
@@ -154,7 +154,7 @@ Dry Run 不修改安装：缺失时返回 `would-install`，与源码不同且�
 `--force`，随后重复上述 dry-run；已发布 tag 的安装仍以对应 tag 自带的 README
 和 manifest 为准。
 
-安装器只复制运行时 allowlist，并把 canonical/legacy pair 与发现入口作为一个可回滚事务更新；不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
+安装器只复制运行时 allowlist，并把 canonical/legacy pair 与发现入口作为一个可回滚事务更新；安装后封装为只读并机械读回内容与权限，不会把 GitHub workflow、历史 validation、README 或仓库管理文件打进运行时 Skill。
 
 专业 Agent 模板随 runtime 分发，但不会默认写入任何项目或用户配置。项目生命周期阶段三默认依据 `TEAM_PLAN.json` 做 Selected-only 准备，并且只有显式 `--apply` 才写当前项目：
 

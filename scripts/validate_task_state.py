@@ -58,7 +58,7 @@ def sample_plan() -> dict[str, object]:
                 "context_coupling": "low",
                 "parallelizable": False,
                 "isolated_worktree_required": False,
-                "accountable_position": "项目总负责人",
+                "accountable_position": "",
                 "profile": None,
                 "review_profile": None,
                 "status": "pending",

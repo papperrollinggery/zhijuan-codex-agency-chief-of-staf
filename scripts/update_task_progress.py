@@ -23,6 +23,7 @@ from agency_task import (
     read_regular_text,
     render_checklist,
     safe_project_root,
+    task_index_lock,
     utc_now,
     validate_task_plan,
 )
@@ -315,6 +316,7 @@ def update_progress(
     blockers: list[str] | None = None,
     idempotency_key: str | None = None,
     _terminal_authority: object | None = None,
+    _index_lock_held: bool = False,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     if event_type not in EVENT_TYPES:
@@ -334,6 +336,23 @@ def update_progress(
         raise ValueError("verification_completed requires verification evidence")
     if event_type in {"verification_failed", "blocker_found"} and not blockers:
         raise ValueError(f"{event_type} requires blockers")
+
+    if not _index_lock_held:
+        with task_index_lock(root):
+            return update_progress(
+                root,
+                task_id=task_id,
+                event_type=event_type,
+                work_id=work_id,
+                actor=actor,
+                summary=summary,
+                artifacts=artifacts,
+                verification=verification,
+                blockers=blockers,
+                idempotency_key=idempotency_key,
+                _terminal_authority=_terminal_authority,
+                _index_lock_held=True,
+            )
 
     task_dir = active_task_dir(root, task_id)
     plan_path = task_dir / "task-plan.json"

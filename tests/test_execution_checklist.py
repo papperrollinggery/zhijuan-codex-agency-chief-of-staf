@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,19 +8,49 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lifecycle_test_support import create_fixture_task, read_json, task_plan, work_item
+from lifecycle_test_support import ROOT, create_fixture_task, read_json, task_plan, work_item
 
 from agency_task import create_task, validate_task_plan
 
 
 class ExecutionChecklistTests(unittest.TestCase):
-    def test_plan_creation_lazily_writes_only_plan_and_checklist(self) -> None:
+    def test_v1_schema_keeps_legacy_model_request_optional_and_rejects_unknown_fields(self) -> None:
+        schema = json.loads(
+            (ROOT / "assets" / "task-execution-plan.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertNotIn("execution_model_request", schema["required"])
+        self.assertFalse(schema["additionalProperties"])
+        self.assertFalse(schema["$defs"]["work_item"]["additionalProperties"])
+
+    def test_plan_creation_writes_complete_nonexecuting_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
             _, task_dir = create_fixture_task(project)
-            expected = {"task-plan.json", "TASK_EXECUTION_CHECKLIST.md"}
+            expected = {
+                "task-plan.json",
+                "TASK_EXECUTION_CHECKLIST.md",
+                "TEAM_PLAN.json",
+                "TEAM_PLAN.md",
+                "EXECUTION_LAUNCH_PROMPT.md",
+                "PROGRESS.md",
+                "progress.jsonl",
+                "EVIDENCE.md",
+            }
             self.assertEqual({path.name for path in task_dir.iterdir()}, expected)
             self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "plan_ready")
+            self.assertEqual(read_json(task_dir / "TEAM_PLAN.json")["status"], "pending")
+            self.assertEqual(read_json(task_dir / "TEAM_PLAN.json")["positions"], [])
+            self.assertEqual((task_dir / "progress.jsonl").read_text(encoding="utf-8"), "")
+            evidence = (task_dir / "EVIDENCE.md").read_text(encoding="utf-8")
+            self.assertIn("证据索引", evidence)
+            self.assertIn("不镜像当前证据状态", evidence)
+            self.assertIn("progress.jsonl", evidence)
+            self.assertIn(
+                "不是 Execution Session Packet",
+                (task_dir / "EXECUTION_LAUNCH_PROMPT.md").read_text(encoding="utf-8"),
+            )
             index = read_json(project / ".agency" / "task-index.json")
             self.assertEqual(index["active_task_ids"], ["task-test-001"])
 
@@ -57,7 +88,15 @@ class ExecutionChecklistTests(unittest.TestCase):
                 "open_questions": [],
             },
         )
-        self.assertNotIn("execution_model_request", persisted)
+        self.assertEqual(
+            persisted["execution_model_request"],
+            {
+                "display_request": "GPT-5.6 Sol",
+                "reasoning_request": "ultra",
+                "resolved_model_id": None,
+                "resolution_status": "pending",
+            },
+        )
         self.assertEqual(
             persisted["work_items"][0],
             {

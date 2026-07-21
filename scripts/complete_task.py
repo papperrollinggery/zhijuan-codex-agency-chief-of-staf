@@ -16,6 +16,7 @@ from agency_task import (
     load_json,
     read_regular_text,
     safe_project_root,
+    task_index_lock,
     transition_task,
     validate_task_plan,
 )
@@ -103,8 +104,24 @@ def complete_task(
     cleanup_evidence: list[str] | None = None,
     cleanup_blocker: str | None = None,
     apply: bool,
+    _index_lock_held: bool = False,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
+    if apply and not _index_lock_held:
+        with task_index_lock(root):
+            return complete_task(
+                root,
+                task_id=task_id,
+                acceptance_evidence=acceptance_evidence,
+                validation_results=validation_results,
+                artifacts=artifacts,
+                review_evidence=review_evidence,
+                cleanup_status=cleanup_status,
+                cleanup_evidence=cleanup_evidence,
+                cleanup_blocker=cleanup_blocker,
+                apply=True,
+                _index_lock_held=True,
+            )
     task_dir = active_task_dir(root, task_id)
     plan_path = task_dir / "task-plan.json"
     plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)

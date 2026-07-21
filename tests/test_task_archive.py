@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -9,12 +10,18 @@ from unittest import mock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lifecycle_test_support import ROOT, completed_task, knowledge_candidate, read_json
+from lifecycle_test_support import (
+    ROOT,
+    completed_task,
+    knowledge_candidate,
+    read_json,
+    task_plan,
+)
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from archive_task import archive_task, closure_path_for  # noqa: E402
 import archive_task as archive_task_module  # noqa: E402
-from agency_task import atomic_write_json  # noqa: E402
+from agency_task import atomic_write_json, create_task  # noqa: E402
 from validate_task_archive import validate_archive_directory, validate_archive_readiness  # noqa: E402
 
 
@@ -63,6 +70,71 @@ class TaskArchiveTests(unittest.TestCase):
             index = read_json(project / ".agency/task-index.json")
             self.assertNotIn("task-archive-001", index["active_task_ids"])
             self.assertIn("task-archive-001", index["archived_task_ids"])
+
+    def test_archive_and_create_share_one_index_transaction_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            _, closure = completed_task(project)
+            new_id = "task-archive-race-new-001"
+            archive_paused = threading.Event()
+            release_archive = threading.Event()
+            create_finished = threading.Event()
+            failures: list[BaseException] = []
+            real_write_index = archive_task_module.write_index
+
+            def pausing_archive_write(path: Path, index: dict[str, object]) -> None:
+                archive_paused.set()
+                if not release_archive.wait(timeout=5):
+                    raise TimeoutError("archive race test release timed out")
+                real_write_index(path, index)
+
+            def run_archive() -> None:
+                try:
+                    archive_task(
+                        project,
+                        task_id="task-archive-001",
+                        closure=closure,
+                        apply=True,
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+
+            def run_create() -> None:
+                try:
+                    create_task(project, task_plan(task_id=new_id))
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+                finally:
+                    create_finished.set()
+
+            with mock.patch.object(
+                archive_task_module,
+                "write_index",
+                side_effect=pausing_archive_write,
+            ):
+                archive_worker = threading.Thread(
+                    target=run_archive, name="task-archiver"
+                )
+                archive_worker.start()
+                self.assertTrue(archive_paused.wait(timeout=5))
+                create_worker = threading.Thread(target=run_create, name="task-creator")
+                create_worker.start()
+                self.assertFalse(
+                    create_finished.wait(timeout=0.2),
+                    "create escaped the archive's index transaction lock",
+                )
+                release_archive.set()
+                archive_worker.join(timeout=5)
+                create_worker.join(timeout=5)
+                self.assertFalse(archive_worker.is_alive())
+                self.assertFalse(create_worker.is_alive())
+
+            self.assertEqual(failures, [])
+            index = read_json(project / ".agency/task-index.json")
+            self.assertEqual(index["tasks"]["task-archive-001"]["status"], "archived")
+            self.assertEqual(index["tasks"][new_id]["status"], "plan_ready")
+            self.assertIn("task-archive-001", index["archived_task_ids"])
+            self.assertIn(new_id, index["active_task_ids"])
 
     def test_completed_archive_ignores_stale_nonterminal_status_reason(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

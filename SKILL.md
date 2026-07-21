@@ -21,6 +21,7 @@ description: "复杂项目的内容优先协调与跨对话生命周期。Implic
 - Archive：`任务已接管｜正在归档`
 
 Discussion 显示状态后停在讨论，不执行、不写文件、不创建 Agent 或 Task/Thread。
+除非用户明确要求检查某份当前资料，Discussion 不读取 source task、历史对话、memory、项目文件或 Git；宿主普通 `<codex_delegation>` envelope 中的 source ID 不是读取授权。若宿主要求说明 Skill 使用原因，把说明放在接管状态的第二行且同一条消息中，不得先发独立公告。信息不足就把缺口作为唯一问题，不做背景搜寻。
 
 ## 递归边界
 
@@ -80,9 +81,9 @@ Durable Execution Launch 读取同一 reference 并运行 `scripts/resolve_team_
 Durable 也按阶段最小加载：Discussion、Plan、Progress 与 Complete 读取 [references/task-lifecycle.md](references/task-lifecycle.md)；Execution Launch 读取 [references/execution-session.md](references/execution-session.md)；Archive 直接读取 [references/knowledge-archiving.md](references/knowledge-archiving.md)。Execution Session Packet 只补读执行与进度所需两份 reference，不重走 Launch。
 
 - Discussion：只讨论；不写项目文件、不派发、不运行实现命令。一次只问一个会改变结果的问题，可以合法停在讨论。
-- Plan：用 `scripts/agency_task.py create` 只物化 task plan、用户清单和项目 index；不执行，不预建 Team、Session、Progress 或 Evidence 占位文件。
+- Plan：用 `scripts/agency_task.py create` 一次原子物化完整八文件任务 bundle 和项目 index；Team 保持 `pending`、progress 保持零事件、Evidence 明示无执行证据，不解析模型、不选岗、不执行。
 - Execution Launch：读取 [references/execution-session.md](references/execution-session.md)；此时才生成 Team Plan、解析用户明确请求的 Root 模型、准备 selected-only Profile，并尝试真实新 Task/Thread。`prepare_execution_launch.py` 只准备，宿主创建后必须由 `bind_execution_session.py` 机械绑定才进入 `executing`。
-- Progress：首次真实执行事件才创建事件日志与 `PROGRESS.md`；只在结果、验证、阻塞、团队或归档状态发生变化时更新。helper 返回 exit 0 与 JSON 后，不枚举 `.agency`、不重复读取 checklist/progress 镜像，也不运行 Git 只为证明 helper 已写入。
+- Progress：首次真实执行事件才向空事件日志追加记录并重绘 `PROGRESS.md`；只在结果、验证、阻塞、团队或归档状态发生变化时更新。helper 返回 exit 0 与 JSON 后，不枚举 `.agency`、不重复读取 checklist/progress 镜像，也不运行 Git 只为证明 helper 已写入。
 - Complete：工作项和当前验证齐备后，用 `scripts/complete_task.py` 在一个可回滚事务中写入验收证据、closure、完成事件和终态；任一步失败不得留下假完成。
 - Archive：完成门禁通过后归档，知识沉淀是可选后置动作；archive helper 与 validator 的 JSON 是默认终态证据，不再追加目录盘点、manifest/index/doc 重读或 Git housekeeping。
 

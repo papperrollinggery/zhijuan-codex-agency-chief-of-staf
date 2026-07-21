@@ -29,7 +29,7 @@ The product requirement is therefore not “more orchestration” or “less orc
 | --- | --- | --- |
 | Direct | One target can close safely in the current conversation | No `.agency`; no team; no Thread; no model query; no receipt |
 | Focused | Related multi-step work needs a short in-thread plan | No persistent management files; delegate only for demonstrated net value |
-| Durable | The user explicitly needs cross-conversation continuity, a checklist, progress, or a separate execution task | Plan initially writes only the project index, task plan, and readable checklist; later assets are lazy |
+| Durable | The user explicitly needs cross-conversation continuity, a checklist, progress, or a separate execution task | One deterministic helper writes the complete nonexecuting plan bundle; live team/model/session/evidence work stays lazy |
 | Assured | Release, security, high-risk migration, audit, or an explicit evidence request needs independent proof | Add only the review, identity readback, or receipt required by the risk |
 
 Mode selection is an internal judgment, not a user-facing ceremony. Direct and Focused must reach the first project-content read or analysis after at most one mode decision. Complexity alone never creates persistent state, a team, visualization, model lookup, or review.
@@ -47,15 +47,21 @@ A single research stream, document, ordinary file change, or internal architectu
 
 ## Durable-state design
 
-Durable state is normalized at script boundaries so compact plans and full v1.0 plans remain compatible. Plan creation writes only:
+Durable state is normalized at script boundaries so compact plans and full v1.0 plans remain compatible. A real installed-state smoke found that the earlier three-file optimization violated the public plan-bundle contract and made later phases depend on missing files. Plan creation now uses one rollback-safe helper call to write:
 
 ```text
 .agency/task-index.json
 .agency/tasks/active/<task-id>/task-plan.json
 .agency/tasks/active/<task-id>/TASK_EXECUTION_CHECKLIST.md
+.agency/tasks/active/<task-id>/TEAM_PLAN.json
+.agency/tasks/active/<task-id>/TEAM_PLAN.md
+.agency/tasks/active/<task-id>/EXECUTION_LAUNCH_PROMPT.md
+.agency/tasks/active/<task-id>/PROGRESS.md
+.agency/tasks/active/<task-id>/progress.jsonl
+.agency/tasks/active/<task-id>/EVIDENCE.md
 ```
 
-Team, session, launch prompt, progress, evidence, closure, archive, and knowledge assets materialize when their phase first needs them. `complete_task.py` is the single guarded completion path: it requires current acceptance evidence, validation, review when required, and native cleanup/readback before producing a reusable closure, and restores every managed file if any completion write fails. Execution preparation and proof are deliberately separate: `prepare_execution_launch.py` never claims a task exists, while `bind_execution_session.py` internally reads App Server, canonical state, live catalog, and rollout turn context before entering `executing`.
+This restores the stable cross-conversation surface without restoring management-heavy reasoning: Team is schema-valid but pending, progress is a zero-event log plus current-state view, evidence explicitly says none exists, and the launch file says no task was created. The helper returns every path, so the model does not enumerate or design these files. It stages and validates the bundle before one directory rename; one reentrant project transaction lock serializes every durable task-state mutation and index rollback, while a tiny recovery journal reconciles an interrupted rename/index window on the next Durable operation. Unknown caller claims fail at the create boundary, while old v1.0 plans remain readable. Live team selection, model resolution, Execution Session, closure, archive, and knowledge work still materialize only when their phase needs them. Team selection and launch snapshot the complete file surface they modify and restore exact prior bytes when any later write, transition, or progress update fails. `complete_task.py` is the single guarded completion path: it requires current acceptance evidence, validation, review when required, and native cleanup/readback before producing a reusable closure, and restores every managed file if any completion write fails. Execution preparation and proof are deliberately separate: `prepare_execution_launch.py` never claims a task exists, while `bind_execution_session.py` internally reads App Server, canonical state, live catalog, and rollout turn context before entering `executing`.
 
 Reserved worker and execution-session markers fail closed. Native `create_thread` may transport an Execution Session inside an exact `<codex_delegation>` envelope; the Runtime unwraps only that host form, rejects Worker/malformed transports, and requires the source to be a user-owned Root in both App Server and canonical state before binding. Legacy v1.0 raw readbacks remain readable and gain transport fields only after a fresh mechanical recheck. Execution Root has orchestration depth zero; its terminal workers cannot invoke this Skill or spawn another layer. Root execution-model resolution remains separate from Subagent cost routing and cannot silently downgrade a requested effort.
 

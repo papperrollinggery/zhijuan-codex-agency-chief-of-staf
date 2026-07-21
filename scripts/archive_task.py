@@ -21,6 +21,7 @@ from agency_task import (
     load_or_initialize_index,
     render_checklist,
     safe_project_root,
+    task_index_lock,
     utc_now,
     validate_task_plan,
     validate_transition,
@@ -233,10 +234,23 @@ def archive_task(
     candidates: list[dict[str, Any]] | None = None,
     apply: bool,
     deposit: bool = False,
+    _index_lock_held: bool = False,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     if disposition not in ARCHIVE_DISPOSITIONS:
         raise ValueError("archive disposition is invalid")
+    if apply and not _index_lock_held:
+        with task_index_lock(root):
+            return archive_task(
+                root,
+                task_id=task_id,
+                closure=closure,
+                disposition=disposition,
+                candidates=candidates,
+                apply=True,
+                deposit=deposit,
+                _index_lock_held=True,
+            )
     task_dir = active_task_dir(root, task_id)
     plan = validate_task_plan(load_json(task_dir / "task-plan.json"), expected_task_id=task_id)
     normalized_candidates = validate_knowledge_candidates(candidates or [])

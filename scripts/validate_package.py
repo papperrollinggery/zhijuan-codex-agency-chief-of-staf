@@ -136,6 +136,16 @@ ALLOWED_LIFECYCLE_PHASES = {
     "executing",
     "archive",
 }
+EXACT_LIFECYCLE_TAKEOVER_LINES = frozenset(
+    {
+        "任务已接管｜需求讨论中",
+        "任务已接管｜正在创建执行清单",
+        "任务已接管｜正在启动执行对话",
+        "任务已接管｜团队执行中",
+        "任务已接管｜正在验证",
+        "任务已接管｜正在归档",
+    }
+)
 ALLOWED_TEAM_EXPECTATIONS = {
     "none",
     "solo_or_lean",
@@ -602,6 +612,9 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
         fail(f"behavior case {case_id} lifecycle_phase is unsupported")
     if "team_expectation" in case and case["team_expectation"] not in ALLOWED_TEAM_EXPECTATIONS:
         fail(f"behavior case {case_id} team_expectation is unsupported")
+    expected_takeover = case.get("expected_takeover_line")
+    if expected_takeover is not None and expected_takeover not in EXACT_LIFECYCLE_TAKEOVER_LINES:
+        fail(f"behavior case {case_id} expected_takeover_line is unsupported")
     for key in (
         "no_write",
         "no_thread",
@@ -611,11 +624,19 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
         "require_takeover",
         "require_skill_read",
         "forbid_skill_read",
+        "forbid_task_actions",
     ):
         if key in case and type(case[key]) is not bool:
             fail(f"behavior case {case_id} {key} must be boolean")
     if case.get("require_skill_read") and case.get("forbid_skill_read"):
         fail(f"behavior case {case_id} has conflicting Skill-read requirements")
+    if expected_takeover is not None and not case.get("should_trigger"):
+        fail(f"behavior case {case_id} cannot require a takeover when excluded")
+    if case.get("model_smoke") and case.get("lifecycle_phase") == "discussion":
+        if expected_takeover != "任务已接管｜需求讨论中":
+            fail(f"behavior case {case_id} discussion requires the exact takeover line")
+        if case.get("forbid_task_actions") is not True:
+            fail(f"behavior case {case_id} discussion must forbid task actions")
     for key in ("max_collab_spawns", "max_management_files", "max_tool_events"):
         if key in case and (type(case[key]) is not int or case[key] < 0):
             fail(f"behavior case {case_id} {key} must be a non-negative integer")
@@ -636,6 +657,9 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
     validate_string_list(case, "expected_absent_artifacts", case_id)
     for pattern in case.get("expected_absent_artifacts", []):
         validate_artifact_glob(pattern, case_id)
+    validate_string_list(case, "expected_empty_artifacts", case_id)
+    for pattern in case.get("expected_empty_artifacts", []):
+        validate_artifact_glob(pattern, case_id)
     artifacts = case.get("expected_artifacts", [])
     if not isinstance(artifacts, list):
         fail(f"behavior case {case_id} expected_artifacts must be a list")
@@ -655,6 +679,7 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
     if case.get("no_write") and (
         case.get("expected_file")
         or artifacts
+        or case.get("expected_empty_artifacts")
         or case.get("allowed_changed_prefixes")
     ):
         fail(f"behavior case {case_id} no_write conflicts with artifact changes")
@@ -886,6 +911,8 @@ def main() -> None:
         "a valid AGENCY_WORKER packet",
         "thread or release readiness without work intent",
         "maintenance of the Agency Chief of Staff source repository",
+        "first visible line must be exactly 任务已接管｜需求讨论中",
+        "no source-thread, history, memory, project, or Git lookup",
     ):
         if cue not in description:
             fail(f"discovery bridge description is missing activation boundary: {cue}")
@@ -893,6 +920,8 @@ def main() -> None:
         "../agency-chief-of-staff/SKILL.md",
         "Do not invoke this bridge again",
         "Do not create plans, files, tasks, Agents, or Threads",
+        "before any other commentary",
+        "delegation envelope",
     ):
         if cue not in discovery_text:
             fail(f"discovery bridge is missing canonical handoff boundary: {cue}")

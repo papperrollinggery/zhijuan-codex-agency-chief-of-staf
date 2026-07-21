@@ -22,6 +22,7 @@ from agency_task import (
     load_json,
     read_regular_text,
     safe_project_root,
+    task_index_lock,
     transition_task,
     utc_now,
     validate_task_plan,
@@ -564,8 +565,22 @@ def bind_execution_session(
     state_db: Path | None = None,
     timeout_seconds: int = 20,
     apply: bool,
+    _index_lock_held: bool = False,
 ) -> dict[str, Any]:
     root = safe_project_root(project)
+    if apply and not _index_lock_held:
+        with task_index_lock(root):
+            return bind_execution_session(
+                root,
+                task_id=task_id,
+                native_task_id=native_task_id,
+                codex_bin=codex_bin,
+                codex_home=codex_home,
+                state_db=state_db,
+                timeout_seconds=timeout_seconds,
+                apply=True,
+                _index_lock_held=True,
+            )
     task_dir = active_task_dir(root, task_id)
     plan_path = task_dir / "task-plan.json"
     plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)

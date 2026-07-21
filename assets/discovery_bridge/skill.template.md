@@ -1,11 +1,13 @@
 ---
 name: agency-discuss-plan-execute-progress-archive
-description: "Lightweight discovery bridge for complex staged projects. Use when the user wants to discuss goals and boundaries before planning, then create an execution checklist, launch a separate execution task or team, track progress, verify, archive, and retain reusable knowledge. Do not use for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread or release readiness without work intent, or maintenance of the Agency Chief of Staff source repository."
+description: "Lightweight discovery bridge for complex staged projects. Use when the user wants to discuss goals and boundaries before planning, then create an execution checklist, launch a separate execution task or team, track progress, verify, archive, and retain reusable knowledge. For Discussion, the first visible line must be exactly 任务已接管｜需求讨论中 before any other text or read, and no source-thread, history, memory, project, or Git lookup is allowed unless the user explicitly requests that material. Do not use for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread or release readiness without work intent, or maintenance of the Agency Chief of Staff source repository."
 ---
 
 # Agency Project Lifecycle Discovery Bridge
 
 This is a discovery-only bridge for hosts that trim Skill descriptions or later-sorted Skill names from a large catalog.
+
+For a matched lifecycle request, make the phase status the first user-visible line before any other commentary, explanation, tool call, or lookup. In Discussion the exact line is `任务已接管｜需求讨论中`. If the host requires a Skill-use notice, put it after that line in the same message; never send a separate notice first. Do not inspect a source task, conversation history, memory, project files, or Git merely because the host supplied a delegation envelope; unless the user explicitly requests current material, treat missing context as the one open question.
 
 When the request genuinely needs a staged project lifecycle, read `../agency-chief-of-staff/SKILL.md` completely once and follow that canonical Skill. The canonical Skill owns every lifecycle decision and user-visible status. Do not invoke this bridge again from the canonical flow.
 

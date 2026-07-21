@@ -15,7 +15,9 @@ from agency_task import (
     atomic_write_text,
     list_active_tasks,
     load_json,
+    read_regular_text,
     safe_project_root,
+    task_index_lock,
     transition_task,
     utc_now,
     validate_task_plan,
@@ -171,18 +173,16 @@ def inspect_native_environment_fields(
     }
 
 
-def prepare_execution_launch(
-    project: Path,
+def _prepare_execution_launch_locked(
+    root: Path,
+    selected_task_id: str,
     *,
-    task_id: str | None = None,
     catalog: dict[str, Any],
     native_capabilities: dict[str, Any] | None = None,
     native_readback: dict[str, Any] | None = None,
     require_native: bool = False,
     catalog_mechanically_verified: bool = False,
 ) -> dict[str, Any]:
-    root = safe_project_root(project)
-    selected_task_id = choose_task(root, task_id)
     task_dir = active_task_dir(root, selected_task_id)
     plan = validate_task_plan(
         load_json(task_dir / "task-plan.json"), expected_task_id=selected_task_id
@@ -315,6 +315,79 @@ def prepare_execution_launch(
         "manual_launch_prompt": str(task_dir / "EXECUTION_LAUNCH_PROMPT.md"),
         "new_conversation_created": False,
     }
+
+
+def _snapshot_launch_file(path: Path) -> tuple[bool, str]:
+    if path.is_symlink():
+        raise ValueError(f"managed launch output must not be a symlink: {path}")
+    return (True, read_regular_text(path)) if path.exists() else (False, "")
+
+
+def _restore_launch_file(path: Path, snapshot: tuple[bool, str]) -> None:
+    existed, text = snapshot
+    if existed:
+        atomic_write_text(path, text)
+    elif path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"cannot remove unsafe launch output: {path}")
+        path.unlink()
+
+
+def _restore_launch_files(
+    snapshots: dict[Path, tuple[bool, str]], exc: Exception
+) -> None:
+    failures: list[str] = []
+    for path, snapshot in reversed(list(snapshots.items())):
+        try:
+            _restore_launch_file(path, snapshot)
+        except (OSError, ValueError) as rollback_exc:
+            failures.append(f"{path}: {rollback_exc}")
+    if failures:
+        raise RuntimeError(
+            "execution launch failed and rollback was incomplete: "
+            + "; ".join(failures)
+        ) from exc
+
+
+def prepare_execution_launch(
+    project: Path,
+    *,
+    task_id: str | None = None,
+    catalog: dict[str, Any],
+    native_capabilities: dict[str, Any] | None = None,
+    native_readback: dict[str, Any] | None = None,
+    require_native: bool = False,
+    catalog_mechanically_verified: bool = False,
+) -> dict[str, Any]:
+    root = safe_project_root(project)
+    with task_index_lock(root):
+        selected_task_id = choose_task(root, task_id)
+        task_dir = active_task_dir(root, selected_task_id)
+        managed_paths = (
+            task_dir / "task-plan.json",
+            task_dir / "TASK_EXECUTION_CHECKLIST.md",
+            task_dir / "TEAM_PLAN.json",
+            task_dir / "TEAM_PLAN.md",
+            task_dir / "EXECUTION_LAUNCH_PROMPT.md",
+            task_dir / "execution-session.json",
+            task_dir / "progress.jsonl",
+            task_dir / "PROGRESS.md",
+            root / ".agency/task-index.json",
+        )
+        snapshots = {path: _snapshot_launch_file(path) for path in managed_paths}
+        try:
+            return _prepare_execution_launch_locked(
+                root,
+                selected_task_id,
+                catalog=catalog,
+                native_capabilities=native_capabilities,
+                native_readback=native_readback,
+                require_native=require_native,
+                catalog_mechanically_verified=catalog_mechanically_verified,
+            )
+        except Exception as exc:
+            _restore_launch_files(snapshots, exc)
+            raise
 
 
 def main() -> None:

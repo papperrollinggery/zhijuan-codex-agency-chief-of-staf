@@ -9,15 +9,18 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
 import json
 import os
 import re
 import stat
 import tempfile
+import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 SCHEMA_VERSION = "1.0"
@@ -63,6 +66,66 @@ WORK_TYPES = frozenset(
 )
 LEVELS = frozenset({"low", "medium", "high"})
 RISKS = frozenset({"low", "medium", "high", "critical"})
+TEAM_LIMITS = {
+    "max_active_positions": 5,
+    "max_parallel_positions": 3,
+    "max_parallel_writers": 2,
+    "default_cold_reviewers": 1,
+    "max_review_fix_rounds": 2,
+}
+
+
+_TASK_INDEX_THREAD_LOCKS: dict[str, threading.RLock] = {}
+_TASK_INDEX_THREAD_LOCKS_GUARD = threading.Lock()
+_TASK_INDEX_LOCK_STATE = threading.local()
+PLAN_BUNDLE_FILES = (
+    "task-plan.json",
+    "TASK_EXECUTION_CHECKLIST.md",
+    "TEAM_PLAN.json",
+    "TEAM_PLAN.md",
+    "EXECUTION_LAUNCH_PROMPT.md",
+    "PROGRESS.md",
+    "progress.jsonl",
+    "EVIDENCE.md",
+)
+INITIAL_PLAN_FIELDS = frozenset(
+    {
+        "schema_version",
+        "task_id",
+        "title",
+        "objective",
+        "source_discussion",
+        "acceptance_criteria",
+        "out_of_scope",
+        "execution_model_request",
+        "work_items",
+        "status",
+    }
+)
+INITIAL_WORK_ITEM_FIELDS = frozenset(
+    {
+        "work_id",
+        "title",
+        "outcome",
+        "work_type",
+        "dependencies",
+        "read_scope",
+        "write_scope",
+        "verification",
+        "risk",
+        "uncertainty",
+        "context_coupling",
+        "parallelizable",
+        "isolated_worktree_required",
+        "accountable_position",
+        "profile",
+        "review_profile",
+        "status",
+        "evidence_refs",
+        "blockers",
+        "required",
+    }
+)
 
 
 def utc_now() -> str:
@@ -274,6 +337,15 @@ def validate_task_plan(plan: object, *, expected_task_id: str | None = None) -> 
         result["task_id"] = expected_task_id or generate_task_id()
     result.setdefault("out_of_scope", [])
     result.setdefault("status", "plan_ready")
+    result.setdefault(
+        "execution_model_request",
+        {
+            "display_request": "GPT-5.6 Sol",
+            "reasoning_request": "ultra",
+            "resolved_model_id": None,
+            "resolution_status": "pending",
+        },
+    )
     if result["schema_version"] != SCHEMA_VERSION:
         raise ValueError("unsupported task plan schema_version")
     task_id = require_task_id(result["task_id"])
@@ -352,6 +424,50 @@ def validate_task_plan(plan: object, *, expected_task_id: str | None = None) -> 
     return result
 
 
+def validate_initial_task_input(plan: object) -> dict[str, Any]:
+    """Fail closed on caller-only claims while legacy task reads stay compatible."""
+    if not isinstance(plan, dict):
+        raise ValueError("task plan must be an object")
+    unknown = sorted(set(plan) - INITIAL_PLAN_FIELDS)
+    if unknown:
+        raise ValueError("new task plan contains unknown fields: " + ", ".join(unknown))
+    work_items = plan.get("work_items")
+    if not isinstance(work_items, list):
+        raise ValueError("work_items must be a list")
+    for index, item in enumerate(work_items):
+        if not isinstance(item, dict):
+            raise ValueError(f"work item {index} must be an object")
+        unknown_item = sorted(set(item) - INITIAL_WORK_ITEM_FIELDS)
+        if unknown_item:
+            raise ValueError(
+                f"work item {index} contains unknown fields: " + ", ".join(unknown_item)
+            )
+    return plan
+
+
+def validate_initial_task_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Reject caller claims that would make a new plan look already executed."""
+    if "acceptance_evidence" in plan:
+        raise ValueError("new plan_ready task cannot contain acceptance evidence")
+    model = plan["execution_model_request"]
+    if model["resolved_model_id"] is not None or model["resolution_status"] != "pending":
+        raise ValueError("new plan_ready task model request must be unresolved and pending")
+    for item in plan["work_items"]:
+        work_id = item["work_id"]
+        if item["status"] != "pending":
+            raise ValueError(f"new plan_ready task requires pending work: {work_id}")
+        if item["evidence_refs"] or item["blockers"]:
+            raise ValueError(f"new plan_ready task cannot contain evidence or blockers: {work_id}")
+        if item["accountable_position"] not in {"", None}:
+            raise ValueError(f"new plan_ready task cannot preassign a position: {work_id}")
+        if item["profile"] is not None or item["review_profile"] is not None:
+            raise ValueError(f"new plan_ready task cannot preselect a profile: {work_id}")
+        if "waiver_reason" in item:
+            raise ValueError(f"new plan_ready task cannot contain a waiver: {work_id}")
+        item["accountable_position"] = ""
+    return plan
+
+
 def validate_transition(status_before: str, status_after: str) -> None:
     if status_before not in LEGAL_TRANSITIONS or status_after not in TASK_STATUSES:
         raise ValueError("unknown task lifecycle status")
@@ -377,7 +493,58 @@ def agency_paths(project: Path) -> tuple[Path, Path, Path]:
     return paths[0], paths[2], paths[3]
 
 
-def load_or_initialize_index(project: Path) -> dict[str, Any]:
+@contextmanager
+def task_index_lock(project: Path) -> Iterator[None]:
+    """Serialize every task-index transaction across processes and threads.
+
+    Callers may compose lifecycle transactions, so the lock is reentrant for the
+    current thread while the outermost acquisition owns the filesystem lock.
+    """
+    agency_root, _, _ = agency_paths(project)
+    agency_root.mkdir(parents=True, exist_ok=True)
+    lock_path = agency_root / ".task-index.lock"
+    lock_key = str(lock_path.resolve(strict=False))
+    with _TASK_INDEX_THREAD_LOCKS_GUARD:
+        thread_lock = _TASK_INDEX_THREAD_LOCKS.setdefault(
+            lock_key, threading.RLock()
+        )
+    with thread_lock:
+        held = getattr(_TASK_INDEX_LOCK_STATE, "held", None)
+        if held is None:
+            held = {}
+            _TASK_INDEX_LOCK_STATE.held = held
+        if lock_key in held:
+            held[lock_key] += 1
+            try:
+                yield
+            finally:
+                held[lock_key] -= 1
+            return
+
+        flags = os.O_RDWR | os.O_CREAT
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(lock_path, flags, 0o600)
+        locked = False
+        try:
+            info = os.fstat(descriptor)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError("task index lock must be a single regular file")
+            os.fchmod(descriptor, 0o600)
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            locked = True
+            held[lock_key] = 1
+            yield
+        finally:
+            held.pop(lock_key, None)
+            if locked:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+
+def _load_or_initialize_index_unlocked(project: Path) -> dict[str, Any]:
     agency_root, _, _ = agency_paths(project)
     path = agency_root / "task-index.json"
     if path.is_symlink():
@@ -398,6 +565,16 @@ def load_or_initialize_index(project: Path) -> dict[str, Any]:
     for key in ("active_task_ids", "archived_task_ids"):
         _require_string_list(value.get(key), f"task index {key}")
     return value
+
+
+def load_or_initialize_index(
+    project: Path, *, recover_incomplete_creations: bool = True
+) -> dict[str, Any]:
+    root = safe_project_root(project)
+    with task_index_lock(root):
+        if recover_incomplete_creations:
+            _recover_task_creations_unlocked(root)
+        return _load_or_initialize_index_unlocked(root)
 
 
 def write_index(project: Path, index: dict[str, Any]) -> None:
@@ -481,78 +658,380 @@ def render_checklist(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def pending_team_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    """Return a schema-valid placeholder without selecting or inventing roles."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "task_id": plan["task_id"],
+        "status": "pending",
+        "team_tier": None,
+        "score": None,
+        "score_breakdown": {},
+        "positions": [],
+        "waves": [],
+        "write_conflicts": [],
+        "root_owned_work_items": [],
+        "limits": dict(TEAM_LIMITS),
+    }
+
+
+def render_pending_team_plan(plan: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            "# 团队执行计划",
+            "",
+            f"- 任务 ID：{plan['task_id']}",
+            "- 状态：pending",
+            "- 团队等级：尚未计算",
+            f"- 活跃职位：0 / {TEAM_LIMITS['max_active_positions']}",
+            "",
+            "只有用户明确启动阶段三时，确定性团队规划器才根据当前 Work Item、依赖、风险、写冲突和并行收益选择职位。不会为满足人数而安排岗位。",
+            "",
+        ]
+    )
+
+
+def render_launch_request(project: Path, plan: dict[str, Any]) -> str:
+    relative = task_relative_path(plan["task_id"])
+    return "\n".join(
+        [
+            "# 执行对话启动提示",
+            "",
+            "- 当前状态：plan_ready",
+            f"- 任务 ID：{plan['task_id']}",
+            f"- 项目根目录：{project}",
+            f"- 任务清单：{relative}/task-plan.json",
+            "- 执行模型请求：GPT-5.6 Sol",
+            "- 推理强度请求：ultra",
+            "",
+            "确认进入阶段三时使用：",
+            "",
+            f"> 创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行任务并更新进度。任务 ID：{plan['task_id']}。",
+            "",
+            "该请求尚未启动执行，也不是 Execution Session Packet。阶段三会先生成团队计划、解析 Live Model Catalog，并将本文件原子替换为完整执行提示；不得把本文件存在视为已创建新对话。",
+            "",
+        ]
+    )
+
+
+def render_initial_progress(plan: dict[str, Any]) -> str:
+    ready = [
+        item
+        for item in plan["work_items"]
+        if not item["dependencies"] and item["status"] == "pending"
+    ]
+    next_items = [
+        f"- 启动执行对话后开始 {item['work_id']} · {item['title']}" for item in ready[:3]
+    ] or ["- 明确启动执行对话后再进入实施。"]
+    return "\n".join(
+        [
+            f"# {plan['title']} — 进度",
+            "",
+            "## 当前阶段",
+            "",
+            "- plan_ready",
+            "",
+            "## 已完成",
+            "",
+            "- 需求讨论已确认，任务执行清单已持久化。",
+            "",
+            "## 正在进行",
+            "",
+            "- 无。",
+            "",
+            "## 被阻塞",
+            "",
+            "- 无。",
+            "",
+            "## 下一步",
+            "",
+            *next_items,
+            "",
+            "## 验证状态",
+            "",
+            "- 计划 schema、Task ID 与 Work Item 依赖已在创建时校验。",
+            "- 尚无执行、产物或实现验证证据。",
+            "",
+        ]
+    )
+
+
+def render_evidence_index(plan: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            f"# {plan['title']} — 证据索引",
+            "",
+            "## Canonical 证据位置",
+            "",
+            "- Work Item 状态与已接受引用：`task-plan.json`",
+            "- 事件、产物、验证、阻塞与 Review：`progress.jsonl`",
+            "- 当前人类可读状态：`PROGRESS.md`",
+            "- 完成门禁与验收映射：`closure.json`（仅完成后存在）",
+            "- 归档完整性：`archive-manifest.json`（仅归档后存在）",
+            "",
+            "## 使用边界",
+            "",
+            "本文件是稳定索引，不镜像当前证据状态。只有上述 canonical 文件中的可读回产物、命令退出码、当前验证结果和独立 Review 才能证明完成；计划文本、占位 ID、显示名称或自述不能证明完成。",
+            "",
+        ]
+    )
+
+
+def _write_plan_bundle(project: Path, task_dir: Path, plan: dict[str, Any]) -> None:
+    atomic_write_json(task_dir / "task-plan.json", plan)
+    atomic_write_text(task_dir / "TASK_EXECUTION_CHECKLIST.md", render_checklist(plan))
+    atomic_write_json(task_dir / "TEAM_PLAN.json", pending_team_plan(plan))
+    atomic_write_text(task_dir / "TEAM_PLAN.md", render_pending_team_plan(plan))
+    atomic_write_text(
+        task_dir / "EXECUTION_LAUNCH_PROMPT.md",
+        render_launch_request(project, plan),
+    )
+    atomic_write_text(task_dir / "PROGRESS.md", render_initial_progress(plan))
+    atomic_write_text(task_dir / "progress.jsonl", "")
+    atomic_write_text(task_dir / "EVIDENCE.md", render_evidence_index(plan))
+
+
+def _validate_complete_plan_bundle(task_dir: Path, task_id: str) -> dict[str, Any]:
+    if task_dir.is_symlink() or not task_dir.is_dir():
+        raise ValueError("task bundle must be a non-symlink directory")
+    children = list(task_dir.iterdir())
+    actual = {child.name for child in children}
+    expected = set(PLAN_BUNDLE_FILES)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise ValueError(f"task bundle is incomplete (missing={missing}, extra={extra})")
+    for child in children:
+        read_regular_text(child)
+    plan = validate_task_plan(
+        load_json(task_dir / "task-plan.json"), expected_task_id=task_id
+    )
+    if plan["status"] != "plan_ready":
+        raise ValueError("new task bundle must remain plan_ready")
+    team = load_json(task_dir / "TEAM_PLAN.json")
+    if (
+        team.get("task_id") != task_id
+        or team.get("status") != "pending"
+        or team.get("positions") != []
+    ):
+        raise ValueError("new task bundle has a non-pending team plan")
+    if read_regular_text(task_dir / "progress.jsonl") != "":
+        raise ValueError("new task bundle progress log must be empty")
+    if "AGENCY_EXECUTION_SESSION: true" in read_regular_text(
+        task_dir / "EXECUTION_LAUNCH_PROMPT.md"
+    ):
+        raise ValueError("new task bundle cannot contain an execution session")
+    return plan
+
+
+def _task_creation_journal_path(agency_root: Path, task_id: str) -> Path:
+    return agency_root / f".task-create-{require_task_id(task_id)}.json"
+
+
+def _safe_unlink_regular(path: Path) -> None:
+    if not path.exists():
+        return
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"refusing to remove unsafe managed file: {path}")
+    path.unlink()
+
+
+def _recover_task_creations_unlocked(project: Path) -> list[str]:
+    root = safe_project_root(project)
+    agency_root, active_root, _ = agency_paths(root)
+    agency_root.mkdir(parents=True, exist_ok=True)
+    active_root.mkdir(parents=True, exist_ok=True)
+    recovered: list[str] = []
+    referenced_staging: set[str] = set()
+    journals = sorted(agency_root.glob(".task-create-*.json"))
+    for journal_path in journals:
+        journal = load_json(journal_path)
+        if set(journal) != {"schema_version", "task_id", "staging_name", "created_at"}:
+            raise ValueError(f"task creation journal fields are invalid: {journal_path.name}")
+        if journal["schema_version"] != SCHEMA_VERSION:
+            raise ValueError("unsupported task creation journal schema_version")
+        task_id = require_task_id(journal["task_id"])
+        staging_name = journal["staging_name"]
+        if (
+            not isinstance(staging_name, str)
+            or "/" in staging_name
+            or "\\" in staging_name
+            or not staging_name.startswith(f".{task_id}.staging-")
+        ):
+            raise ValueError("task creation journal staging name is unsafe")
+        if journal_path != _task_creation_journal_path(agency_root, task_id):
+            raise ValueError("task creation journal name does not match task id")
+        if not isinstance(journal["created_at"], str) or not journal["created_at"]:
+            raise ValueError("task creation journal created_at is invalid")
+        referenced_staging.add(staging_name)
+        staging = active_root / staging_name
+        task_dir = active_root / task_id
+        if task_dir.exists():
+            plan = _validate_complete_plan_bundle(task_dir, task_id)
+            index = _load_or_initialize_index_unlocked(root)
+            existing = index["tasks"].get(task_id)
+            expected_entry = {
+                "title": plan["title"],
+                "status": "plan_ready",
+                "path": task_relative_path(task_id),
+                "created_at": journal["created_at"],
+                "updated_at": journal["created_at"],
+                "superseded_by": None,
+            }
+            if existing is None:
+                index["tasks"][task_id] = expected_entry
+            elif not isinstance(existing, dict) or any(
+                existing.get(key) != value for key, value in expected_entry.items()
+            ):
+                raise ValueError("task creation recovery found an inconsistent index entry")
+            index["active_task_ids"] = [
+                item for item in index["active_task_ids"] if item != task_id
+            ] + [task_id]
+            write_index(root, index)
+            if staging.exists():
+                _remove_created_task_dir(staging)
+            _safe_unlink_regular(journal_path)
+            recovered.append(task_id)
+        else:
+            if staging.exists():
+                _remove_created_task_dir(staging)
+            _safe_unlink_regular(journal_path)
+
+    for candidate in sorted(active_root.iterdir()):
+        if ".staging-" not in candidate.name or candidate.name in referenced_staging:
+            continue
+        if re.fullmatch(r"\.[a-z0-9][a-z0-9._-]{2,95}\.staging-[A-Za-z0-9_-]+", candidate.name):
+            _remove_created_task_dir(candidate)
+    for candidate in sorted(agency_root.iterdir()):
+        if re.fullmatch(
+            r"\.\.task-create-[a-z0-9][a-z0-9._-]{2,95}\.json\.[A-Za-z0-9_-]+",
+            candidate.name,
+        ):
+            _safe_unlink_regular(candidate)
+    return recovered
+
+
+def recover_task_creations(project: Path) -> list[str]:
+    root = safe_project_root(project)
+    with task_index_lock(root):
+        return _recover_task_creations_unlocked(root)
+
+
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def create_task(project: Path, raw_plan: dict[str, Any]) -> dict[str, Any]:
     root = safe_project_root(project)
-    plan = dict(raw_plan)
+    plan = dict(validate_initial_task_input(raw_plan))
     plan["task_id"] = plan.get("task_id") or generate_task_id()
     plan.setdefault("schema_version", SCHEMA_VERSION)
     plan.setdefault("status", "plan_ready")
     if plan["status"] != "plan_ready":
         raise ValueError("new persisted execution checklists must start at plan_ready")
-    normalized = validate_task_plan(plan)
-    _, active_root, _ = agency_paths(root)
-    task_dir = active_root / normalized["task_id"]
-    if task_dir.exists():
-        raise ValueError(f"task already exists: {normalized['task_id']}")
-    agency_root, _, _ = agency_paths(root)
-    index_path = agency_root / "task-index.json"
-    index_existed = index_path.exists()
-    index = load_or_initialize_index(root)
-    original_index = copy.deepcopy(index)
-    if normalized["task_id"] in index["tasks"]:
-        raise ValueError(f"task id already exists in index: {normalized['task_id']}")
-
-    task_dir.mkdir(parents=True, exist_ok=False)
-    try:
-        atomic_write_json(task_dir / "task-plan.json", normalized)
-        atomic_write_text(task_dir / "TASK_EXECUTION_CHECKLIST.md", render_checklist(normalized))
-        created_at = utc_now()
-        index["tasks"][normalized["task_id"]] = {
-            "title": normalized["title"],
-            "status": "plan_ready",
-            "path": task_relative_path(normalized["task_id"]),
-            "created_at": created_at,
-            "updated_at": created_at,
-            "superseded_by": None,
-        }
-        index["active_task_ids"] = [
-            item for item in index["active_task_ids"] if item != normalized["task_id"]
-        ] + [normalized["task_id"]]
-        write_index(root, index)
-    except Exception as exc:
-        rollback_errors: list[str] = []
+    normalized = validate_initial_task_plan(validate_task_plan(plan))
+    agency_root, active_root, _ = agency_paths(root)
+    task_id = normalized["task_id"]
+    task_dir = active_root / task_id
+    with task_index_lock(root):
+        _recover_task_creations_unlocked(root)
+        active_root.mkdir(parents=True, exist_ok=True)
+        if task_dir.exists():
+            raise ValueError(f"task already exists: {task_id}")
+        index_path = agency_root / "task-index.json"
+        index_existed = index_path.exists()
+        index = _load_or_initialize_index_unlocked(root)
+        original_index = copy.deepcopy(index)
+        if task_id in index["tasks"]:
+            raise ValueError(f"task id already exists in index: {task_id}")
+        staging = Path(
+            tempfile.mkdtemp(prefix=f".{task_id}.staging-", dir=active_root)
+        )
+        journal_path = _task_creation_journal_path(agency_root, task_id)
+        promoted = False
         try:
-            _restore_index_snapshot(root, original_index, existed=index_existed)
-        except (OSError, ValueError) as rollback_exc:
-            rollback_errors.append(f"index: {rollback_exc}")
-        try:
-            _remove_created_task_dir(task_dir)
-        except (OSError, ValueError) as rollback_exc:
-            rollback_errors.append(f"task directory: {rollback_exc}")
-        if rollback_errors:
-            raise RuntimeError(
-                "task creation failed and rollback was incomplete: "
-                + "; ".join(rollback_errors)
-            ) from exc
-        raise
+            _write_plan_bundle(root, staging, normalized)
+            _validate_complete_plan_bundle(staging, task_id)
+            created_at = utc_now()
+            atomic_write_json(
+                journal_path,
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "task_id": task_id,
+                    "staging_name": staging.name,
+                    "created_at": created_at,
+                },
+            )
+            os.replace(staging, task_dir)
+            promoted = True
+            _fsync_directory(active_root)
+            index["tasks"][task_id] = {
+                "title": normalized["title"],
+                "status": "plan_ready",
+                "path": task_relative_path(task_id),
+                "created_at": created_at,
+                "updated_at": created_at,
+                "superseded_by": None,
+            }
+            index["active_task_ids"] = [
+                item for item in index["active_task_ids"] if item != task_id
+            ] + [task_id]
+            write_index(root, index)
+            _safe_unlink_regular(journal_path)
+            _fsync_directory(agency_root)
+        except Exception as exc:
+            rollback_errors: list[str] = []
+            try:
+                _restore_index_snapshot(root, original_index, existed=index_existed)
+            except (OSError, ValueError) as rollback_exc:
+                rollback_errors.append(f"index: {rollback_exc}")
+            for label, candidate in (
+                ("task directory", task_dir if promoted else staging),
+                ("staging directory", staging),
+            ):
+                if candidate.exists():
+                    try:
+                        _remove_created_task_dir(candidate)
+                    except (OSError, ValueError) as rollback_exc:
+                        rollback_errors.append(f"{label}: {rollback_exc}")
+            try:
+                _safe_unlink_regular(journal_path)
+            except (OSError, ValueError) as rollback_exc:
+                rollback_errors.append(f"journal: {rollback_exc}")
+            if rollback_errors:
+                raise RuntimeError(
+                    "task creation failed and rollback was incomplete: "
+                    + "; ".join(rollback_errors)
+                ) from exc
+            raise
     return {
         "status": "created",
         "lifecycle_phase": "plan_ready",
         "task_id": normalized["task_id"],
         "task_dir": str(task_dir),
+        "task_files": [str(task_dir / name) for name in PLAN_BUNDLE_FILES],
         "execution_started": False,
     }
 
 
 def active_task_dir(project: Path, task_id: str) -> Path:
-    _, active_root, _ = agency_paths(project)
+    root = safe_project_root(project)
+    recover_task_creations(root)
+    _, active_root, _ = agency_paths(root)
     path = active_root / require_task_id(task_id)
     if not path.is_dir() or path.is_symlink():
         raise ValueError(f"active task not found: {task_id}")
     return path
 
 
-def _transition_task(
+def _transition_task_unlocked(
     project: Path,
     task_id: str,
     status_after: str,
@@ -577,7 +1056,7 @@ def _transition_task(
             raise ValueError("a task cannot supersede itself")
     elif superseded_by is not None:
         raise ValueError("superseded_by is only valid for superseded transitions")
-    index = load_or_initialize_index(root)
+    index = _load_or_initialize_index_unlocked(root)
     original_index = copy.deepcopy(index)
     entry = index["tasks"].get(task_id)
     if not isinstance(entry, dict):
@@ -625,6 +1104,26 @@ def _transition_task(
         "status_after": status_after,
         "active": status_after not in INACTIVE_STATUSES,
     }
+
+
+def _transition_task(
+    project: Path,
+    task_id: str,
+    status_after: str,
+    *,
+    reason: str | None = None,
+    superseded_by: str | None = None,
+) -> dict[str, Any]:
+    root = safe_project_root(project)
+    with task_index_lock(root):
+        _recover_task_creations_unlocked(root)
+        return _transition_task_unlocked(
+            root,
+            task_id,
+            status_after,
+            reason=reason,
+            superseded_by=superseded_by,
+        )
 
 
 def transition_task(

@@ -62,6 +62,10 @@ class ActivationLifecycleTests(unittest.TestCase):
             self.assertIn(exclusion, skill)
             self.assertIn(exclusion, description)
         self.assertIn("thread or release readiness without work intent", description)
+        self.assertIn("first visible line must be exactly 任务已接管｜需求讨论中", description)
+        self.assertIn("no source-thread, history, memory, project, or Git lookup", description)
+        self.assertIn("before any other commentary", skill)
+        self.assertIn("delegation envelope", skill)
         self.assertIn("Do not invoke this bridge again", skill)
         self.assertIn("allow_implicit_invocation: true", metadata)
 
@@ -76,6 +80,8 @@ class ActivationLifecycleTests(unittest.TestCase):
             "任务已接管｜正在归档",
         ):
             self.assertIn(status, skill)
+        self.assertIn("source ID 不是读取授权", skill)
+        self.assertIn("信息不足就把缺口作为唯一问题", skill)
 
     def test_canonical_and_legacy_implicit_policies_are_opposite(self) -> None:
         canonical = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")

@@ -10,7 +10,18 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from agency_task import SCHEMA_VERSION, atomic_write_json, atomic_write_text, load_json, validate_task_plan
+from agency_task import (
+    SCHEMA_VERSION,
+    TEAM_LIMITS,
+    active_task_dir,
+    atomic_write_json,
+    atomic_write_text,
+    load_json,
+    read_regular_text,
+    safe_project_root,
+    task_index_lock,
+    validate_task_plan,
+)
 
 
 PROFILE_TITLES = {
@@ -41,11 +52,11 @@ ACCOUNTABLE_PROFILE_BY_WORK_TYPE = {
     "writing": "writer",
     "testing": "test-debugger",
 }
-MAX_ACTIVE_POSITIONS = 5
-MAX_PARALLEL_POSITIONS = 3
-MAX_PARALLEL_WRITERS = 2
-DEFAULT_COLD_REVIEWERS = 1
-MAX_REVIEW_FIX_ROUNDS = 2
+MAX_ACTIVE_POSITIONS = TEAM_LIMITS["max_active_positions"]
+MAX_PARALLEL_POSITIONS = TEAM_LIMITS["max_parallel_positions"]
+MAX_PARALLEL_WRITERS = TEAM_LIMITS["max_parallel_writers"]
+DEFAULT_COLD_REVIEWERS = TEAM_LIMITS["default_cold_reviewers"]
+MAX_REVIEW_FIX_ROUNDS = TEAM_LIMITS["max_review_fix_rounds"]
 RISK_POINTS = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 LEVEL_POINTS = {"low": 0, "medium": 1, "high": 2}
 FAILURE_RE = re.compile(r"\b(?:fail(?:ed|ing|ure)?|error|flaky|regression)\b|失败|报错|不稳定|根因", re.I)
@@ -507,10 +518,81 @@ def render_team_plan(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def write_team_plan(task_dir: Path, team_plan: dict[str, Any]) -> None:
-    resolved = task_dir.resolve()
-    if not resolved.is_dir() or resolved.is_symlink():
+def _managed_task_context(
+    task_dir: Path, task_id: str
+) -> tuple[Path, Path]:
+    if task_dir.is_symlink():
         raise ValueError("task directory must be a non-symlink directory")
+    resolved = task_dir.resolve()
+    if not resolved.is_dir():
+        raise ValueError("task directory must be a non-symlink directory")
+    if (
+        resolved.name != task_id
+        or resolved.parent.name != "active"
+        or resolved.parent.parent.name != "tasks"
+        or resolved.parent.parent.parent.name != ".agency"
+    ):
+        raise ValueError("team plan writes require a managed active task directory")
+    root = safe_project_root(resolved.parents[3])
+    return root, resolved
+
+
+def write_team_plan(task_dir: Path, team_plan: dict[str, Any]) -> None:
+    task_id = team_plan.get("task_id")
+    if not isinstance(task_id, str):
+        raise ValueError("team plan task_id must be a string")
+    root, resolved = _managed_task_context(task_dir, task_id)
+    with task_index_lock(root):
+        if active_task_dir(root, task_id).resolve() != resolved:
+            raise ValueError("team plan task directory does not match the project task")
+        paths = (
+            resolved / "task-plan.json",
+            resolved / "TEAM_PLAN.json",
+            resolved / "TEAM_PLAN.md",
+        )
+        snapshots = {path: _snapshot_team_file(path) for path in paths}
+        try:
+            _write_team_plan_unlocked(resolved, team_plan)
+        except Exception as exc:
+            _restore_team_files(snapshots, exc)
+            raise
+
+
+def _snapshot_team_file(path: Path) -> tuple[bool, str]:
+    if path.is_symlink():
+        raise ValueError(f"managed team-plan output must not be a symlink: {path}")
+    return (True, read_regular_text(path)) if path.exists() else (False, "")
+
+
+def _restore_team_file(path: Path, snapshot: tuple[bool, str]) -> None:
+    existed, text = snapshot
+    if existed:
+        atomic_write_text(path, text)
+    elif path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"cannot remove unsafe team-plan output: {path}")
+        path.unlink()
+
+
+def _restore_team_files(
+    snapshots: dict[Path, tuple[bool, str]], exc: Exception
+) -> None:
+    failures: list[str] = []
+    for path, snapshot in reversed(list(snapshots.items())):
+        try:
+            _restore_team_file(path, snapshot)
+        except (OSError, ValueError) as rollback_exc:
+            failures.append(f"{path}: {rollback_exc}")
+    if failures:
+        raise RuntimeError(
+            "team-plan write failed and rollback was incomplete: "
+            + "; ".join(failures)
+        ) from exc
+
+
+def _write_team_plan_unlocked(
+    resolved: Path, team_plan: dict[str, Any]
+) -> None:
     task_plan_path = resolved / "task-plan.json"
     task_plan = validate_task_plan(load_json(task_plan_path), expected_task_id=team_plan["task_id"])
     positions_by_work: dict[str, list[dict[str, Any]]] = {}
@@ -663,6 +745,11 @@ def main() -> None:
         signals = load_json(args.signals) if args.signals else None
         result = resolve_team_plan(load_json(args.task_plan), signals=signals)
         if args.write_task_dir:
+            expected_plan = args.write_task_dir.resolve() / "task-plan.json"
+            if args.task_plan.resolve() != expected_plan:
+                raise ValueError(
+                    "--write-task-dir requires its own canonical task-plan.json"
+                )
             write_team_plan(args.write_task_dir, result)
     print(json.dumps(result, ensure_ascii=False, indent=2) if args.json or args.self_test else render_team_plan(result))
 

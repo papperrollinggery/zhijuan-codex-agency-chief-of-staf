@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import stat
 import tempfile
 import uuid
 from pathlib import Path
@@ -191,11 +192,62 @@ def installed_manifest(root: Path) -> dict[str, str]:
         return {}
     manifest: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
         if path.is_symlink():
-            raise ValueError(f"installed bundle contains a symlink: {path.relative_to(root)}")
+            raise ValueError(f"installed bundle contains a symlink: {relative}")
         if path.is_file():
-            manifest[str(path.relative_to(root))] = digest(path)
+            manifest[str(relative)] = digest(path)
     return manifest
+
+
+def runtime_permission_report(root: Path, skill_name: str = SKILL_NAME) -> dict[str, object]:
+    """Read back the exact sealed file/directory surface for one installed bundle."""
+    expected_files = set(runtime_files(skill_name))
+    expected_directories = {"."}
+    for relative in expected_files:
+        parent = Path(relative).parent
+        while str(parent) not in {"", "."}:
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+    if not root.exists():
+        return {"current": False, "mismatches": ["missing-root"]}
+    if root.is_symlink():
+        raise ValueError("installed runtime root must be a non-symlink directory")
+    if not root.is_dir():
+        return {"current": False, "mismatches": ["root-not-directory"]}
+    actual_files: set[str] = set()
+    actual_directories = {"."}
+    mismatches: list[str] = []
+    if stat.S_IMODE(root.stat().st_mode) != 0o555:
+        mismatches.append("mode:.:expected-0555")
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"installed bundle contains a symlink: {relative}")
+        if stat.S_ISDIR(info.st_mode):
+            actual_directories.add(relative)
+            if stat.S_IMODE(info.st_mode) != 0o555:
+                mismatches.append(f"mode:{relative}:expected-0555")
+        elif stat.S_ISREG(info.st_mode):
+            actual_files.add(relative)
+            if stat.S_IMODE(info.st_mode) != 0o444:
+                mismatches.append(f"mode:{relative}:expected-0444")
+        else:
+            mismatches.append(f"unsupported:{relative}")
+    for relative in sorted(expected_files - actual_files):
+        mismatches.append(f"missing-file:{relative}")
+    for relative in sorted(actual_files - expected_files):
+        mismatches.append(f"extra-file:{relative}")
+    for relative in sorted(expected_directories - actual_directories):
+        mismatches.append(f"missing-directory:{relative}")
+    for relative in sorted(actual_directories - expected_directories):
+        mismatches.append(f"extra-directory:{relative}")
+    return {"current": not mismatches, "mismatches": mismatches}
+
+
+def runtime_permissions_current(root: Path, skill_name: str = SKILL_NAME) -> bool:
+    return runtime_permission_report(root, skill_name)["current"] is True
 
 
 def copy_runtime(
@@ -207,11 +259,42 @@ def copy_runtime(
         destination.write_bytes(render_runtime_bytes(source, rel, skill_name))
 
 
+def seal_runtime_tree(root: Path) -> None:
+    """Make an installed Runtime read-only so Python cannot create executable caches."""
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("runtime tree must be a non-symlink directory")
+    directories = [root]
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            raise ValueError(f"runtime tree contains a symlink: {path.relative_to(root)}")
+        if path.is_dir():
+            directories.append(path)
+        elif path.is_file():
+            path.chmod(0o444)
+    for directory in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+        directory.chmod(0o555)
+
+
+def make_runtime_tree_writable(root: Path) -> None:
+    """Unseal an installer-owned staging or backup tree immediately before removal."""
+    if root.is_symlink() or not root.is_dir():
+        return
+    root.chmod(0o700)
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink():
+            continue
+        if path.is_dir():
+            path.chmod(0o700)
+        elif path.is_file():
+            path.chmod(0o600)
+
+
 def best_effort_remove(path: Path) -> None:
     try:
         if path.is_symlink() or path.is_file():
             path.unlink(missing_ok=True)
         else:
+            make_runtime_tree_writable(path)
             shutil.rmtree(path, ignore_errors=True)
     except OSError:
         pass
@@ -231,8 +314,11 @@ def replace_many_from_staging(source: Path, targets: dict[str, Path]) -> None:
             )
             staged[skill_name] = staging
             copy_runtime(source, staging, skill_name)
+            seal_runtime_tree(staging)
             if installed_manifest(staging) != runtime_manifest(source, skill_name):
                 raise RuntimeError(f"staged runtime manifest mismatch: {skill_name}")
+            if not runtime_permissions_current(staging, skill_name):
+                raise RuntimeError(f"staged runtime permission mismatch: {skill_name}")
 
         for skill_name, target in targets.items():
             if target.exists():
@@ -245,6 +331,8 @@ def replace_many_from_staging(source: Path, targets: dict[str, Path]) -> None:
             promoted.add(skill_name)
             if installed_manifest(target) != runtime_manifest(source, skill_name):
                 raise RuntimeError(f"installed runtime manifest mismatch: {skill_name}")
+            if not runtime_permissions_current(target, skill_name):
+                raise RuntimeError(f"installed runtime permission mismatch: {skill_name}")
         committed = True
     except Exception:
         for skill_name, target in reversed(tuple(targets.items())):
@@ -339,14 +427,24 @@ def main() -> None:
             raise SystemExit(1)
 
     states: dict[str, str] = {}
+    permissions_before: dict[str, dict[str, object]] = {}
     try:
         for name, target in targets.items():
             if not target.exists():
                 states[name] = "missing"
-            elif installed_manifest(target) == expected[name]:
-                states[name] = "current"
+                permissions_before[name] = {
+                    "current": False,
+                    "mismatches": ["missing-root"],
+                }
             else:
-                states[name] = "different"
+                permission_report = runtime_permission_report(target, name)
+                permissions_before[name] = permission_report
+                states[name] = (
+                    "current"
+                    if installed_manifest(target) == expected[name]
+                    and permission_report["current"] is True
+                    else "different"
+                )
     except (OSError, ValueError) as exc:
         result = {
             "source": str(source),
@@ -382,6 +480,8 @@ def main() -> None:
         for name, target in targets.items():
             if installed_manifest(target) != expected[name]:
                 raise SystemExit(f"installed runtime manifest does not match source: {name}")
+            if not runtime_permissions_current(target, name):
+                raise SystemExit(f"installed runtime permissions do not match source: {name}")
 
     result = {
         "source": str(source),
@@ -389,6 +489,7 @@ def main() -> None:
         "targets": {name: str(path) for name, path in targets.items()},
         "status": status,
         "states_before": states,
+        "permissions_before": permissions_before,
         "runtime_files_per_bundle": len(RUNTIME_FILES),
         "runtime_file_counts": {
             name: len(runtime_files(name)) for name in MANAGED_INSTALL_NAMES

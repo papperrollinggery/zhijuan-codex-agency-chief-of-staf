@@ -11,6 +11,7 @@
 - 首个状态为“任务已接管｜需求讨论中”。
 - 不修改项目文件，不创建 Agent、Task、Thread，不运行实现命令。
 - 只读取用户明确要求核对的当前资料。
+- 宿主普通 delegation envelope 的 source ID 不是读取授权；不自行检索 source task、历史对话、memory、项目或 Git。
 - 一次只问一个会改变结果的问题。
 - 在当前对话维护 objective、constraints、accepted decisions、assumptions、open questions、acceptance criteria 和 out of scope。
 - 不自行从讨论进入计划或执行。“只讨论不执行”是合法停止点。
@@ -25,21 +26,29 @@
 └── tasks/
     ├── active/<task-id>/
     │   ├── task-plan.json
-    │   └── TASK_EXECUTION_CHECKLIST.md
+    │   ├── TASK_EXECUTION_CHECKLIST.md
+    │   ├── TEAM_PLAN.json
+    │   ├── TEAM_PLAN.md
+    │   ├── EXECUTION_LAUNCH_PROMPT.md
+    │   ├── PROGRESS.md
+    │   ├── progress.jsonl
+    │   └── EVIDENCE.md
     └── archive/
 ```
 
-清单面向用户，列出完成标准、依赖、状态和验证，不使用虚构日期、用时或百分比。创建后状态为 `plan_ready`，不会自动执行、安装 Profile 或创建新对话。`TEAM_PLAN.*`、Execution Session、Launch Prompt、Progress 与归档文件分别在首次需要时生成，不写占位文件。
+清单面向用户，列出完成标准、依赖、状态和验证，不使用虚构日期、用时或百分比。一次 helper 调用在隐藏 staging 中创建并校验八个任务文件，再以目录 rename 原子发布并更新项目 index，避免模型逐文件设计、枚举或补写，也不会让其他进程读到半个正式任务目录。创建使用项目级短锁和恢复 journal；进程中断后下一次 Durable 操作会清理未发布 staging，或把已完整发布的孤儿任务补回 index。创建后状态为 `plan_ready`，不会自动执行、安装 Profile 或创建新对话。`TEAM_PLAN.*` 是未选岗的 `pending` scaffold，`progress.jsonl` 是零事件空日志，`PROGRESS.md` 陈述当前阶段，`EVIDENCE.md` 只是 canonical 证据位置索引而不镜像易过期状态；它们的存在不代表执行已经开始。
 
-输入可以只提供每个 Work Item 的 `work_id`、`title`、`outcome` 和 `work_type`；确定性脚本补齐安全默认字段并把完整规范写入 `task-plan.json`。模型请求不属于 Plan 必填项，只在真正启动 Execution Session 时解析。
+创建入口按字段白名单拒绝未知完成声明，并拒绝任何调用方预填的已完成/waived Work Item、evidence、blocker、岗位/Profile、acceptance evidence 或已解析模型 ID；新任务只能从全 pending、模型 `null + pending` 的诚实初态开始。旧 v1.0 任务读取仍会补齐缺失的模型请求字段，schema 不把后来新增字段倒灌成旧文件的必填项。
 
-首次真实执行事件才创建 `progress.jsonl` 和 `PROGRESS.md`。工作项全部完成且当前验收、验证、Review（如需要）及 Task/Thread 清理证据齐备后，使用 `scripts/complete_task.py`。默认只做 readiness 检查；传入 `--apply` 才从 `executing`/`verifying` 收口到 `completed`，并生成归档可复用的 `closure.json`。
+输入可以只提供每个 Work Item 的 `work_id`、`title`、`outcome` 和 `work_type`；确定性脚本补齐安全默认字段并把完整规范写入 `task-plan.json`。Plan 固定记录 GPT-5.6 Sol / `ultra` 请求为 `pending`，但不解析 Live Model Catalog，也不把显示名称当运行证明；真正启动 Execution Session 时才解析和读回。
+
+首次真实执行事件才向零事件 `progress.jsonl` 追加记录并重绘 `PROGRESS.md`。工作项全部完成且当前验收、验证、Review（如需要）及 Task/Thread 清理证据齐备后，使用 `scripts/complete_task.py`。默认只做 readiness 检查；传入 `--apply` 才从 `executing`/`verifying` 收口到 `completed`，并生成归档可复用的 `closure.json`。
 
 通用 `agency_task.py transition` 和公开进度命令不能写 `completed` / `archived` 或 terminal event；这些终态只能由 `complete_task.py` 与 `archive_task.py` 在证据门禁通过后写入。Task 创建、状态转换、进度事件、归档和知识沉淀的多文件提交都带故障回滚；失败不能留下 plan/index、文档/report 或 active/archive 的半状态。
 
 #### Execution Root 快速路径
 
-Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 Team Plan，只在确需委派或确认 Reviewer 时读一次当前分工。task ID 与 plan 路径已给出时，不用 `rg` / `find` 枚举 `.agency`，不读作为人类视图的 checklist；首个事件前也不要尝试读取尚不存在的 `PROGRESS.md`。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
+Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 ready Team Plan，只在确需委派或确认 Reviewer 时读一次当前分工。task ID 与 plan 路径已给出时，不用 `rg` / `find` 枚举 `.agency`，不读作为人类视图的 checklist；全新任务首次进入时不读取零事件 `progress.jsonl`，只有恢复既有事件时才读一次。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
 
 下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入，包括 skill root、project、task/work ID、summary、完成标准、证据和路径；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把尖括号占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已完整读取的 Canonical `SKILL.md` 所在目录。
 

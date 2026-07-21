@@ -17,6 +17,7 @@ from install_skill import (
     DISCOVERY_SKILL_NAME,
     LEGACY_SKILL_NAME,
     installed_manifest,
+    runtime_permission_report,
     runtime_manifest,
 )
 from resolve_execution_model import _display_field, _effort_fields, _normalized_display
@@ -55,10 +56,18 @@ def bundle_report(skills_root: Path, skill_name: str) -> dict[str, Any]:
     expected = runtime_manifest(ROOT, skill_name)
     try:
         actual = installed_manifest(target)
-        state = "missing" if not target.exists() else "current" if actual == expected else "different"
+        permissions = runtime_permission_report(target, skill_name)
+        state = (
+            "missing"
+            if not target.exists()
+            else "current"
+            if actual == expected and permissions["current"] is True
+            else "different"
+        )
         error = None
     except (OSError, ValueError) as exc:
         actual = {}
+        permissions = {"current": False, "mismatches": [str(exc)]}
         state = "unreadable"
         error = str(exc)
     return {
@@ -66,6 +75,8 @@ def bundle_report(skills_root: Path, skill_name: str) -> dict[str, Any]:
         "state": state,
         "source_manifest_sha256": manifest_hash(expected),
         "installed_manifest_sha256": manifest_hash(actual),
+        "permissions_current": permissions["current"],
+        "permission_mismatches": permissions["mismatches"],
         "implicit_policy": implicit_policy(target / "agents" / "openai.yaml"),
         "error": error,
     }

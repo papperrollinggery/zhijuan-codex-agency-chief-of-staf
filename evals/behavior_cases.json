@@ -358,6 +358,8 @@
     "lifecycle_phase": "discussion",
     "team_expectation": "none",
     "model_smoke": true,
+    "expected_takeover_line": "任务已接管｜需求讨论中",
+    "forbid_task_actions": true,
     "must_contain": ["任务已接管｜需求讨论中"],
     "must_not_contain": ["task-plan.json", "已创建执行对话", "TOOL_BLOCKED"],
     "no_write": true,
@@ -373,6 +375,8 @@
     "lifecycle_phase": "discussion",
     "team_expectation": "none",
     "model_smoke": true,
+    "expected_takeover_line": "任务已接管｜需求讨论中",
+    "forbid_task_actions": true,
     "must_contain": ["任务已接管｜需求讨论中"],
     "must_not_contain": ["执行已开始", "已创建 Thread", "TOOL_BLOCKED"],
     "no_write": true,
@@ -389,6 +393,7 @@
     "team_expectation": "none",
     "model_smoke": true,
     "sandbox": "workspace-write",
+    "expected_takeover_line": "任务已接管｜正在创建执行清单",
     "must_contain": ["任务已接管｜正在创建执行清单"],
     "must_not_contain": ["团队执行中", "已创建新对话", "TOOL_BLOCKED"],
     "require_tool_event": true,
@@ -396,7 +401,7 @@
     "expected_artifacts": [
       {
         "path_glob": ".agency/tasks/active/task-model-smoke-plan/task-plan.json",
-        "must_contain": ["\"task_id\": \"task-model-smoke-plan\"", "\"status\": \"plan_ready\""],
+        "must_contain": ["\"task_id\": \"task-model-smoke-plan\"", "\"status\": \"plan_ready\"", "\"display_request\": \"GPT-5.6 Sol\"", "\"reasoning_request\": \"ultra\"", "\"resolution_status\": \"pending\""],
         "must_contain_any": [],
         "must_not_contain": ["\"status\": \"executing\""]
       },
@@ -405,14 +410,43 @@
         "must_contain": ["完成标准", "不会自动开始执行"],
         "must_contain_any": [],
         "must_not_contain": ["100%"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/TEAM_PLAN.json",
+        "must_contain": ["\"status\": \"pending\"", "\"team_tier\": null", "\"positions\": []"],
+        "must_contain_any": [],
+        "must_not_contain": ["\"status\": \"ready\""]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/TEAM_PLAN.md",
+        "must_contain": ["状态：pending", "团队等级：尚未计算", "不会为满足人数而安排岗位"],
+        "must_contain_any": [],
+        "must_not_contain": ["实施负责人（实例"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/EXECUTION_LAUNCH_PROMPT.md",
+        "must_contain": ["当前状态：plan_ready", "gpt-5.6 sol ultra", "尚未启动执行"],
+        "must_contain_any": [],
+        "must_not_contain": ["AGENCY_EXECUTION_SESSION: true"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/PROGRESS.md",
+        "must_contain": ["当前阶段", "plan_ready", "正在进行", "被阻塞", "下一步", "验证状态"],
+        "must_contain_any": [],
+        "must_not_contain": ["100%", "executing"]
+      },
+      {
+        "path_glob": ".agency/tasks/active/task-model-smoke-plan/EVIDENCE.md",
+        "must_contain": ["证据索引", "不镜像当前证据状态", "progress.jsonl", "计划文本、占位 ID、显示名称或自述不能证明完成"],
+        "must_contain_any": [],
+        "must_not_contain": ["PASS"]
       }
     ],
+    "expected_empty_artifacts": [
+      ".agency/tasks/active/task-model-smoke-plan/progress.jsonl"
+    ],
     "expected_absent_artifacts": [
-      ".agency/tasks/active/task-model-smoke-plan/TEAM_PLAN.json",
-      ".agency/tasks/active/task-model-smoke-plan/PROGRESS.md",
-      ".agency/tasks/active/task-model-smoke-plan/progress.jsonl",
-      ".agency/tasks/active/task-model-smoke-plan/execution-session.json",
-      ".agency/tasks/active/task-model-smoke-plan/EXECUTION_LAUNCH_PROMPT.md"
+      ".agency/tasks/active/task-model-smoke-plan/execution-session.json"
     ]
   },
   {
@@ -426,6 +460,7 @@
     "team_expectation": "solo_or_lean",
     "model_smoke": true,
     "sandbox": "workspace-write",
+    "expected_takeover_line": "任务已接管｜正在启动执行对话",
     "fixture_setup": {"kind": "plan_ready", "task_id": "task-model-smoke-launch"},
     "must_contain": ["任务已接管｜正在启动执行对话"],
     "must_not_contain": ["模型已运行（未读回）", "TOOL_BLOCKED"],
@@ -465,6 +500,7 @@
     "team_expectation": "root_owned",
     "model_smoke": true,
     "sandbox": "workspace-write",
+    "expected_takeover_line": "任务已接管｜团队执行中",
     "fixture_setup": {"kind": "executing", "task_id": "task-model-smoke-resume"},
     "must_contain": ["任务已接管｜团队执行中"],
     "must_not_contain": ["重新讨论需求", "重新创建任务清单", "另一个 Execution Root", "TOOL_BLOCKED"],
@@ -545,6 +581,7 @@
     "team_expectation": "root_owned",
     "model_smoke": true,
     "sandbox": "workspace-write",
+    "expected_takeover_line": "任务已接管｜团队执行中",
     "fixture_setup": {"kind": "executing", "task_id": "task-model-smoke-progress"},
     "must_contain": ["任务已接管｜团队执行中"],
     "must_not_contain": ["100%", "TOOL_BLOCKED"],
@@ -579,6 +616,7 @@
     "team_expectation": "solo_or_lean",
     "model_smoke": true,
     "sandbox": "workspace-write",
+    "expected_takeover_line": "任务已接管｜正在归档",
     "fixture_setup": {"kind": "completed_archive", "task_id": "task-model-smoke-archive"},
     "must_contain": ["任务已接管｜正在归档"],
     "must_not_contain": ["未验证知识已沉淀", "TOOL_BLOCKED"],

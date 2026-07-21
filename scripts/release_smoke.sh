@@ -8,7 +8,16 @@ SOURCE_ROOT="$PWD"
 python3 scripts/validate_package.py .
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/agency-release-smoke.XXXXXX")"
-trap 'rm -rf "$TMP_ROOT"' EXIT
+cleanup_tmp_root() {
+  if test -n "${TMP_ROOT:-}" && test -d "$TMP_ROOT"; then
+    # Installed Runtime trees are deliberately read-only. Restore write
+    # permission only inside this release-smoke-owned temporary root so the
+    # EXIT trap can remove it without weakening the installed bundle contract.
+    chmod -R u+w "$TMP_ROOT" 2>/dev/null || true
+    rm -rf "$TMP_ROOT"
+  fi
+}
+trap cleanup_tmp_root EXIT
 
 if test -f "$SOURCE_ROOT/AGENTS.md"; then
   source_agents_before="FILE:$(shasum -a 256 "$SOURCE_ROOT/AGENTS.md" | awk '{print $1}')"

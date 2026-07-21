@@ -39,11 +39,39 @@ class ModelEvalRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "max_tool_events"):
             runner.validate_runtime_case(case)
 
+    def test_empty_artifact_contract_requires_a_real_zero_byte_file(self) -> None:
+        case = self.base_case()
+        case["sandbox"] = "workspace-write"
+        case["allowed_changed_prefixes"] = [".agency/"]
+        case["expected_empty_artifacts"] = [".agency/task/progress.jsonl"]
+        runner.validate_runtime_case(case)
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw)
+            progress = fixture / ".agency" / "task" / "progress.jsonl"
+            progress.parent.mkdir(parents=True)
+            progress.write_bytes(b"")
+            observed, failures = runner.inspect_empty_artifacts(
+                fixture,
+                case["expected_empty_artifacts"],
+                str(case["id"]),
+            )
+            self.assertEqual(observed, [".agency/task/progress.jsonl"])
+            self.assertEqual(failures, [])
+            progress.write_text("fake event\n", encoding="utf-8")
+            _, failures = runner.inspect_empty_artifacts(
+                fixture,
+                case["expected_empty_artifacts"],
+                str(case["id"]),
+            )
+            self.assertIn("expected empty artifact contains data", failures[0])
+
     def test_eval_host_contract_normalizes_notice_without_selecting_a_skill(self) -> None:
         self.assertIn("<skill-name>", runner.EVAL_HOST_AGENTS_TEXT)
         self.assertNotIn(runner.SKILL_NAME, runner.EVAL_HOST_AGENTS_TEXT)
         self.assertNotIn(runner.LEGACY_SKILL_NAME, runner.EVAL_HOST_AGENTS_TEXT)
         self.assertIn("does not select or activate any Skill", runner.EVAL_HOST_AGENTS_TEXT)
+        self.assertIn("status-first pre-read message", runner.EVAL_HOST_AGENTS_TEXT)
+        self.assertIn("before the phase status", runner.EVAL_HOST_AGENTS_TEXT)
 
     def test_contamination_check_allows_only_source_maintenance_boundary(self) -> None:
         self.assertEqual(
@@ -1483,6 +1511,13 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 ".agents/skills/agency-chief-of-staff/references/team-orchestration.md\""
             )
             self.assertEqual(chained_reference["passive_skill_reads_completed"], 1)
+            reversed_reference = observed(
+                "/bin/zsh -lc \"sed -n '1,320p' "
+                ".agents/skills/agency-chief-of-staff/references/team-orchestration.md && "
+                "sed -n '1,260p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(reversed_reference["passive_skill_reads_completed"], 0)
             chunked_skill = observed(
                 "/bin/zsh -lc \"sed -n '1,240p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md && "
@@ -1516,6 +1551,22 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
             )
             self.assertEqual(gapped_skill["passive_skill_reads_completed"], 0)
+            malformed_range_item = {
+                "type": "command_execution",
+                "command": (
+                    "/bin/zsh -lc \"sed -n '3,2p' "
+                    ".agents/skills/agency-chief-of-staff/SKILL.md\""
+                ),
+            }
+            self.assertEqual(
+                runner.classify_passive_skill_bundle_read(
+                    malformed_range_item, skill, fixture
+                ),
+                (False, False),
+            )
+            malformed_range = observed(str(malformed_range_item["command"]))
+            self.assertEqual(malformed_range["passive_skill_reads_completed"], 0)
+            self.assertTrue(malformed_range["task_action_event_indexes"])
             oversized_start = observed(
                 "/bin/zsh -lc \"sed -n '" + ("9" * 5000) + ",5001p' "
                 ".agents/skills/agency-chief-of-staff/SKILL.md\""
@@ -2032,6 +2083,116 @@ class ModelEvalRunnerTests(unittest.TestCase):
         ):
             failures = runner.contract_failures(self.base_case(), parsed)
             self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+    def test_discussion_requires_exact_status_before_skill_reads_and_forbids_lookup(self) -> None:
+        case = self.base_case()
+        case.update(
+            {
+                "mode": "structured",
+                "activation": "implicit",
+                "lifecycle_phase": "discussion",
+                "expected_takeover_line": "任务已接管｜需求讨论中",
+                "forbid_task_actions": True,
+            }
+        )
+        runner.validate_runtime_case(case)
+        skill_path = ROOT / "SKILL.md"
+        lifecycle_path = ROOT / "references" / "task-lifecycle.md"
+
+        def message(text: str) -> dict[str, object]:
+            return {
+                "type": "item.completed",
+                "item": {"type": "assistant_message", "text": text},
+            }
+
+        def read_pair(item_id: str, command: str) -> tuple[dict[str, object], dict[str, object]]:
+            started = {
+                "type": "item.started",
+                "item": {
+                    "id": item_id,
+                    "type": "command_execution",
+                    "status": "in_progress",
+                    "command": command,
+                },
+            }
+            completed = json.loads(json.dumps(started))
+            completed["type"] = "item.completed"
+            completed["item"]["status"] = "completed"
+            completed["item"]["exit_code"] = 0
+            return started, completed
+
+        boot = message(
+            "任务已接管｜需求讨论中\n"
+            "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；"
+            "先完整读取 Skill 说明。"
+        )
+        skill_read = read_pair("skill", f"/bin/cat {skill_path}")
+        reference_read = read_pair("reference", f"/bin/cat {lifecycle_path}")
+
+        def parsed(*events: dict[str, object]) -> dict[str, object]:
+            return runner.event_surface(
+                "\n".join(map(json.dumps, events)),
+                "",
+                installed_skill_path=skill_path,
+                fixture_root=ROOT,
+            )
+
+        valid = runner.contract_failures(
+            case,
+            parsed(
+                boot,
+                *skill_read,
+                *reference_read,
+                message("你希望这个项目最终改变什么结果？"),
+            ),
+        )
+        self.assertNotIn("Skill announcement/read order violated takeover contract", valid)
+        self.assertNotIn("discussion attempted a non-Skill tool or collaboration action", valid)
+        self.assertFalse(
+            any("first visible takeover line is not exact" in item for item in valid)
+        )
+
+        reversed_reads = runner.contract_failures(
+            case,
+            parsed(
+                boot,
+                *reference_read,
+                *skill_read,
+                message("你希望这个项目最终改变什么结果？"),
+            ),
+        )
+        self.assertIn(
+            "Skill announcement/read order violated takeover contract",
+            reversed_reads,
+        )
+
+        announced_first = message(
+            "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；"
+            "先完整读取 Skill 说明。"
+        )
+        order_failures = runner.contract_failures(
+            case, parsed(announced_first, boot, *skill_read)
+        )
+        self.assertIn("Skill announcement/read order violated takeover contract", order_failures)
+
+        wrong_boot = message(
+            "任务已接管｜团队执行中\n"
+            "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；"
+            "先完整读取 Skill 说明。"
+        )
+        wrong_failures = runner.contract_failures(case, parsed(wrong_boot, *skill_read))
+        self.assertTrue(
+            any("first visible takeover line is not exact" in item for item in wrong_failures)
+        )
+
+        git_read = read_pair("git", "/usr/bin/git log -1 --oneline")
+        lookup_failures = runner.contract_failures(
+            case, parsed(boot, *skill_read, *git_read)
+        )
+        self.assertIn(
+            "discussion attempted a non-Skill tool or collaboration action",
+            lookup_failures,
+        )
 
     def test_visible_takeover_line_is_sufficient_when_host_strips_comments(self) -> None:
         boot = {

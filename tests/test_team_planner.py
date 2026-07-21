@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from unittest import mock
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lifecycle_test_support import ROOT, task_plan, work_item
+from lifecycle_test_support import ROOT, create_fixture_task, task_plan, work_item
 
 sys.path.insert(0, str(ROOT / "scripts"))
+import resolve_team_plan as team_plan_module  # noqa: E402
 from resolve_team_plan import (  # noqa: E402
     MAX_ACTIVE_POSITIONS,
     MAX_PARALLEL_POSITIONS,
     MAX_PARALLEL_WRITERS,
     resolve_team_plan,
+    write_team_plan,
 )
 
 
@@ -21,6 +26,66 @@ def profiles(team: dict[str, object]) -> list[str]:
 
 
 class TeamPlannerTests(unittest.TestCase):
+    def test_team_plan_writer_rejects_an_unmanaged_task_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            task_dir = Path(raw) / "task-unmanaged-001"
+            task_dir.mkdir()
+            plan = task_plan(task_id="task-unmanaged-001")
+            (task_dir / "task-plan.json").write_text(
+                json.dumps(plan, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ValueError, "managed active task directory"):
+                write_team_plan(task_dir, resolve_team_plan(plan))
+
+    def test_team_plan_second_and_third_write_failures_restore_exact_files(self) -> None:
+        for failing_name in ("TEAM_PLAN.json", "TEAM_PLAN.md"):
+            with self.subTest(failing_name=failing_name), tempfile.TemporaryDirectory() as raw:
+                project = Path(raw)
+                task_id, task_dir = create_fixture_task(
+                    project, f"task-team-rollback-{failing_name.lower().replace('.', '-')}-001"
+                )
+                plan = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
+                team = resolve_team_plan(plan)
+                paths = (
+                    task_dir / "task-plan.json",
+                    task_dir / "TEAM_PLAN.json",
+                    task_dir / "TEAM_PLAN.md",
+                )
+                before = {path.name: path.read_bytes() for path in paths}
+                failed = False
+                real_json = team_plan_module.atomic_write_json
+                real_text = team_plan_module.atomic_write_text
+
+                def maybe_fail_json(path: Path, value: object) -> None:
+                    nonlocal failed
+                    if Path(path).name == failing_name and not failed:
+                        failed = True
+                        raise OSError("team json write failed")
+                    real_json(path, value)
+
+                def maybe_fail_text(path: Path, value: str) -> None:
+                    nonlocal failed
+                    if Path(path).name == failing_name and not failed:
+                        failed = True
+                        raise OSError("team markdown write failed")
+                    real_text(path, value)
+
+                with mock.patch.object(
+                    team_plan_module,
+                    "atomic_write_json",
+                    side_effect=maybe_fail_json,
+                ), mock.patch.object(
+                    team_plan_module,
+                    "atomic_write_text",
+                    side_effect=maybe_fail_text,
+                ):
+                    with self.assertRaisesRegex(OSError, "team .* write failed"):
+                        write_team_plan(task_dir, team)
+                self.assertTrue(failed)
+                self.assertEqual(
+                    {path.name: path.read_bytes() for path in paths}, before
+                )
+
     def test_single_file_high_coupling_bug_stays_solo(self) -> None:
         item = work_item(
             "W-01",

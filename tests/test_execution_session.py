@@ -6,6 +6,7 @@ import json
 import copy
 import hashlib
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
@@ -17,6 +18,7 @@ from lifecycle_test_support import ROOT, create_fixture_task, live_catalog, read
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import bind_execution_session as bind_execution_session_module  # noqa: E402
+import prepare_execution_launch as prepare_execution_launch_module  # noqa: E402
 from bind_execution_session import (  # noqa: E402
     MECHANICAL_ATTESTATION,
     bind_execution_session,
@@ -29,6 +31,7 @@ from protocol_contract import (  # noqa: E402
     match_execution_session_transport,
     parse_execution_session_packet,
 )
+from update_task_progress import update_progress  # noqa: E402
 
 try:
     import jsonschema
@@ -70,6 +73,27 @@ def trusted_readback(project: Path, task_id: str) -> dict[str, object]:
         "rollout_sha256": "a" * 64,
         "model_turns_observed": 1,
         "observed_at": utc_now(),
+    }
+
+
+def launch_managed_snapshot(project: Path, task_dir: Path) -> dict[str, bytes | None]:
+    root = project.resolve()
+    paths = (
+        task_dir / "task-plan.json",
+        task_dir / "TASK_EXECUTION_CHECKLIST.md",
+        task_dir / "TEAM_PLAN.json",
+        task_dir / "TEAM_PLAN.md",
+        task_dir / "EXECUTION_LAUNCH_PROMPT.md",
+        task_dir / "execution-session.json",
+        task_dir / "progress.jsonl",
+        task_dir / "PROGRESS.md",
+        project / ".agency/task-index.json",
+    )
+    return {
+        str(path.resolve(strict=False).relative_to(root)): (
+            path.read_bytes() if path.exists() else None
+        )
+        for path in paths
     }
 
 
@@ -127,6 +151,249 @@ class ExecutionSessionTests(unittest.TestCase):
                 (task_dir / "progress.jsonl").read_text(encoding="utf-8"),
             )
             self.assertIn("execution_ready", (task_dir / "PROGRESS.md").read_text(encoding="utf-8"))
+
+    def test_launch_and_progress_share_the_task_state_transaction_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = create_fixture_task(
+                project, "task-launch-progress-race-001"
+            )
+            launch_paused = threading.Event()
+            release_launch = threading.Event()
+            progress_finished = threading.Event()
+            failures: list[BaseException] = []
+            real_atomic_write_json = prepare_execution_launch_module.atomic_write_json
+
+            def pausing_plan_write(path: Path, value: object) -> None:
+                if (
+                    threading.current_thread().name == "launch-writer"
+                    and Path(path).name == "task-plan.json"
+                    and not launch_paused.is_set()
+                ):
+                    launch_paused.set()
+                    if not release_launch.wait(timeout=5):
+                        raise TimeoutError("launch race test release timed out")
+                real_atomic_write_json(path, value)
+
+            def run_launch() -> None:
+                try:
+                    prepare_execution_launch(
+                        project,
+                        task_id=task_id,
+                        catalog=live_catalog(),
+                        native_capabilities={"task_thread_create": False},
+                        catalog_mechanically_verified=True,
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+
+            def run_progress() -> None:
+                try:
+                    update_progress(
+                        project,
+                        task_id=task_id,
+                        event_type="work_started",
+                        work_id="W-01",
+                        actor="execution-root",
+                        summary="Implementation started after launch handoff",
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+                finally:
+                    progress_finished.set()
+
+            with mock.patch.object(
+                prepare_execution_launch_module,
+                "atomic_write_json",
+                side_effect=pausing_plan_write,
+            ):
+                launch_worker = threading.Thread(
+                    target=run_launch, name="launch-writer"
+                )
+                launch_worker.start()
+                self.assertTrue(launch_paused.wait(timeout=5))
+                progress_worker = threading.Thread(
+                    target=run_progress, name="progress-writer"
+                )
+                progress_worker.start()
+                self.assertFalse(
+                    progress_finished.wait(timeout=0.2),
+                    "progress escaped the launch task-state transaction lock",
+                )
+                release_launch.set()
+                launch_worker.join(timeout=5)
+                progress_worker.join(timeout=5)
+                self.assertFalse(launch_worker.is_alive())
+                self.assertFalse(progress_worker.is_alive())
+
+            self.assertEqual(failures, [])
+            plan = read_json(task_dir / "task-plan.json")
+            self.assertEqual(plan["status"], "execution_ready")
+            self.assertEqual(plan["work_items"][0]["status"], "in_progress")
+            progress_text = (task_dir / "progress.jsonl").read_text(encoding="utf-8")
+            self.assertIn("Implementation started after launch handoff", progress_text)
+
+    def test_launch_session_write_failure_restores_every_managed_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = create_fixture_task(
+                project, "task-launch-session-failure-001"
+            )
+            before = launch_managed_snapshot(project, task_dir)
+            real_atomic_write_json = prepare_execution_launch_module.atomic_write_json
+
+            def fail_session(path: Path, value: object) -> None:
+                if Path(path).name == "execution-session.json":
+                    raise OSError("session write failed")
+                real_atomic_write_json(path, value)
+
+            with mock.patch.object(
+                prepare_execution_launch_module,
+                "atomic_write_json",
+                side_effect=fail_session,
+            ):
+                with self.assertRaisesRegex(OSError, "session write failed"):
+                    prepare_execution_launch(
+                        project,
+                        task_id=task_id,
+                        catalog=live_catalog(),
+                        native_capabilities={"task_thread_create": False},
+                        catalog_mechanically_verified=True,
+                    )
+            self.assertEqual(launch_managed_snapshot(project, task_dir), before)
+
+    def test_launch_transition_failure_restores_every_managed_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = create_fixture_task(
+                project, "task-launch-transition-failure-001"
+            )
+            before = launch_managed_snapshot(project, task_dir)
+            with mock.patch.object(
+                prepare_execution_launch_module,
+                "transition_task",
+                side_effect=OSError("launch transition failed"),
+            ):
+                with self.assertRaisesRegex(OSError, "launch transition failed"):
+                    prepare_execution_launch(
+                        project,
+                        task_id=task_id,
+                        catalog=live_catalog(),
+                        native_capabilities={"task_thread_create": False},
+                        catalog_mechanically_verified=True,
+                    )
+            self.assertEqual(launch_managed_snapshot(project, task_dir), before)
+
+    def test_launch_progress_failure_restores_every_managed_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = create_fixture_task(
+                project, "task-launch-progress-failure-001"
+            )
+            before = launch_managed_snapshot(project, task_dir)
+            with mock.patch.object(
+                prepare_execution_launch_module,
+                "update_progress",
+                side_effect=OSError("launch progress failed"),
+            ):
+                with self.assertRaisesRegex(OSError, "launch progress failed"):
+                    prepare_execution_launch(
+                        project,
+                        task_id=task_id,
+                        catalog=live_catalog(),
+                        native_capabilities={"task_thread_create": False},
+                        catalog_mechanically_verified=True,
+                    )
+            self.assertEqual(launch_managed_snapshot(project, task_dir), before)
+
+    def test_relaunch_and_native_bind_share_the_task_state_transaction_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw).resolve()
+            task_id, task_dir = create_fixture_task(
+                project,
+                "task-launch-bind-race-001",
+                items=[work_item("W-01", work_type="research", read_scope=["src/"])],
+            )
+            prepare_execution_launch(
+                project,
+                task_id=task_id,
+                catalog=live_catalog(),
+                native_capabilities={"task_thread_create": True},
+                catalog_mechanically_verified=True,
+            )
+            launch_paused = threading.Event()
+            release_launch = threading.Event()
+            bind_finished = threading.Event()
+            failures: list[BaseException] = []
+            real_atomic_write_json = prepare_execution_launch_module.atomic_write_json
+
+            def pausing_plan_write(path: Path, value: object) -> None:
+                if (
+                    threading.current_thread().name == "relaunch-writer"
+                    and Path(path).name == "task-plan.json"
+                    and not launch_paused.is_set()
+                ):
+                    launch_paused.set()
+                    if not release_launch.wait(timeout=5):
+                        raise TimeoutError("relaunch race test release timed out")
+                real_atomic_write_json(path, value)
+
+            def run_relaunch() -> None:
+                try:
+                    prepare_execution_launch(
+                        project,
+                        task_id=task_id,
+                        catalog=live_catalog(),
+                        native_capabilities={"task_thread_create": True},
+                        catalog_mechanically_verified=True,
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+
+            def run_bind() -> None:
+                try:
+                    bind_execution_session(
+                        project,
+                        task_id=task_id,
+                        native_task_id=NATIVE_TASK_ID,
+                        apply=True,
+                    )
+                except BaseException as exc:  # pragma: no cover - asserted below
+                    failures.append(exc)
+                finally:
+                    bind_finished.set()
+
+            with mock.patch.object(
+                prepare_execution_launch_module,
+                "atomic_write_json",
+                side_effect=pausing_plan_write,
+            ), mock.patch.object(
+                bind_execution_session_module,
+                "_mechanical_readback",
+                return_value=trusted_readback(project, task_id),
+            ):
+                launch_worker = threading.Thread(
+                    target=run_relaunch, name="relaunch-writer"
+                )
+                launch_worker.start()
+                self.assertTrue(launch_paused.wait(timeout=5))
+                bind_worker = threading.Thread(target=run_bind, name="native-binder")
+                bind_worker.start()
+                self.assertFalse(
+                    bind_finished.wait(timeout=0.2),
+                    "Native bind escaped the launch task-state transaction lock",
+                )
+                release_launch.set()
+                launch_worker.join(timeout=5)
+                bind_worker.join(timeout=5)
+                self.assertFalse(launch_worker.is_alive())
+                self.assertFalse(bind_worker.is_alive())
+
+            self.assertEqual(failures, [])
+            self.assertEqual(read_json(task_dir / "task-plan.json")["status"], "executing")
+            session = read_json(task_dir / "execution-session.json")
+            self.assertEqual(session["native_task_id"], NATIVE_TASK_ID)
+            self.assertEqual(session["native_readback_attestation"], MECHANICAL_ATTESTATION)
 
     def test_native_write_launch_requires_verified_isolated_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -3,6 +3,7 @@
   "$id": "https://example.invalid/agency/task-execution-plan.schema.json",
   "title": "Agency Task Execution Plan",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "title",
     "objective",
@@ -78,6 +79,7 @@
   "$defs": {
     "work_item": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "work_id",
         "title",

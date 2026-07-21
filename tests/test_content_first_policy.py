@@ -27,12 +27,13 @@ class ContentFirstPolicyTests(unittest.TestCase):
         self.assertIn("Direct/Focused 不要求固定", text)
         self.assertIn("单一研究、单一文档、普通单文件修改", text)
 
-    def test_durable_assets_are_lazy_and_model_resolution_is_launch_only(self) -> None:
+    def test_durable_plan_bundle_is_complete_but_execution_is_lazy(self) -> None:
         lifecycle = (ROOT / "references/task-lifecycle.md").read_text(encoding="utf-8")
         self.assertIn("task-plan.json", lifecycle)
         self.assertIn("TASK_EXECUTION_CHECKLIST.md", lifecycle)
-        self.assertIn("不写占位文件", lifecycle)
-        self.assertIn("模型请求不属于 Plan 必填项", lifecycle)
+        self.assertIn("八个任务文件", lifecycle)
+        self.assertIn("零事件", lifecycle)
+        self.assertIn("不解析 Live Model Catalog", lifecycle)
         self.assertIn("complete_task.py", lifecycle)
 
     def test_durable_execution_has_a_no_spelunking_fast_path(self) -> None:
@@ -42,7 +43,7 @@ class ContentFirstPolicyTests(unittest.TestCase):
         self.assertIn("Execution Root 快速路径", lifecycle)
         self.assertIn("--event-type work_started", lifecycle)
         self.assertIn("--event-type work_completed", lifecycle)
-        self.assertIn("首个事件前也不要尝试读取尚不存在的 `PROGRESS.md`", lifecycle)
+        self.assertIn("首次进入时不读取零事件 `progress.jsonl`", lifecycle)
         self.assertIn("不运行 `--help`", lifecycle)
         self.assertIn("不读取 helper 源码", lifecycle)
         self.assertIn("不用 `rg` / `find` 枚举 `.agency`", lifecycle)
@@ -116,18 +117,25 @@ class ContentFirstPolicyTests(unittest.TestCase):
             ["INVALID_PACKET"],
         )
 
-    def test_plan_smoke_forbids_eager_runtime_files(self) -> None:
+    def test_plan_smoke_requires_complete_nonexecuting_bundle(self) -> None:
         cases = json.loads((ROOT / "evals/behavior_cases.json").read_text(encoding="utf-8"))
         plan = next(case for case in cases if case["id"] == "lifecycle-plan-creation")
+        present = {
+            contract["path_glob"]
+            for contract in plan["expected_artifacts"]
+        }
+        empty = set(plan["expected_empty_artifacts"])
         absent = set(plan["expected_absent_artifacts"])
         for name in (
             "TEAM_PLAN.json",
+            "TEAM_PLAN.md",
             "PROGRESS.md",
-            "progress.jsonl",
-            "execution-session.json",
             "EXECUTION_LAUNCH_PROMPT.md",
+            "EVIDENCE.md",
         ):
-            self.assertTrue(any(path.endswith(name) for path in absent), name)
+            self.assertTrue(any(path.endswith(name) for path in present), name)
+        self.assertTrue(any(path.endswith("progress.jsonl") for path in empty))
+        self.assertTrue(any(path.endswith("execution-session.json") for path in absent))
 
 
 if __name__ == "__main__":
