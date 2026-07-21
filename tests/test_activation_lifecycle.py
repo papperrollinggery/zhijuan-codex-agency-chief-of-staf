@@ -31,6 +31,18 @@ class ActivationLifecycleTests(unittest.TestCase):
         ):
             self.assertIn(phrase, skill)
 
+    def test_durable_statuses_are_in_the_core_skill_contract(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for status in (
+            "任务已接管｜需求讨论中",
+            "任务已接管｜正在创建执行清单",
+            "任务已接管｜正在启动执行对话",
+            "任务已接管｜团队执行中",
+            "任务已接管｜正在验证",
+            "任务已接管｜正在归档",
+        ):
+            self.assertIn(status, skill)
+
     def test_canonical_and_legacy_implicit_policies_are_opposite(self) -> None:
         canonical = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
         legacy = install_skill.render_runtime_bytes(

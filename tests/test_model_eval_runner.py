@@ -217,6 +217,58 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 },
             )
 
+    def test_reads_identity_when_rollout_cwd_uses_a_path_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixture = root / "fixture"
+            fixture.mkdir()
+            alias = root / "fixture-alias"
+            alias.symlink_to(fixture, target_is_directory=True)
+            rollout = root / "codex" / "sessions" / "2026" / "07" / "run.jsonl"
+            rollout.parent.mkdir(parents=True)
+            records = [
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "019f57b8-6477-76d0-ae82-0e7b39a3ae6b",
+                        "cwd": str(alias),
+                        "model_provider": "openai",
+                    },
+                },
+                {
+                    "type": "turn_context",
+                    "payload": {
+                        "turn_id": "turn-1",
+                        "cwd": str(alias),
+                        "model": "gpt-5.6-sol",
+                        "effort": "ultra",
+                    },
+                },
+                {
+                    "type": "event_msg",
+                    "payload": {"type": "task_complete", "turn_id": "turn-1"},
+                },
+            ]
+            rollout.write_text(
+                "\n".join(json.dumps(record) for record in records) + "\n",
+                encoding="utf-8",
+            )
+
+            observed = runner.observed_execution_identity(root / "codex", fixture)
+            self.assertEqual(observed["models"], ["gpt-5.6-sol"])
+            self.assertEqual(observed["reasoning_efforts"], ["ultra"])
+            self.assertEqual(observed["task_complete_count"], 1)
+            self.assertFalse(
+                runner.execution_cwd_matches(
+                    str(root / "missing" / ".." / "fixture"), fixture
+                )
+            )
+            other = root / "other"
+            other.mkdir()
+            alias.unlink()
+            alias.symlink_to(other, target_is_directory=True)
+            self.assertFalse(runner.execution_cwd_matches(str(alias), fixture))
+
     def test_root_identity_allows_separately_observed_child_session(self) -> None:
         root_id = "019f57b8-6477-76d0-ae82-0e7b39a3ae6b"
         root = {
@@ -1296,6 +1348,57 @@ class ModelEvalRunnerTests(unittest.TestCase):
             ),
         )
         self.assertIn("task action preceded COS_BOOT_RECEIPT", foreign)
+
+    def test_complete_sed_skill_read_through_shell_is_passive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            skill = fixture / ".agents" / "skills" / "agency-chief-of-staff" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text("one\ntwo\nthree\n", encoding="utf-8")
+
+            def observed(command: str) -> dict[str, object]:
+                event = {
+                    "type": "item.completed",
+                    "item": {
+                        "id": "skill",
+                        "type": "command_execution",
+                        "status": "completed",
+                        "exit_code": 0,
+                        "command": command,
+                    },
+                }
+                return runner.event_surface(
+                    json.dumps(event),
+                    "",
+                    installed_skill_path=skill,
+                    fixture_root=fixture,
+                )
+
+            complete = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(complete["passive_skill_reads_completed"], 1)
+            partial = observed(
+                "/bin/zsh -lc \"sed -n '1,2p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(partial["passive_skill_reads_completed"], 0)
+            injected = observed(
+                "/bin/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md; touch escaped\""
+            )
+            self.assertEqual(injected["passive_skill_reads_completed"], 0)
+            untrusted_shell = observed(
+                "/tmp/zsh -lc \"sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(untrusted_shell["passive_skill_reads_completed"], 0)
+            untrusted_sed = observed(
+                "/bin/zsh -lc \"/tmp/sed -n '1,240p' "
+                ".agents/skills/agency-chief-of-staff/SKILL.md\""
+            )
+            self.assertEqual(untrusted_sed["passive_skill_reads_completed"], 0)
 
     def test_activation_contract_requires_or_forbids_observed_skill_read(self) -> None:
         skill_read = {

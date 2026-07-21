@@ -1029,7 +1029,7 @@ def is_valid_worker_packet(prompt: str) -> bool:
 def is_passive_skill_read(
     item: dict[str, object], installed_skill_path: Path | None, fixture_root: Path | None
 ) -> bool:
-    """Allow only the host's one passive direct read of the installed skill."""
+    """Allow only a complete, read-only host read of the installed skill."""
     if item.get("type") != "command_execution" or installed_skill_path is None:
         return False
     command = item.get("command")
@@ -1039,15 +1039,63 @@ def is_passive_skill_read(
         parts = shlex.split(command)
     except ValueError:
         return False
-    candidate = Path(parts[1]) if len(parts) == 2 else None
+    if (
+        len(parts) == 3
+        and parts[0] in {"/bin/bash", "/bin/sh", "/bin/zsh"}
+        and parts[1] == "-lc"
+    ):
+        try:
+            parts = shlex.split(parts[2])
+        except ValueError:
+            return False
+    candidate: Path | None = None
+    complete_read = False
+    if len(parts) == 2 and parts[0] in {"/bin/cat", "cat"}:
+        candidate = Path(parts[1])
+        complete_read = True
+    elif (
+        len(parts) == 4
+        and parts[0] in {"/usr/bin/sed", "sed"}
+        and parts[1] == "-n"
+    ):
+        match = re.fullmatch(r"1,(\$|[1-9][0-9]*)p", parts[2])
+        candidate = Path(parts[3])
+        if match is not None:
+            if match.group(1) == "$":
+                complete_read = True
+            else:
+                try:
+                    line_count = len(
+                        installed_skill_path.read_text(encoding="utf-8").splitlines()
+                    )
+                except OSError:
+                    return False
+                complete_read = int(match.group(1)) >= line_count
     if candidate is not None and not candidate.is_absolute() and fixture_root is not None:
         candidate = fixture_root / candidate
     return (
-        len(parts) == 2
-        and Path(parts[0]).name == "cat"
+        complete_read
         and candidate is not None
         and candidate.resolve(strict=False) == installed_skill_path.resolve(strict=False)
     )
+
+
+def execution_cwd_matches(value: object, fixture: Path) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        return False
+    try:
+        candidate_resolved = candidate.resolve(strict=True)
+        fixture_resolved = fixture.resolve(strict=True)
+        return (
+            candidate_resolved.is_dir()
+            and fixture_resolved.is_dir()
+            and candidate_resolved == fixture_resolved
+        )
+    except (OSError, RuntimeError):
+        return False
 
 
 def safe_relative_artifact(value: object, case_id: str) -> PurePosixPath:
@@ -1072,7 +1120,6 @@ def safe_artifact_glob(value: object, case_id: str) -> str:
 
 
 def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, object]:
-    expected_cwd = str(fixture.resolve())
     models: set[str] = set()
     providers: set[str] = set()
     efforts: set[str] = set()
@@ -1128,7 +1175,7 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
             record_type = record.get("type")
             if (
                 record_type == "session_meta"
-                and str(payload.get("cwd", "")) == expected_cwd
+                and execution_cwd_matches(payload.get("cwd"), fixture)
             ):
                 session_count += 1
                 file_session_count += 1
@@ -1142,7 +1189,7 @@ def observed_execution_identity(codex_home: Path, fixture: Path) -> dict[str, ob
                     file_providers.add(provider)
             if (
                 record_type == "turn_context"
-                and str(payload.get("cwd", "")) == expected_cwd
+                and execution_cwd_matches(payload.get("cwd"), fixture)
             ):
                 turn_count += 1
                 file_turn_count += 1

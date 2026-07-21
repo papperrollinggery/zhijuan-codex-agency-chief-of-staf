@@ -64,6 +64,15 @@ Durable Execution Launch 才读取 [references/team-orchestration.md](references
 
 只有进入 Durable 才读取 [references/task-lifecycle.md](references/task-lifecycle.md)：
 
+进入 Durable 阶段后，把对应状态作为读取 Skill 后的首个用户可见行；先显示状态，再解释、提问或调用项目工具：
+
+- Discussion：`任务已接管｜需求讨论中`
+- Plan：`任务已接管｜正在创建执行清单`
+- Execution Launch：`任务已接管｜正在启动执行对话`
+- Execution：`任务已接管｜团队执行中`
+- Verify：`任务已接管｜正在验证`
+- Archive：`任务已接管｜正在归档`
+
 - Discussion：只讨论；不写项目文件、不派发、不运行实现命令。一次只问一个会改变结果的问题，可以合法停在讨论。
 - Plan：用 `scripts/agency_task.py create` 只物化 task plan、用户清单和项目 index；不执行，不预建 Team、Session、Progress 或 Evidence 占位文件。
 - Execution Launch：读取 [references/execution-session.md](references/execution-session.md)；此时才生成 Team Plan、解析用户明确请求的 Root 模型、准备 selected-only Profile，并尝试真实新 Task/Thread。`prepare_execution_launch.py` 只准备，宿主创建后必须由 `bind_execution_session.py` 机械绑定才进入 `executing`。
