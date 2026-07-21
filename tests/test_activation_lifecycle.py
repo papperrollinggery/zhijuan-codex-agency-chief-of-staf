@@ -16,6 +16,7 @@ class ActivationLifecycleTests(unittest.TestCase):
     def test_canonical_description_covers_natural_lifecycle_intents(self) -> None:
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         for phrase in (
+            "这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划",
             "先讨论需求",
             "先把需求聊清楚",
             "根据以上讨论创建执行清单",
@@ -30,6 +31,17 @@ class ActivationLifecycleTests(unittest.TestCase):
             "总结到已有文档",
         ):
             self.assertIn(phrase, skill)
+
+    def test_host_metadata_describes_the_staged_lifecycle(self) -> None:
+        metadata = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertIn(
+            'short_description: "讨论需求、建立执行清单、启动执行团队并沉淀长期资产"',
+            metadata,
+        )
+        self.assertIn(
+            "先和我讨论需求；确认后建立任务执行清单，再创建独立执行对话推进任务、更新进度",
+            metadata,
+        )
 
     def test_durable_statuses_are_in_the_core_skill_contract(self) -> None:
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")

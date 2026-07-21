@@ -1,6 +1,6 @@
 ---
 name: agency-chief-of-staff
-description: "项目型工作的内容优先协调与跨对话生命周期。Use when the user explicitly invokes $agency-chief-of-staff, provides an AGENCY_EXECUTION_SESSION packet, or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
+description: "复杂项目的内容优先协调与跨对话生命周期。Implicitly invoke when the user wants a staged project workflow, especially ‘这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划’，or naturally asks to 先讨论需求/先把需求聊清楚、根据以上讨论创建执行清单/整理成任务清单、开一个新对话执行/单独创建任务执行、安排团队来做/安排几个专业角色、持续更新进度、归档任务、沉淀长期资产、总结到已有文档，或明确需要长期 Goal、跨对话连续性、Codex Task/Thread/Worktree 调度及验证交付闭环。Also use for explicit $agency-chief-of-staff invocation or an AGENCY_EXECUTION_SESSION packet. Do not implicitly trigger for ordinary questions, one-line translation, a simple code edit, an explicit single-file fix, a valid AGENCY_WORKER packet, a mere mention of thread/release readiness without work intent, or maintenance of this Skill's own source repository."
 ---
 
 # Agency Chief of Staff

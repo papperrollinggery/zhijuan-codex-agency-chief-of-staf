@@ -1,7 +1,7 @@
 interface:
   display_name: "Agency Chief of Staff · Codex 幕僚长"
-  short_description: "聚焦项目内容，按需协调专业团队、跨对话进度、验证与知识沉淀"
-  default_prompt: "使用 $agency-chief-of-staff。先聚焦项目目标和实际内容；只有确需跨对话连续性时才建立执行清单、启动独立执行对话、更新进度并在完成后按需归档。"
+  short_description: "讨论需求、建立执行清单、启动执行团队并沉淀长期资产"
+  default_prompt: "使用 $agency-chief-of-staff。先和我讨论需求；确认后建立任务执行清单，再创建独立执行对话推进任务、更新进度，完成后归档并沉淀长期资产。"
 
 policy:
   allow_implicit_invocation: true
