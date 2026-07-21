@@ -10,6 +10,7 @@
 - Corrected archive guidance for optional candidates, new knowledge targets, post-archive deposit blockers, and the real `destination` response field; corrected resume guidance to read canonical progress once when prior blocker, review, team, or work evidence exists.
 - Hardened source-forward evaluation for chunked full Skill reads, completed/index fixture consistency, oversized sed ranges, terminal event pairing, and status-first lifecycle messages without weakening true preboot action checks.
 - Let the live Execution Root resolver accept an explicit Root thread selector while deriving the state DB from the same App Server `codexHome`; Runtime passes the host `CODEX_THREAD_ID` explicitly when model items omit provider, records only `selected-root-state-inferred`, and still requires final Native binder readback instead of treating the selector as current-task proof.
+- Render deposited knowledge with a compact ID-derived heading and keep the full verified statement in the body, preserving provenance and duplicate detection without turning long findings into unwieldy document headings.
 - On the current host, the exact `ef2a2dc` source runtime passed the three targeted GPT-5.6 Sol Ultra lifecycle cases with 10/13, 7/9, and 7/11 attempted tool events. This was a primary-credential, no-catalog `passed_partial` diagnostic with `release_evidence_eligible=false`; it is not portable release evidence or an installed-state claim.
 
 ## v0.3.0-rc.3 - 2026-07-21 (source candidate, unpublished)

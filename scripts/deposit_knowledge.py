@@ -236,9 +236,12 @@ def choose_target(project: Path, candidate: dict[str, Any], documents: list[Path
 
 def candidate_fragment(candidate: dict[str, Any]) -> str:
     evidence = "；".join(candidate["evidence_refs"])
+    title = re.sub(r"[._-]+", " ", candidate["knowledge_id"]).strip().title()
     return "\n".join(
         [
-            f"## {candidate['statement']}",
+            f"## {title}",
+            "",
+            candidate["statement"],
             "",
             f"适用范围：{candidate['applicability']}",
             "",

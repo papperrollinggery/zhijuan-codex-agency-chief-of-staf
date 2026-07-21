@@ -14,6 +14,7 @@ from lifecycle_test_support import ROOT, knowledge_candidate
 sys.path.insert(0, str(ROOT / "scripts"))
 import deposit_knowledge as deposit_module  # noqa: E402
 from deposit_knowledge import (  # noqa: E402
+    candidate_fragment,
     deposit_knowledge,
     plan_deposits,
     validate_knowledge_candidates,
@@ -40,6 +41,19 @@ class KnowledgeDepositTests(unittest.TestCase):
             self.assertEqual(second["actions"][0]["action"], "duplicate")
             self.assertEqual(len(list((project / "docs").rglob("*.md"))), 1)
             self.assertEqual(target.read_text(encoding="utf-8").count("Knowledge ID"), 1)
+
+    def test_fragment_uses_compact_id_heading_and_statement_body(self) -> None:
+        candidate = knowledge_candidate(
+            "testing-native-execution-proof-boundary",
+            statement=(
+                "A Native execution result needs mechanical identity readback and "
+                "independent artifact verification."
+            ),
+        )
+        fragment = candidate_fragment(candidate)
+        self.assertTrue(fragment.startswith("## Testing Native Execution Proof Boundary\n\n"))
+        self.assertIn("\nA Native execution result needs mechanical identity readback", fragment)
+        self.assertNotIn("## A Native execution result", fragment)
 
     def test_no_matching_document_creates_docs_knowledge_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

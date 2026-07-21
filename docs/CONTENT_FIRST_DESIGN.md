@@ -72,3 +72,13 @@ Reserved worker and execution-session markers fail closed. Native `create_thread
 The offline gate proves schema, deterministic scripts, installer parity, compatibility, and unit/integration contracts. Model smoke additionally requires a completed installed-Skill read for positive activation and forbids that read for ordinary/worker exclusions; output resemblance alone is not activation evidence. Source-forward model smoke must separately prove behavior in isolated fixtures; Native Task/Thread and actual model/effort claims require current host readback. Passing one evidence layer does not promote another, and only an explicit later decision may update the installed global Skill.
 
 The rc.4 current-host source-forward diagnostic ran the resume, progress, and archive/knowledge cases from exact commit `ef2a2dc` on `gpt-5.6-sol` with `ultra`. All three model/effort identities were read back and the cases passed with 10/13, 7/9, and 7/11 attempted tool events; there were no invalid commands, management-directory enumeration, Git housekeeping, helper-source reads, or `--help` probes. The host-local ignored receipt records `passed_partial` and `release_evidence_eligible=false` because it used the primary credential and no release catalog. It proves only this scoped source-forward behavior, not installation, Native task creation, portability, publication, or stable-release eligibility.
+
+## Testing Native Execution Proof Boundary
+
+A Native execution result is proven only when the execution task is mechanically bound to provider, model, reasoning effort, and isolated CWD, and the requested artifact is independently verified; preparing a launch packet alone is not execution proof.
+
+适用范围：Installed-Skill Native smoke tests and project execution sessions that create or modify files in an isolated Codex worktree.
+
+Source Task: `task-installed-native-20260722-001`
+Evidence: execution-session.json readback: openai/gpt-5.6-sol/ultra, isolated_worktree=true；python3 verifier exited 0: regular_file=true, symlink=false, bytes=23, sha256=7b15687d110829cf4e87f19e2aa9f2b5b3963905d571536adc85241eb8796b8d
+Knowledge ID: `testing-native-execution-proof-boundary`
