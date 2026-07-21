@@ -75,7 +75,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
   → 任务归档与长期知识沉淀
 ```
 
-Discussion 可以合法停在讨论；Plan 用一次确定性调用在隐藏 staging 中生成并校验完整八文件任务 bundle，再原子发布正式目录并用恢复 journal 协调项目 index，其中 Team 为 `pending`、进度为零事件、Evidence 只是稳定索引，不查询模型、不选岗、不启动；Execution 优先真实 Codex Task/Thread，Native 创建面不可用时生成可复制的手动启动提示词；准备阶段不认调用方 JSON，只有 `bind_execution_session.py` 从 App Server、canonical state 与 rollout 机械读回后才进入执行；`complete_task.py` 用可回滚事务把当前验收、验证、Review 与 cleanup 一次收口；Archive 再执行归档和可选知识沉淀。普通单次请求不创建 `.agency`，也不要求每次建 Thread。
+Discussion 可以合法停在讨论；Plan 用一次确定性调用在隐藏 staging 中生成并校验完整八文件任务 bundle，再原子发布正式目录并用恢复 journal 协调项目 index，其中 Team 为 `pending`、进度为零事件、Evidence 只是稳定索引，不查询模型、不选岗、不启动；Execution 优先真实 Codex Task/Thread，Native 创建面不可用时生成可复制的手动启动提示词；准备阶段不认调用方 JSON，只有 `bind_execution_session.py` 从 App Server、canonical state 与 rollout 机械读回后才进入执行；`complete_task.py` 用可回滚事务把当前验收、验证、Review 与 cleanup 一次收口，并允许来源 Root 在真实关闭读回后把 `cleanup_blocked` 单向修正为 `closed`；Archive 再执行归档和可选知识沉淀。普通单次请求不创建 `.agency`，也不要求每次建 Thread。
 
 关键设计：
 

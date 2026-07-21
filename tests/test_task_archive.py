@@ -454,6 +454,18 @@ class TaskArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "readback evidence"):
                 validate_archive_readiness(project, task_dir, closure)
 
+    def test_closed_cleanup_rejects_stale_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_dir, closure = completed_task(project)
+            closure["execution_cleanup"] = {
+                "status": "closed",
+                "evidence_refs": ["native task readback closed"],
+                "blocker": "stale cleanup blocker",
+            }
+            with self.assertRaisesRegex(ValueError, "only valid for cleanup_blocked"):
+                validate_archive_readiness(project, task_dir, closure)
+
 
 if __name__ == "__main__":
     unittest.main()

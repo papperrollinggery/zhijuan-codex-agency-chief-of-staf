@@ -201,6 +201,98 @@ class TaskCompletionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "closure does not match"):
                 complete_task(project, task_id=task_id, apply=True, **changed)
 
+    def test_completed_native_cleanup_blocker_can_resolve_to_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = executing_fixture(project)
+            atomic_write_json(
+                task_dir / "execution-session.json", {"native_task_id": "task-real"}
+            )
+            blocked = {
+                **completion_args(),
+                "cleanup_status": "cleanup_blocked",
+                "cleanup_blocker": "Execution Root cannot close itself before returning",
+            }
+            complete_task(project, task_id=task_id, apply=True, **blocked)
+
+            closed = {
+                **completion_args(),
+                "cleanup_status": "closed",
+                "cleanup_evidence": ["source root archived task-real and read back closed"],
+            }
+            check = complete_task(project, task_id=task_id, apply=False, **closed)
+            self.assertTrue(check["cleanup_resolution"])
+            result = complete_task(project, task_id=task_id, apply=True, **closed)
+
+            self.assertEqual(result["status_after"], "completed")
+            self.assertTrue(result["closure_updated"])
+            self.assertIsNone(result["progress_event"])
+            closure = read_json(task_dir / "closure.json")
+            self.assertEqual(closure["execution_cleanup"]["status"], "closed")
+            self.assertEqual(
+                closure["execution_cleanup"]["evidence_refs"],
+                ["source root archived task-real and read back closed"],
+            )
+            self.assertIsNone(closure["execution_cleanup"]["blocker"])
+
+    def test_completed_native_cleanup_resolution_rejects_other_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = executing_fixture(project)
+            atomic_write_json(
+                task_dir / "execution-session.json", {"native_task_id": "task-real"}
+            )
+            complete_task(
+                project,
+                task_id=task_id,
+                cleanup_status="cleanup_blocked",
+                cleanup_blocker="Execution Root cannot close itself before returning",
+                apply=True,
+                **completion_args(),
+            )
+            changed = completion_args()
+            changed["validation_results"] = [
+                {
+                    "status": "passed",
+                    "summary": "different evidence",
+                    "evidence_refs": ["different test exit 0"],
+                }
+            ]
+            with self.assertRaisesRegex(ValueError, "closure does not match"):
+                complete_task(
+                    project,
+                    task_id=task_id,
+                    cleanup_status="closed",
+                    cleanup_evidence=["source root archived task-real"],
+                    apply=True,
+                    **changed,
+                )
+
+    def test_completed_native_cleanup_resolution_is_not_reversible(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = executing_fixture(project)
+            atomic_write_json(
+                task_dir / "execution-session.json", {"native_task_id": "task-real"}
+            )
+            complete_task(
+                project,
+                task_id=task_id,
+                cleanup_status="closed",
+                cleanup_evidence=["native task readback closed"],
+                apply=True,
+                **completion_args(),
+            )
+            with self.assertRaisesRegex(ValueError, "closure does not match"):
+                complete_task(
+                    project,
+                    task_id=task_id,
+                    cleanup_status="cleanup_blocked",
+                    cleanup_blocker="stale blocker",
+                    apply=True,
+                    **completion_args(),
+                )
+
     def test_native_task_requires_cleanup_readback(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)

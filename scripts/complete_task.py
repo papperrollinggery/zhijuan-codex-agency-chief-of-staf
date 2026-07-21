@@ -92,6 +92,39 @@ def _normalize_acceptance_evidence(
     }
 
 
+def _is_cleanup_resolution(
+    existing: dict[str, Any], requested: dict[str, Any]
+) -> bool:
+    """Allow only the parent-owned cleanup_blocked -> closed reconciliation."""
+    existing_without_cleanup = {
+        key: value for key, value in existing.items() if key != "execution_cleanup"
+    }
+    requested_without_cleanup = {
+        key: value for key, value in requested.items() if key != "execution_cleanup"
+    }
+    if existing_without_cleanup != requested_without_cleanup:
+        return False
+
+    existing_cleanup = existing["execution_cleanup"]
+    requested_cleanup = requested["execution_cleanup"]
+    if (
+        existing_cleanup.get("status") != "cleanup_blocked"
+        or requested_cleanup.get("status") != "closed"
+        or not requested_cleanup.get("evidence_refs")
+        or requested_cleanup.get("blocker") is not None
+    ):
+        return False
+
+    mutable_keys = {"status", "evidence_refs", "blocker"}
+    existing_fixed = {
+        key: value for key, value in existing_cleanup.items() if key not in mutable_keys
+    }
+    requested_fixed = {
+        key: value for key, value in requested_cleanup.items() if key not in mutable_keys
+    }
+    return existing_fixed == requested_fixed
+
+
 def complete_task(
     project: Path,
     *,
@@ -175,6 +208,22 @@ def complete_task(
         if session.get("native_task_id") and cleanup_status == "closed" and not cleanup_refs:
             raise ValueError("closed native task/thread requires cleanup readback evidence")
 
+    closure_path = task_dir / "closure.json"
+    cleanup_resolution = False
+    closure_missing = not closure_path.is_file()
+    if plan["status"] == "completed":
+        if plan.get("acceptance_evidence") != normalized_evidence:
+            raise ValueError("completed task acceptance evidence does not match current input")
+        if not closure_missing:
+            existing = validate_closure(
+                load_json(closure_path),
+                reviewer_required=task_requires_reviewer(plan, task_dir),
+            )
+            if existing != closure:
+                if not _is_cleanup_resolution(existing, closure):
+                    raise ValueError("completed task closure does not match current input")
+                cleanup_resolution = True
+
     result = {
         "status": "would-complete",
         "task_id": task_id,
@@ -184,32 +233,23 @@ def complete_task(
         "artifacts": artifact_paths,
         "review_status": closure["review"]["status"],
         "cleanup_status": closure["execution_cleanup"]["status"],
+        "cleanup_resolution": cleanup_resolution,
     }
     if not apply:
         return result
 
     if plan["status"] == "completed":
-        if plan.get("acceptance_evidence") != normalized_evidence:
-            raise ValueError("completed task acceptance evidence does not match current input")
-        closure_path = task_dir / "closure.json"
-        if closure_path.is_file():
-            existing = validate_closure(
-                load_json(closure_path),
-                reviewer_required=task_requires_reviewer(plan, task_dir),
-            )
-            if existing != closure:
-                raise ValueError("completed task closure does not match current input")
-        else:
+        if closure_missing or cleanup_resolution:
             atomic_write_json(closure_path, closure)
         return {
             **result,
             "status": "completed",
             "status_after": "completed",
             "closure": str(closure_path),
+            "closure_updated": closure_missing or cleanup_resolution,
             "progress_event": None,
         }
 
-    closure_path = task_dir / "closure.json"
     managed_paths = (
         plan_path,
         task_dir / "TASK_EXECUTION_CHECKLIST.md",

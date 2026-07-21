@@ -80,6 +80,8 @@ python3 <skill-root>/scripts/complete_task.py \
 
 上例的 `not_applicable` 只适用于没有 Native Task/Thread 的任务。存在 Native Task/Thread 时必须把这一段替换为以下二者之一：已关闭时传 `--cleanup-status closed` 并至少重复一个 `--cleanup-evidence '<关闭读回证据>'`；确有清理阻塞时传 `--cleanup-status cleanup_blocked --cleanup-blocker '<真实阻塞>'`。不得为通过门禁虚构关闭证据或阻塞。
 
+Execution Root 无法在自己的最终返回前证明自身已关闭时，可以先用真实 `cleanup_blocked` 完成内容收口。来源 Root 随后关闭并读回该 Task/Thread，再以完全相同的验收、验证、Review 和产物参数重跑 `complete_task.py --apply`，只把 cleanup 改为 `closed` 并附关闭证据。Runtime 仅允许这一个 `cleanup_blocked → closed` 单向修正；验收或 closure 其他字段漂移、反向修改及无读回证据都会失败，且不会重复生成完成事件。
+
 completion exit 0 后只做一次全项目状态校验：`python3 <skill-root>/scripts/validate_task_state.py --project . --json`。该 CLI 没有 `--task-id`；不要先试探参数。completion JSON 已给出 closure 与 terminal event，不再枚举目录或重读这些文件。
 
 以上 CLI 是稳定 Runtime 契约。helper 没有报错时，不运行 `--help`、不枚举全部脚本、不读取 helper 源码，也不反复读回整个 `.agency`；只读与当前完成标准有关的项目产物和最终状态。只有 helper 返回的具体错误无法从输入修正时，才检查对应实现。

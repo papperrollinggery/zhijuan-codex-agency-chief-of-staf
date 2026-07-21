@@ -18,6 +18,8 @@
 
 正常完成优先复用 `scripts/complete_task.py --apply` 生成的当前 `closure.json`；只有兼容旧任务时才由调用方另行提供 closure。它集中记录 review、cleanup、validation 和 artifact 证据，避免手工维护重复状态。
 
+若 Execution Root 返回时只能诚实记录 `cleanup_blocked`，来源 Root 在关闭并读回真实 Task/Thread 后，应先按 [task-lifecycle.md](task-lifecycle.md) 的单向规则把同一 closure 更新为 `closed`，再归档；不要把已经解决的清理阻塞永久保留在 Archive Report。
+
 `archive_task.py` 默认只预检，明确 `--apply` 才移动目录：
 
 ```text

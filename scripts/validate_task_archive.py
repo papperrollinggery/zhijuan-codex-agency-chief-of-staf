@@ -105,6 +105,8 @@ def validate_closure(
         raise ValueError("execution cleanup blocker must be a non-empty string or null")
     if cleanup["status"] == "cleanup_blocked" and not blocker:
         raise ValueError("cleanup_blocked requires an explicit blocker")
+    if cleanup["status"] != "cleanup_blocked" and blocker is not None:
+        raise ValueError("execution cleanup blocker is only valid for cleanup_blocked")
     if not isinstance(validations, list) or (completion_evidence_required and not validations):
         raise ValueError("completed archive requires current validation results")
     for index, result in enumerate(validations):
