@@ -322,6 +322,47 @@ def classify_agency_packet(text: str) -> tuple[str, dict[str, str] | None]:
     return "ordinary", None
 
 
+def classify_transport_source_prompt(
+    text: str,
+) -> tuple[str, dict[str, str] | None]:
+    """Classify provenance without treating later documentation examples as sessions.
+
+    Normal activation remains strict: a reserved marker anywhere outside the
+    physical first line is an invalid packet. Native binding has a narrower
+    question after App Server and canonical state already proved a user-owned
+    Root: whether that Root itself *started* as a Worker or Execution Session.
+    Only a first-line protocol form can establish that fact. Later marker or
+    envelope examples therefore remain ordinary source text here.
+    """
+
+    lines = text.splitlines()
+    first_line = lines[0] if lines else ""
+    reserved_first_line = re.match(
+        r"^\s*\ufeff?\s*AGENCY_(WORKER|EXECUTION_SESSION)(?![A-Za-z0-9_])",
+        first_line,
+        re.IGNORECASE,
+    )
+    delegation_first_line = re.match(
+        r"^\s*\ufeff?\s*<\s*/?\s*codex_delegation\b",
+        first_line,
+        re.IGNORECASE,
+    )
+    if reserved_first_line is not None or delegation_first_line is not None:
+        result = classify_agency_packet(text)
+        if result[0] == "ordinary":
+            kind = (
+                "worker"
+                if reserved_first_line is not None
+                and reserved_first_line.group(1).casefold() == "worker"
+                else "execution_session"
+            )
+            raise InvalidAgencyPacket(
+                kind, "source first line uses a malformed reserved protocol namespace"
+            )
+        return result
+    return "ordinary", None
+
+
 def parse_reviewer_terminal(text: str) -> dict[str, str]:
     lines = _strict_lines(text, expected_count=len(REVIEW_FIELDS), label="reviewer final")
     result: dict[str, str] = {}

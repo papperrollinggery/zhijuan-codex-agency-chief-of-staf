@@ -36,7 +36,7 @@ from inspect_codex_models import (
 from prepare_execution_launch import _writes_required, execution_packet
 from protocol_contract import (
     InvalidAgencyPacket,
-    classify_agency_packet,
+    classify_transport_source_prompt,
     match_execution_session_transport,
 )
 from resolve_execution_model import _effort_fields
@@ -276,7 +276,9 @@ def _mechanical_readback(
                 if not isinstance(source_row[3], str) or not source_row[3]:
                     raise ValueError("transport source task has no canonical first prompt")
                 try:
-                    source_packet_kind, _ = classify_agency_packet(source_row[3])
+                    source_packet_kind, _ = classify_transport_source_prompt(
+                        source_row[3]
+                    )
                 except InvalidAgencyPacket as exc:
                     raise ValueError(
                         "transport source task contains an invalid reserved packet"

@@ -50,6 +50,7 @@ AGENCY_EXECUTION_SESSION: true
 - `编排深度` 必须为 `0`；worker 固定为终端深度 `1`，不存在深度 `2`。
 - 首行是保留 marker 但 packet 无效时返回 `INVALID_PACKET`，不得按普通主会话重新激活。
 - Raw Packet 仍要求物理首行 marker；唯一例外是 Codex `create_thread` 的精确 transport envelope。Envelope 不改变 packet 语义，也不能用来承载 Worker 或增加编排深度。
+- Native binder 仍要求 transport source 在 App Server 与 canonical state 中都是 `user` Root；`subagent` source 一律拒绝。已证明为用户 Root 后，只用其物理首行判断它是否本身是 Worker/Execution Session：正文、需求或文档中的后置 marker 示例不构成递归会话，也不能阻断合法的直接 launch。普通激活解析仍保持“后置独立 marker fail closed”，此窄规则只用于 source provenance。
 
 ## Root 模型政策
 

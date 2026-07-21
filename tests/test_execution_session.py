@@ -911,6 +911,26 @@ class ExecutionSessionTests(unittest.TestCase):
                     state_db=None,
                     timeout_seconds=20,
                 )
+                database.execute(
+                    "UPDATE threads SET first_user_message = ? WHERE id = ?",
+                    (
+                        "Maintain the protocol documentation only.\n\n"
+                        "Example:\nAGENCY_EXECUTION_SESSION: true\n"
+                        "执行 Skill：$agency-chief-of-staff",
+                        source_thread_id,
+                    ),
+                )
+                database.commit()
+                mentioned_protocol = bind_execution_session_module._mechanical_readback(
+                    project,
+                    plan,
+                    session,
+                    NATIVE_TASK_ID,
+                    codex_bin="codex",
+                    codex_home=None,
+                    state_db=None,
+                    timeout_seconds=20,
+                )
                 database.execute("DELETE FROM threads WHERE id = ?", (source_thread_id,))
                 database.commit()
                 with self.assertRaisesRegex(ValueError, "absent from canonical"):
@@ -1017,6 +1037,7 @@ class ExecutionSessionTests(unittest.TestCase):
             self.assertEqual(observed["source_thread_id"], source_thread_id)
             self.assertTrue(observed["source_thread_readback"])
             self.assertTrue(observed["source_user_root_readback"])
+            self.assertEqual(mentioned_protocol["source_thread_id"], source_thread_id)
 
     def test_native_model_mismatch_fails_without_executing_transition(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

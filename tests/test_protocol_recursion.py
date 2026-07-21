@@ -13,6 +13,7 @@ from protocol_contract import (  # noqa: E402
     EXECUTION_SESSION_STOP,
     InvalidAgencyPacket,
     classify_agency_packet,
+    classify_transport_source_prompt,
 )
 
 
@@ -86,6 +87,75 @@ class ProtocolRecursionTests(unittest.TestCase):
     def test_inline_marker_mention_remains_ordinary_text(self) -> None:
         text = "下面只是正文引用 `AGENCY_WORKER: true`，不是 packet。"
         self.assertEqual(classify_agency_packet(text), ("ordinary", None))
+
+    def test_transport_source_allows_later_protocol_examples_in_user_text(self) -> None:
+        text = (
+            "请维护协议文档，不要启动 Runtime。\n\n"
+            "示例：\n"
+            "AGENCY_EXECUTION_SESSION: true\n"
+            "执行 Skill：$agency-chief-of-staff\n"
+            "<codex_delegation>"
+        )
+        with self.assertRaises(InvalidAgencyPacket):
+            classify_agency_packet(text)
+        self.assertEqual(
+            classify_transport_source_prompt(text), ("ordinary", None)
+        )
+
+    def test_transport_source_still_rejects_first_line_protocol_sessions(self) -> None:
+        kind, _ = classify_transport_source_prompt(
+            self.execution_packet(depth="0")
+        )
+        self.assertEqual(kind, "execution_session")
+        worker = "\n".join(
+            (
+                "AGENCY_WORKER: true",
+                "委派目标：读取 README",
+                "读取范围：README.md",
+                "写入范围：无",
+                "期望产物：WORKER_RESULT，均填实际读回值",
+                "验证要求：读取当前 README 并回传",
+                "停止条件：返回唯一终态；不启动、不派发。",
+            )
+        )
+        worker_kind, _ = classify_transport_source_prompt(worker)
+        self.assertEqual(worker_kind, "worker")
+
+        malformed = (
+            "AGENCY_EXECUTION_SESSION: true\nnot a valid packet",
+            "AGENCY_EXECUTION_SESSION: true # launch",
+            "AGENCY_WORKER: true example",
+            "AGENCY_WORKER: false",
+            "AGENCY_EXECUTION_SESSION true",
+            "AGENCY_EXECUTION_SESSION protocol example",
+            "AGENCY_WORKER",
+            "AGENCY_WORKER=true",
+            "AGENCY_EXECUTION_SESSION=true",
+            "AGENCY_WORKER：true",
+            "AGENCY_WORKER/true",
+            "AGENCY_WORKER#true",
+            "AGENCY_WORKER.true",
+            self.codex_envelope(self.execution_packet(depth="0")).replace(
+                "<codex_delegation>",
+                '<codex_delegation version="1">',
+                1,
+            ),
+        )
+        for prompt in malformed:
+            with self.subTest(prompt=prompt.splitlines()[0]):
+                with self.assertRaises(InvalidAgencyPacket):
+                    classify_transport_source_prompt(prompt)
+
+        for ordinary in (
+            "AGENCY_WORKER_EXTRA is an application constant.",
+            "AGENCY_WORKERISH is not a reserved namespace.",
+            "AGENCY_EXECUTION_SESSION2 is not a reserved namespace.",
+        ):
+            with self.subTest(ordinary=ordinary):
+                self.assertEqual(
+                    classify_transport_source_prompt(ordinary),
+                    ("ordinary", None),
+                )
 
     def test_padded_or_bom_worker_markers_fail_closed(self) -> None:
         for marker in (
