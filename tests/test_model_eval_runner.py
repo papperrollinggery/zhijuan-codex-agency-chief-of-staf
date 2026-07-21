@@ -1436,11 +1436,21 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
 
     def test_allows_one_narrow_platform_skill_announcement_before_boot(self) -> None:
-        announcement = {
+        def announcement_event(text: str) -> dict[str, object]:
+            return {
+                "type": "item.completed",
+                "item": {"type": "assistant_message", "text": text},
+            }
+
+        skill_path = ROOT / "SKILL.md"
+        skill_read = {
             "type": "item.completed",
             "item": {
-                "type": "assistant_message",
-                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。",
+                "id": "skill-read",
+                "type": "command_execution",
+                "status": "completed",
+                "exit_code": 0,
+                "command": f"/bin/cat {skill_path}",
             },
         }
         boot = {
@@ -1450,89 +1460,37 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "text": "<!-- COS_BOOT_RECEIPT；模式：直接；协作：无。 -->\n任务已接管｜正在核对事实",
             },
         }
-        parsed = runner.event_surface("\n".join(map(json.dumps, (announcement, boot))), "")
-        failures = runner.contract_failures(self.base_case(), parsed)
-        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", failures)
-
-        natural_announcement = {
-            "type": "item.completed",
-            "item": {
-                "type": "assistant_message",
-                "text": (
-                    "我会先用 `agency-chief-of-staff` 的需求澄清流程来推进："
-                    "这一轮只把目标和边界聊清楚，不提前进入执行；"
-                    "现在先按它的流程读取协作规范。"
-                ),
-            },
-        }
-        natural = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (natural_announcement, boot))), ""
-            ),
-        )
-        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", natural)
-
-        observed_discussion_announcement = (
-            "我会先用「agency-chief-of-staff」的需求澄清流程，"
-            "因为你明确希望先聊清目标和边界。"
-            "这个阶段只做讨论与收敛，不创建执行计划，也不启动实际执行。"
-        )
-        observed = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(
-                    map(
-                        json.dumps,
-                        (
-                            {
-                                "type": "item.completed",
-                                "item": {
-                                    "type": "assistant_message",
-                                    "text": observed_discussion_announcement,
-                                },
-                            },
-                            boot,
-                        ),
-                    )
-                ),
+        def surface_for(*announcements: dict[str, object]) -> dict[str, object]:
+            return runner.event_surface(
+                "\n".join(map(json.dumps, (*announcements, skill_read, boot))),
                 "",
-            ),
-        )
-        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", observed)
+                installed_skill_path=skill_path,
+                fixture_root=ROOT,
+            )
 
-        observed_read_first_announcement = (
-            "我会用 `agency-chief-of-staff` 的需求澄清流程来推进："
-            "这一轮只把目标、范围、约束和验收标准聊清楚，"
-            "不提前进入执行或排期。"
-            "先读取它的协作规则，再从最关键的问题开始。"
-        )
-        observed_read_first = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(
-                    map(
-                        json.dumps,
-                        (
-                            {
-                                "type": "item.completed",
-                                "item": {
-                                    "type": "assistant_message",
-                                    "text": observed_read_first_announcement,
-                                },
-                            },
-                            boot,
-                        ),
-                    )
-                ),
-                "",
+        accepted_texts = (
+            "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。",
+            (
+                "我会先用 `agency-chief-of-staff` 的需求澄清流程来推进："
+                "这一轮只把目标和边界聊清楚，不提前进入执行；"
+                "现在先按它的流程读取协作规范。"
             ),
-        )
-        self.assertNotIn(
-            "assistant message preceded COS_BOOT_RECEIPT", observed_read_first
-        )
-
-        for text in (
+            (
+                "我会先用「agency-chief-of-staff」的需求澄清流程，"
+                "因为你明确希望先聊清目标和边界。"
+                "这个阶段只做讨论与收敛，不创建执行计划，也不启动实际执行。"
+            ),
+            (
+                "我会用 `agency-chief-of-staff` 的需求澄清流程来推进："
+                "这一轮只把目标、范围、约束和验收标准聊清楚，"
+                "不提前进入执行或排期。"
+                "先读取它的协作规则，再从最关键的问题开始。"
+            ),
+            (
+                "我会用 `agency-chief-of-staff` 的需求澄清流程来协助："
+                "这一轮只把目标、范围和约束聊清楚，不提前进入执行或排期；"
+                "等我们共同确认后，再整理执行计划。先让我读取它的工作约定。"
+            ),
             (
                 "我会采用 `agency-chief-of-staff`，因为这个需求需要它的工作流；"
                 "我会先查看完整 Skill 说明。"
@@ -1541,55 +1499,20 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 "I'll use `agency-chief-of-staff` because this request matches its "
                 "workflow; I'll read the Skill instructions first."
             ),
-            (
-                "Using agency-chief-of-staff for this task, "
-                "read the Skill instructions first."
-            ),
-        ):
+            "Using agency-chief-of-staff for this task, read the Skill instructions first.",
+            "我将使用 agency-chief-of-staff，因为这个请求需要该流程；先查看 Skill 说明。",
+            "I'm using agency-chief-of-staff for this task; read the Skill instructions first.",
+        )
+        for text in accepted_texts:
             with self.subTest(text=text):
                 accepted = runner.contract_failures(
-                    self.base_case(),
-                    runner.event_surface(
-                        "\n".join(
-                            map(
-                                json.dumps,
-                                (
-                                    {
-                                        "type": "item.completed",
-                                        "item": {
-                                            "type": "assistant_message",
-                                            "text": text,
-                                        },
-                                    },
-                                    boot,
-                                ),
-                            )
-                        ),
-                        "",
-                    ),
+                    self.base_case(), surface_for(announcement_event(text))
                 )
                 self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", accepted)
 
-        progress_disguised_as_announcement = {
-            "type": "item.completed",
-            "item": {
-                "type": "assistant_message",
-                "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。下一步开始修改文件。",
-            },
-        }
-        rejected = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (progress_disguised_as_announcement, boot))), ""
-            ),
-        )
-        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", rejected)
-
+        announcement = announcement_event(accepted_texts[0])
         duplicate = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (announcement, announcement, boot))), ""
-            ),
+            self.base_case(), surface_for(announcement, announcement)
         )
         self.assertIn("assistant message preceded COS_BOOT_RECEIPT", duplicate)
 
@@ -1601,49 +1524,80 @@ class ModelEvalRunnerTests(unittest.TestCase):
             "README 当前版本是 v2，测试全部通过。",
             "随后删除 README.md。",
             "证据：tests: 364 passed；git diff clean。",
+            "结论：README 无需改动。",
+            "稍后编辑 README 并更新配置。",
+            "pytest -q: 12 passed；git status clean。",
+            "Tests passed; then delete README.md.",
         ):
-            smuggled = {
-                "type": "item.completed",
-                "item": {
-                    "type": "assistant_message",
-                    "text": "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；先完整读取 Skill 说明。" + suffix,
-                },
-            }
             failures = runner.contract_failures(
                 self.base_case(),
-                runner.event_surface("\n".join(map(json.dumps, (smuggled, boot))), ""),
+                surface_for(announcement_event(accepted_texts[0] + suffix)),
             )
             self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
-        observed_smuggled = {
-            "type": "item.completed",
-            "item": {
-                "type": "assistant_message",
-                "text": observed_discussion_announcement + "README 当前测试已通过。",
-            },
-        }
-        failures = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (observed_smuggled, boot))), ""
-            ),
-        )
-        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+        for base, suffix in (
+            (accepted_texts[2], "README 当前测试已通过。"),
+            (accepted_texts[3], "随后删除 README.md。"),
+        ):
+            failures = runner.contract_failures(
+                self.base_case(), surface_for(announcement_event(base + suffix))
+            )
+            self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
-        observed_read_first_smuggled = {
-            "type": "item.completed",
-            "item": {
-                "type": "assistant_message",
-                "text": observed_read_first_announcement + "随后删除 README.md。",
-            },
-        }
-        failures = runner.contract_failures(
-            self.base_case(),
-            runner.event_surface(
-                "\n".join(map(json.dumps, (observed_read_first_smuggled, boot))), ""
-            ),
+        read_before_announcement = runner.event_surface(
+            "\n".join(map(json.dumps, (skill_read, announcement, boot))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
         )
-        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+        read_after_boot = runner.event_surface(
+            "\n".join(map(json.dumps, (announcement, boot, skill_read))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
+        )
+        for parsed in (read_before_announcement, read_after_boot):
+            failures = runner.contract_failures(self.base_case(), parsed)
+            self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+        no_announcement = runner.event_surface(
+            "\n".join(map(json.dumps, (skill_read, boot))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
+        )
+        second_read = json.loads(json.dumps(skill_read))
+        second_read["item"]["id"] = "skill-read-2"
+        early_then_valid_read = runner.event_surface(
+            "\n".join(map(json.dumps, (skill_read, announcement, second_read, boot))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
+        )
+        started_read = json.loads(json.dumps(skill_read))
+        started_read["type"] = "item.started"
+        started_read["item"]["status"] = "in_progress"
+        started_read["item"].pop("exit_code")
+        split_read = runner.event_surface(
+            "\n".join(map(json.dumps, (started_read, announcement, skill_read, boot))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
+        )
+        duplicate_completion = runner.event_surface(
+            "\n".join(map(json.dumps, (announcement, skill_read, skill_read, boot))),
+            "",
+            installed_skill_path=skill_path,
+            fixture_root=ROOT,
+        )
+        for parsed in (
+            no_announcement,
+            early_then_valid_read,
+            split_read,
+            duplicate_completion,
+        ):
+            failures = runner.contract_failures(self.base_case(), parsed)
+            self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
     def test_visible_takeover_line_is_sufficient_when_host_strips_comments(self) -> None:
         boot = {

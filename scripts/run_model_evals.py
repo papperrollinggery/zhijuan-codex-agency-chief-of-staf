@@ -1515,6 +1515,9 @@ def event_surface(
     last_file_change_event_index = -1
     passive_skill_read_ids: set[str] = set()
     passive_skill_reads_completed: set[str] = set()
+    passive_skill_read_first_event_indexes: dict[str, int] = {}
+    passive_skill_read_completion_event_indexes: dict[str, int] = {}
+    duplicate_passive_skill_read_completions: set[str] = set()
     jsonl_parse_errors = 0
     thread_started_ids: list[str] = []
     turn_started_count = 0
@@ -1581,8 +1584,13 @@ def event_surface(
             if passive_skill_read:
                 if isinstance(item_id, str):
                     passive_skill_read_ids.add(item_id)
+                    passive_skill_read_first_event_indexes.setdefault(item_id, index)
                     if completed and tool_success:
-                        passive_skill_reads_completed.add(item_id)
+                        if item_id in passive_skill_read_completion_event_indexes:
+                            duplicate_passive_skill_read_completions.add(item_id)
+                        else:
+                            passive_skill_read_completion_event_indexes[item_id] = index
+                            passive_skill_reads_completed.add(item_id)
             else:
                 task_action_event_indexes.append(index)
             if completed and tool_success:
@@ -1693,6 +1701,15 @@ def event_surface(
         "top_level_error_count": top_level_error_count,
         "collaboration_identity_errors": collaboration_identity_errors,
         "passive_skill_reads_completed": len(passive_skill_reads_completed),
+        "passive_skill_read_first_event_indexes": sorted(
+            passive_skill_read_first_event_indexes.values()
+        ),
+        "passive_skill_read_completion_event_indexes": sorted(
+            passive_skill_read_completion_event_indexes.values()
+        ),
+        "duplicate_passive_skill_read_completion_count": len(
+            duplicate_passive_skill_read_completions
+        ),
     }
 
 
@@ -1706,56 +1723,53 @@ def atomic_boot_block(text: str) -> bool:
 
 
 def is_platform_skill_announcement(text: str) -> bool:
-    """Recognize one narrow, pre-boot host-required Skill usage notice."""
+    """Recognize one complete, controlled host-required Skill usage notice."""
     normalized = " ".join(text.strip().split())
-    if normalized == (
-        "我会使用 agency-chief-of-staff Skill，因为本任务匹配它的职责；"
-        "先完整读取 Skill 说明。"
-    ):
-        return True
     skill = re.escape(SKILL_NAME)
+    chinese_start = (
+        rf"(?:我会(?:先)?|我将|我准备)(?:使用|采用|启用|用)\s*"
+        rf"(?:`|「|『)?{skill}(?:`|」|』)?(?:\s*[Ss]kill)?"
+    )
+    objective = (
+        r"(?:需求|目标和边界|目标、范围和约束|目标、范围、约束和验收标准)"
+    )
+    discussion_read = (
+        r"(?:现在(?:我)?先按它的流程读取协作规范|"
+        r"先读取它的协作规则[，,]再从最关键的问题开始|"
+        r"先让我读取它的工作约定)"
+    )
     patterns = (
         (
-            rf"我会(?:先)?(?:使用|采用|启用|用)\s*`?{skill}`?(?:\s*[Ss]kill)?\s*[，,]\s*"
-            rf"因为(?:本|这个|这项)?(?:任务|请求|需求)(?:匹配|需要)(?:它的|该)?"
-            rf"(?:职责|流程|工作流)[；;]\s*(?:现在)?(?:我)?(?:会)?(?:先)?(?:完整)?"
-            rf"(?:读取|查看)(?:完整)?\s*(?:它的|该)?(?:[Ss]kill\s*)?"
-            rf"(?:说明|指引|规范|协作规范|工作流说明)[。.]?"
+            rf"{chinese_start}\s*[，,]\s*因为(?:本|这个|这项)?(?:任务|请求|需求)"
+            rf"(?:匹配|需要)(?:它的|该)?(?:职责|流程|工作流)[；;]\s*"
+            rf"(?:现在)?(?:我)?(?:会)?(?:先)?(?:完整)?(?:读取|查看)(?:完整)?\s*"
+            rf"(?:它的|该)?(?:[Ss]kill\s*)?(?:说明|指引|规范|协作规范|工作流说明)[。.]?"
         ),
         (
-            rf"我会(?:先)?用\s*`?{skill}`?\s*(?:的需求澄清流程来推进|来组织这次需求澄清)"
-            rf"[：:]\s*这一轮只(?:把)?(?:目标、范围、约束和验收标准|目标和边界)"
-            rf"(?:聊清楚)?[，,]"
-            rf"不提前进入执行(?:计划)?[；;。.]\s*"
-            rf"(?:等(?:这些对齐|我们共同确认需求基线)后[，,]再"
-            rf"(?:把讨论收敛成|单独整理)执行清单[；;。.]\s*)?"
-            rf"现在(?:我)?先按它的流程读取协作规范[。.]?"
+            rf"{chinese_start}\s*的需求澄清流程(?:来推进|来协助|来组织这次需求澄清)?"
+            rf"[：:]\s*这一轮只把?{objective}(?:聊清|聊清楚|对齐)[，,]"
+            rf"不提前进入执行(?:计划|或排期)?"
+            rf"(?:[；;。.]\s*等(?:这些对齐|我们共同确认(?:需求基线)?)后[，,]再"
+            rf"(?:把讨论收敛成|单独整理|整理)执行(?:清单|计划))?"
+            rf"[；;。.]\s*{discussion_read}[。.]?"
         ),
         (
-            rf"我会先用(?:`|「|『)?{skill}(?:`|」|』)?(?:\s*[Ss]kill)?的需求澄清流程"
-            rf"[，,](?:因为)?你(?:明确)?(?:希望|要求)先(?:把)?"
-            rf"(?:(?:把)?(?:需求|目标和边界|目标、范围、约束和验收标准)"
-            rf"(?:聊清|聊清楚|对齐)|(?:聊清|聊清楚|对齐)"
-            rf"(?:需求|目标和边界|目标、范围、约束和验收标准))"
-            rf"[。.]这个阶段只做(?:需求)?(?:讨论|讨论与收敛|澄清)"
-            rf"[，,]不创建执行计划[，,]也不启动实际执行[。.]?"
+            rf"{chinese_start}\s*的需求澄清流程[，,](?:因为)?你(?:明确)?"
+            rf"(?:希望|要求)先(?:(?:把)?{objective}(?:聊清|聊清楚|对齐)|"
+            rf"(?:聊清|聊清楚|对齐){objective})[。.]"
+            rf"这个阶段只做(?:需求)?(?:讨论|讨论与收敛|澄清)[，,]"
+            rf"不创建执行计划[，,]也不启动实际执行[。.]?"
         ),
         (
-            rf"我会(?:先)?用\s*(?:`|「|『)?{skill}(?:`|」|』)?(?:\s*[Ss]kill)?\s*"
-            rf"的需求澄清流程(?:来推进)?[：:]这一轮只把"
-            rf"(?:目标和边界|目标、范围、约束和验收标准)聊清楚[，,]"
-            rf"不提前进入执行(?:计划|或排期)?[。.]"
-            rf"先读取它的协作规则[，,]再从最关键的问题开始[。.]?"
-        ),
-        (
-            rf"(?:I(?:'ll| will) (?:use|apply)|Using)\s+`?{skill}`?(?:\s+[Ss]kill)?\s+"
+            rf"(?:(?:I(?:'ll| will| am)|I'm) (?:use|using|apply)|Using)\s+"
+            rf"`?{skill}`?(?:\s+[Ss]kill)?\s+"
             rf"(?:because (?:this|the) (?:request|task) (?:matches|needs) "
             rf"(?:its )?(?:workflow|responsibilities)|for (?:this|the) (?:request|task))"
             rf"[;,]\s*(?:I(?:'ll| will) )?(?:read|review) (?:the )?(?:complete )?"
             rf"(?:[Ss]kill )?instructions first[.]?"
         ),
     )
-    return any(re.fullmatch(pattern, normalized) is not None for pattern in patterns)
+    return any(re.fullmatch(pattern, normalized, flags=re.IGNORECASE) for pattern in patterns)
 
 
 def contract_failures(
@@ -1799,6 +1813,33 @@ def contract_failures(
         0
         if isinstance(surface_or_events, str)
         else int(surface_or_events.get("passive_skill_reads_completed", 0))
+    )
+    passive_read_first_indexes = (
+        []
+        if isinstance(surface_or_events, str)
+        else [
+            int(item)
+            for item in surface_or_events.get(
+                "passive_skill_read_first_event_indexes", []
+            )
+        ]
+    )
+    passive_read_completion_indexes = (
+        []
+        if isinstance(surface_or_events, str)
+        else [
+            int(item)
+            for item in surface_or_events.get(
+                "passive_skill_read_completion_event_indexes", []
+            )
+        ]
+    )
+    duplicate_passive_read_completions = (
+        0
+        if isinstance(surface_or_events, str)
+        else int(
+            surface_or_events.get("duplicate_passive_skill_read_completion_count", 0)
+        )
     )
     require_skill_read = bool(
         case.get(
@@ -1849,10 +1890,19 @@ def contract_failures(
         preboot_messages = [
             item for item in message_events if int(item["event_index"]) < boot_index
         ]
-        if preboot_messages and not (
+        valid_announcement_read_window = (
             len(preboot_messages) == 1
             and is_platform_skill_announcement(str(preboot_messages[0].get("text", "")))
-        ):
+            and passive_reads == 1
+            and len(passive_read_first_indexes) == 1
+            and len(passive_read_completion_indexes) == 1
+            and duplicate_passive_read_completions == 0
+            and int(preboot_messages[0]["event_index"])
+            < passive_read_first_indexes[0]
+            <= passive_read_completion_indexes[0]
+            < boot_index
+        )
+        if (preboot_messages or passive_reads) and not valid_announcement_read_window:
             failures.append("assistant message preceded COS_BOOT_RECEIPT")
         progress_indexes = [
             int(item["event_index"])
