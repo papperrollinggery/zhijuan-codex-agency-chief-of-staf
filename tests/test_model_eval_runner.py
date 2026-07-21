@@ -1473,6 +1473,34 @@ class ModelEvalRunnerTests(unittest.TestCase):
         )
         self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", natural)
 
+        observed_discussion_announcement = (
+            "我会先用「agency-chief-of-staff」的需求澄清流程，"
+            "因为你明确希望先聊清目标和边界。"
+            "这个阶段只做讨论与收敛，不创建执行计划，也不启动实际执行。"
+        )
+        observed = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(
+                    map(
+                        json.dumps,
+                        (
+                            {
+                                "type": "item.completed",
+                                "item": {
+                                    "type": "assistant_message",
+                                    "text": observed_discussion_announcement,
+                                },
+                            },
+                            boot,
+                        ),
+                    )
+                ),
+                "",
+            ),
+        )
+        self.assertNotIn("assistant message preceded COS_BOOT_RECEIPT", observed)
+
         for text in (
             (
                 "我会采用 `agency-chief-of-staff`，因为这个需求需要它的工作流；"
@@ -1555,6 +1583,21 @@ class ModelEvalRunnerTests(unittest.TestCase):
                 runner.event_surface("\n".join(map(json.dumps, (smuggled, boot))), ""),
             )
             self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
+
+        observed_smuggled = {
+            "type": "item.completed",
+            "item": {
+                "type": "assistant_message",
+                "text": observed_discussion_announcement + "README 当前测试已通过。",
+            },
+        }
+        failures = runner.contract_failures(
+            self.base_case(),
+            runner.event_surface(
+                "\n".join(map(json.dumps, (observed_smuggled, boot))), ""
+            ),
+        )
+        self.assertIn("assistant message preceded COS_BOOT_RECEIPT", failures)
 
     def test_visible_takeover_line_is_sufficient_when_host_strips_comments(self) -> None:
         boot = {

@@ -1732,6 +1732,15 @@ def is_platform_skill_announcement(text: str) -> bool:
             rf"现在(?:我)?先按它的流程读取协作规范[。.]?"
         ),
         (
+            rf"我会先用(?:`|「|『)?{skill}(?:`|」|』)?(?:\s*[Ss]kill)?的需求澄清流程"
+            rf"[，,](?:因为)?你(?:明确)?(?:希望|要求)先(?:把)?"
+            rf"(?:(?:把)?(?:需求|目标和边界|目标、范围、约束和验收标准)"
+            rf"(?:聊清|聊清楚|对齐)|(?:聊清|聊清楚|对齐)"
+            rf"(?:需求|目标和边界|目标、范围、约束和验收标准))"
+            rf"[。.]这个阶段只做(?:需求)?(?:讨论|讨论与收敛|澄清)"
+            rf"[，,]不创建执行计划[，,]也不启动实际执行[。.]?"
+        ),
+        (
             rf"(?:I(?:'ll| will) (?:use|apply)|Using)\s+`?{skill}`?(?:\s+[Ss]kill)?\s+"
             rf"(?:because (?:this|the) (?:request|task) (?:matches|needs) "
             rf"(?:its )?(?:workflow|responsibilities)|for (?:this|the) (?:request|task))"
