@@ -25,7 +25,12 @@ from bind_execution_session import (  # noqa: E402
     validate_bound_execution_session,
 )
 from agency_task import atomic_write_json, utc_now  # noqa: E402
-from prepare_execution_launch import execution_packet, prepare_execution_launch  # noqa: E402
+from prepare_execution_launch import (  # noqa: E402
+    MAX_EXECUTION_THREAD_TITLE_LENGTH,
+    execution_packet,
+    execution_thread_title,
+    prepare_execution_launch,
+)
 from prepare_team_runtime import prepare_team_runtime  # noqa: E402
 from protocol_contract import (  # noqa: E402
     match_execution_session_transport,
@@ -189,15 +194,53 @@ class ExecutionSessionTests(unittest.TestCase):
             self.assertEqual(result["status"], "manual_launch_ready")
             self.assertEqual(result["lifecycle_status"], "execution_ready")
             self.assertFalse(result["new_conversation_created"])
-            self.assertIsNone(read_json(task_dir / "execution-session.json")["native_task_id"])
+            session = read_json(task_dir / "execution-session.json")
+            self.assertEqual(result["requested_thread_title"], "Agency · Lifecycle test task")
+            self.assertEqual(session["requested_thread_title"], result["requested_thread_title"])
+            self.assertIsNone(session["native_task_id"])
             self.assertEqual(
-                read_json(task_dir / "execution-session.json")["orchestration_depth"], 0
+                session["orchestration_depth"], 0
             )
             self.assertIn(
                 "Execution session prepared",
                 (task_dir / "progress.jsonl").read_text(encoding="utf-8"),
             )
             self.assertIn("execution_ready", (task_dir / "PROGRESS.md").read_text(encoding="utf-8"))
+
+    def test_required_native_surface_fails_closed_without_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = create_fixture_task(project, "task-native-required-001")
+            result = prepare_execution_launch(
+                project,
+                task_id=task_id,
+                catalog=live_catalog(),
+                native_capabilities={"task_thread_create": False},
+                require_native=True,
+                catalog_mechanically_verified=True,
+            )
+            session = read_json(task_dir / "execution-session.json")
+            self.assertEqual(result["status"], "TOOL_BLOCKED")
+            self.assertEqual(result["lifecycle_status"], "plan_ready")
+            self.assertFalse(result["new_conversation_created"])
+            self.assertEqual(session["session_status"], "TOOL_BLOCKED")
+            self.assertIsNone(session["native_task_id"])
+            self.assertIsNone(session["native_readback"])
+            self.assertEqual(
+                session["requested_thread_title"], "Agency · Lifecycle test task"
+            )
+
+    def test_execution_thread_title_is_deterministic_compact_and_single_line(self) -> None:
+        title = execution_thread_title(
+            {
+                "title": "  Cross-module\n migration   with a deliberately long descriptive title "
+                * 3
+            }
+        )
+        self.assertTrue(title.startswith("Agency · Cross-module migration"))
+        self.assertNotIn("\n", title)
+        self.assertNotIn("  ", title)
+        self.assertLessEqual(len(title), MAX_EXECUTION_THREAD_TITLE_LENGTH)
 
     def test_reprepare_execution_ready_replaces_pre_canonical_skill_packet(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

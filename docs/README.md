@@ -2,9 +2,9 @@
 
 > Status: Current documentation index
 >
-> As of: 2026-07-21
+> As of: 2026-08-19
 >
-> Reviewed source candidate: `v0.3.0-rc.4`; unpublished and not an installed-state claim
+> Reviewed release target: `v0.3.0-rc.5`; publication requires tag, Release, and API readback
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 
@@ -43,7 +43,7 @@ These files are loaded on demand by the Skill. They describe operating contracts
 
 The four-stage lifecycle is intent-gated. Plan creation uses one deterministic call for a complete nonexecuting task bundle; live Team selection, model resolution, Session binding, evidence, and archive work remain lazy. Team planning first applies a net-execution-value gate; it does not restore a fixed organization, require every task to create a Thread, or force routine review. Only Team Plan selected Profiles are prepared, and Execution Root model requests remain separate from Subagent routing.
 
-The rc.4 fast path treats durable state as a continuity and evidence layer, not the work itself. Stable helper exit-0 JSON normally ends a lifecycle step; failed calls count against model-smoke overhead budgets, and prior canonical progress is read once only when a resumed task actually has evidence to recover.
+The rc.4 fast path treats durable state as a continuity and evidence layer, not the work itself. rc.5 retains that boundary while adding deterministic Execution Root title requests, explicit mode/scenario guidance, and regression gates for Native-required fallback plus planner/profile policy parity. Stable helper exit-0 JSON normally ends a lifecycle step; failed calls count against model-smoke overhead budgets, and prior canonical progress is read once only when a resumed task actually has evidence to recover.
 
 Large local Skill catalogs can exhaust Codex's metadata context budget, remove every Skill description, and omit later-sorted names before inference. The installed two-file `agency-discuss-plan-execute-progress-archive` discovery bridge stays near the Canonical entry and improves discovery while its name or description remains visible, but it cannot guarantee natural-language activation after the host removes every description. The deterministic fallback is explicit `$agency-chief-of-staff`; Execution Session packets include that reference automatically. The bridge does not duplicate orchestration or add work to Direct Mode.
 

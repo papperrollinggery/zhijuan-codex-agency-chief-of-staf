@@ -1,20 +1,20 @@
 # Repository discovery and release metadata
 
-> Status: proposed metadata for the next authorized public update
+> Status: release metadata target for the authorized `v0.3.0-rc.5` public update
 >
-> Release/tag readback: 2026-07-19; About metadata snapshot: 2026-07-15
+> Pre-publish release/tag and About metadata readback: 2026-08-19; post-write readback required
 >
 > Read-only evidence: GitHub repository API fields `description`, `homepageUrl`, and `repositoryTopics`, plus the public Releases API for stable/prerelease tags; observed values are recorded below and may drift after this date.
 >
-> Evidence boundary: this file prepares discoverability metadata; it does not apply GitHub settings, publish the current checkout, or claim search-ranking impact.
+> Evidence boundary: this file does not apply GitHub settings or prove publication; it records intended metadata and the pre-publish snapshot without claiming search-ranking impact, stable behavior, or cross-host compatibility.
 
 ## Current public state
 
-At the recorded About-metadata snapshot, the public GitHub repository reported no About description, website, or topics. A fresh read-only tag readback on 2026-07-19 still found `v0.1.7` as the latest stable tag and `v0.2.0-rc.3` as the latest prerelease tag. This checkout is the unpublished `v0.3.0-rc.4` source candidate; public description, topics, tag, and release still require an authorized write plus post-write API readback before they count as published.
+At the 2026-08-19 pre-publish readback, `v0.1.7` remained the latest stable tag and `v0.2.0-rc.3` the latest prerelease tag; `v0.3.0-rc.5` is the release target represented by this commit. The repository About description and topics below are part of the same authorized public update and count as applied only after post-write API readback; the website remains unset. The target release is host-scoped and does not claim stable, unattended, or cross-host behavior.
 
 GitHub documents topics as a discovery mechanism for finding repositories by purpose and subject. Topic names must use lowercase letters, numbers, and hyphens, be at most 50 characters, and a repository may have at most 20. Applying repository metadata is an external write and requires maintainer authorization and working GitHub authentication.
 
-## Proposed GitHub About metadata
+## GitHub About metadata
 
 Description:
 

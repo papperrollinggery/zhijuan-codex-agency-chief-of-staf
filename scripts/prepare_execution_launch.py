@@ -34,6 +34,9 @@ from resolve_team_plan import resolve_team_plan, write_team_plan
 from update_task_progress import update_progress
 
 
+MAX_EXECUTION_THREAD_TITLE_LENGTH = 80
+
+
 def choose_task(project: Path, task_id: str | None) -> str:
     if task_id is not None:
         return task_id
@@ -47,6 +50,21 @@ def choose_task(project: Path, task_id: str | None) -> str:
             "exactly one plan_ready/execution_ready task is required; pass --task-id"
         )
     return str(candidates[0]["task_id"])
+
+
+def execution_thread_title(plan: dict[str, Any]) -> str:
+    raw_title = plan.get("title")
+    if not isinstance(raw_title, str):
+        raise ValueError("task title is required for the execution thread title")
+    normalized = " ".join(raw_title.split())
+    if not normalized:
+        raise ValueError("task title is required for the execution thread title")
+    prefix = "Agency · "
+    available = MAX_EXECUTION_THREAD_TITLE_LENGTH - len(prefix)
+    title = normalized[:available].rstrip()
+    if not title:
+        raise ValueError("task title cannot be normalized for the execution thread title")
+    return prefix + title
 
 
 def execution_packet(project: Path, task_id: str) -> str:
@@ -200,6 +218,7 @@ def _prepare_execution_launch_locked(
         catalog,
         catalog_mechanically_verified=catalog_mechanically_verified,
     )
+    requested_thread_title = execution_thread_title(plan)
     model_request = plan.setdefault(
         "execution_model_request",
         {
@@ -262,6 +281,7 @@ def _prepare_execution_launch_locked(
         "task_plan": f".agency/tasks/active/{selected_task_id}/task-plan.json",
         "team_plan": f".agency/tasks/active/{selected_task_id}/TEAM_PLAN.json",
         "progress_file": f".agency/tasks/active/{selected_task_id}/PROGRESS.md",
+        "requested_thread_title": requested_thread_title,
         "display_model_request": "GPT-5.6 Sol",
         "reasoning_request": "ultra",
         "resolved_model_id": resolution.get("resolved_model_id"),
@@ -315,6 +335,7 @@ def _prepare_execution_launch_locked(
         "native_readback_consistency": readback_consistency,
         "execution_session": str(task_dir / "execution-session.json"),
         "manual_launch_prompt": str(task_dir / "EXECUTION_LAUNCH_PROMPT.md"),
+        "requested_thread_title": requested_thread_title,
         "new_conversation_created": False,
     }
 

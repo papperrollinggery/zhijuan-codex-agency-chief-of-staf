@@ -42,7 +42,7 @@ Machine rule: the first line is AGENCY_WORKER: true. 只有首行精确为 `AGEN
 | Direct | 单目标、低风险、单会话可完成 | 直接研究、执行、验证；不写 `.agency`，不建团队或 Thread |
 | Focused | 三个以上相关步骤或多文件但单会话可收口 | 维护短计划；只有净收益明确时使用一个或少量 Subagent |
 | Durable | 用户明确要跨对话、持续进度、执行清单或新执行对话 | 使用 `.agency` 生命周期；资产按阶段懒生成 |
-| Assured | 发布、安全、高风险迁移、审计或明确要求 receipt | 在内容工作之外增加独立审核与必要 readback |
+| Assured | 发布、安全、高风险迁移、审计、客户可见交付或明确要求 receipt | 在内容工作之外增加独立审核与必要 readback |
 
 档位只指导内部行为，不向用户展示。复杂不等于持久化，高风险不等于固定团队，明确调用本 Skill 也不自动升级档位。
 
@@ -82,12 +82,12 @@ Durable 也按阶段最小加载：Discussion、Plan、Progress 与 Complete 读
 
 - Discussion：只讨论；不写项目文件、不派发、不运行实现命令。一次只问一个会改变结果的问题，可以合法停在讨论。
 - Plan：用 `scripts/agency_task.py create` 一次原子物化完整八文件任务 bundle 和项目 index；Team 保持 `pending`、progress 保持零事件、Evidence 明示无执行证据，不解析模型、不选岗、不执行。
-- Execution Launch：读取 [references/execution-session.md](references/execution-session.md)；此时才生成 Team Plan、解析用户明确请求的 Root 模型、准备 selected-only Profile，并尝试真实新 Task/Thread。`prepare_execution_launch.py` 只准备，宿主创建后必须由 `bind_execution_session.py` 机械绑定才进入 `executing`。
+- Execution Launch：读取 [references/execution-session.md](references/execution-session.md)；此时才生成 Team Plan、解析用户明确请求的 Root 模型、准备 selected-only Profile，并尝试真实新 Task/Thread。`prepare_execution_launch.py` 同时给出确定性的 `requested_thread_title`；调用真实 `create_thread` 时把它作为 `title`，但只有宿主标题读回才算命名成功。准备 helper 本身不创建对话，宿主创建后必须由 `bind_execution_session.py` 机械绑定才进入 `executing`。
 - Progress：首次真实执行事件才向空事件日志追加记录并重绘 `PROGRESS.md`；只在结果、验证、阻塞、团队或归档状态发生变化时更新。helper 返回 exit 0 与 JSON 后，不枚举 `.agency`、不重复读取 checklist/progress 镜像，也不运行 Git 只为证明 helper 已写入。
 - Complete：工作项和当前验证齐备后，用 `scripts/complete_task.py` 在一个可回滚事务中写入验收证据、closure、完成事件和终态；任一步失败不得留下假完成。
 - Archive：完成门禁通过后归档，知识沉淀是可选后置动作；archive helper 与 validator 的 JSON 是默认终态证据，不再追加目录盘点、manifest/index/doc 重读或 Git housekeeping。
 
-Native 新对话不可用时生成可复制启动提示词并标记 `manual_launch_ready`，不在同一线程或普通 Subagent 中假装新对话。只有实际 readback 一致才声称 Task/Thread、模型、Effort、CWD 或 Worktree 已确认。
+Native 新对话不可用时生成可复制启动提示词并标记 `manual_launch_ready`，不在同一线程或普通 Subagent 中假装新对话。只有实际 readback 一致才声称 Task/Thread、标题、模型、Effort、CWD 或 Worktree 已确认；标题只是用户界面元数据，命名失败不得伪装成执行身份失败。
 
 ## Goal 与长期工作
 
@@ -97,7 +97,7 @@ Native 新对话不可用时生成可复制启动提示词并标记 `manual_laun
 
 - 低风险、局部修改：Root 自检，加相关测试或 artifact 检查。
 - 中风险、多文件但边界清楚：集成验证；只有存在独立判断价值时增加 Reviewer。
-- 高风险、安全、发布、跨模块迁移或用户明确要求：读取 [references/delivery-review.md](references/delivery-review.md)，使用独立 reviewer 并核对当前 artifact、diff 与验证。
+- 高风险、安全、发布、跨模块迁移、客户可见交付或用户明确要求：读取 [references/delivery-review.md](references/delivery-review.md)，使用独立 reviewer 并核对当前 artifact、diff 与验证。
 
 机器 receipt、CLI profile compat、模型身份和 cold-context 证明只在 Assured 或真实 Task/Thread 证据需要时启用。普通任务不运行这些协议。
 

@@ -15,19 +15,20 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 
 ## 一览
 
-| 项目 | 当前事实（2026-07-21） |
+| 项目 | 当前事实（2026-08-19） |
 | --- | --- |
 | Canonical Skill | `$agency-chief-of-staff` |
 | 兼容入口 | `$zhijuan-codex-agency-chief-of-staf`，仅显式调用 |
 | 核心模型提供方 | OpenAI / Codex；Claude/Fable 仅为默认关闭的可选 advisor 位 |
 | Python | 3.10+ |
 | 最新 stable tag | [`v0.1.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.1.7) |
-| 最新 prerelease tag | [`v0.2.0-rc.3`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.2.0-rc.3) |
-| 当前 checkout | `v0.3.0-rc.4` 本地源码候选；未打 tag、未发布 |
+| 本发布版本 | [`v0.3.0-rc.5`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.3.0-rc.5)，host-scoped prerelease |
+| 发布前远端 prerelease | `v0.2.0-rc.3`；rc.5 必须以发布后 API readback 为准 |
+| 当前 checkout | `v0.3.0-rc.5` release source |
 
 入口：[文档索引](docs/README.md) · [内容优先设计依据](docs/CONTENT_FIRST_DESIGN.md) · [LLM 索引](llms.txt) · [发现性与发布元数据](docs/REPOSITORY_DISCOVERY.md) · [Changelog](CHANGELOG.md) · [示例](examples) · [贡献](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [行为规范](CODE_OF_CONDUCT.md) · [全部 Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases)
 
-本 README 正文描述 `v0.3.0-rc.4` 本地源码候选。它不是当前 GitHub Release，也不代表任一宿主的已安装 Skill 已更新。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
+本 README 正文描述 `v0.3.0-rc.5` host-scoped prerelease。它不是 stable release，也不代表任一宿主已经安装、自然语言隐式唤起必然成功，或无人值守/跨宿主行为已经验证。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
 
 | 版本线 | 能力边界 |
 | --- | --- |
@@ -37,6 +38,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | `v0.3.0-rc.2` 本地源码候选 | 在 rc.1 生命周期上增加内容优先执行面、净执行价值门、懒资产、递归 fail-closed、单命令完成收口和结果/开销评测；尚未发布，真实 Model/Native 行为仍需单独 smoke |
 | `v0.3.0-rc.3` 本地源码候选 | 在 rc.2 上补齐 Native `create_thread` transport 解包、user-owned source 证明与已绑定当前 Packet 缺失 transport readback 字段的兼容回填；尚未发布，安装态 Model/Native 行为仍需单独 smoke |
 | `v0.3.0-rc.4` 本地源码候选 | 用真实生命周期 trace 把持久执行收敛为内容优先快路径，增加失败调用也计数的 tool-event 预算、无歧义完成证据 argv、恢复/归档边界与评测防伪；尚未发布，安装态 Native 行为仍需单独 readback |
+| `v0.3.0-rc.5` host-scoped prerelease | 汇总 rc.4 后的生命周期/安装完整性修复，增加确定性 Execution Root 标题、场景模式地图、强制 Native 降级门与角色策略一致性检查；标题请求已实现，安装态 Skill→title 端到端、自然触发、无人值守与跨宿主仍需分别验证 |
 
 ## v0.3 迁移
 
@@ -61,6 +63,17 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 - 明确要求真实 Codex task/thread、隔离 worktree、thread id、receipt 或 cleanup 证明。
 
 单句翻译、普通问答、简单代码修改、单文件明确修复，以及只出现 `thread` / `release readiness` 字样但没有工作意图的文本，不应隐式触发本 Skill。合法 Worker Packet 和本 Skill 自身源码维护也排除在外。
+
+## 使用模式与调度边界
+
+| 使用模式 | 典型场景 | 状态与分发方式 |
+| --- | --- | --- |
+| Direct | 单目标、低风险、一次对话可完成 | Root 直接完成，不建团队、不建 Thread、不写 `.agency` |
+| Focused | 多步骤或多文件，但上下文强耦合且本对话可收口 | 维护短计划；只有独立收益明确时自动派发少量终端 Subagent |
+| Durable | 用户明确要执行清单、跨对话推进、独立执行对话或持续进度 | Plan 先落 `.agency`；Execution Launch 再按 Work Item 生成岗位与波次，并创建或手动启动新的 Execution Root |
+| Assured | 发布、安全、高风险迁移、审计、客户交付或明确要求 receipt | 在对应模式上增加一次独立审核、宿主 readback 与必要 cleanup 证明 |
+
+自动分配分两层：Root 先把用户目标拆成有依赖、范围、风险和验证要求的 Work Item；`resolve_team_plan.py` 再确定 Root 自留项、专业岗位、并行波次与写冲突。内部 Subagent 可在净收益为正时自动派发；用户可见的真实 Codex Task/Thread 只在用户明确要求独立执行面或跨对话生命周期时创建，不因“任务复杂”三个字自动占用侧边栏和 Worktree。新的 Execution Root 使用确定性的 `Agency · <任务标题>` 请求名；只有宿主读回一致才算命名成功。
 
 `allow_implicit_invocation: true` 是路由许可，不是宿主运行证明。若 Codex 新会话报告 `Exceeded skills context budget of 2%. All skill descriptions were removed`，当前宿主已经在推理前移除了自然语言匹配所需的 Description；本 Skill 的发现桥也不能单独越过这一宿主级限制。此时使用显式 `$agency-chief-of-staff`，或由用户自行停用不需要的 Skills/Plugins 后重开会话。安装器不会为修复宿主预算而删除、停用或改写其他全局资产。
 
@@ -121,7 +134,7 @@ cd zhijuan-codex-agency-chief-of-staf
 python3 scripts/install_skill.py
 ```
 
-如需已发布 prerelease，把 tag 改为 `v0.2.0-rc.3`。`v0.3.0-rc.4` 当前只存在于本地源码候选；仅在已审阅的源码 checkout 中开发或验证新增量时直接运行：
+`v0.3.0-rc.5` 发布并完成 API readback 后，可固定该 tag 安装。发布前验证本候选时只从已审阅的 release-source checkout 直接运行；需要当前已公开 prerelease 时仍固定 `v0.2.0-rc.3`：
 
 ```bash
 python3 scripts/install_skill.py

@@ -35,6 +35,8 @@ TOOL_BLOCKED：缺少真实 Codex task/thread 或 isolated worktree 能力；未
 
 使用工具返回的真实 id。不要填写 `pending`、`unknown`、`same-thread`、主线程 id 或猜测值。
 
+新的用户可见 Task/Thread 使用 `execution-session.json` 中的 `requested_thread_title`：创建时直接传给宿主 `title`，随后从 task/thread readback 读取实际标题。创建参数、worker 自述或侧边栏肉眼观察都不能单独证明命名成功；读回不一致时最多调用一次宿主重命名能力再复核，失败只报告标题 `未验证`，不污染真实执行身份结论。
+
 给 worker 的 prompt 必须逐行且仅包含：
 
 ```text

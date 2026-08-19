@@ -32,6 +32,7 @@
     "task_plan": {"type": "string", "minLength": 1},
     "team_plan": {"type": "string", "minLength": 1},
     "progress_file": {"type": "string", "minLength": 1},
+    "requested_thread_title": {"type": "string", "minLength": 1, "maxLength": 80},
     "display_model_request": {"const": "GPT-5.6 Sol"},
     "reasoning_request": {"const": "ultra"},
     "resolved_model_id": {"type": ["string", "null"]},

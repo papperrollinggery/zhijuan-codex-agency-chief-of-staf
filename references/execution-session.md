@@ -17,10 +17,14 @@
 5. 验证该 ID 支持 `ultra`；不支持或不存在时停止并给用户唯一模型选择，不静默降级。
 6. 按执行面优先级准备所需 Profile：Native Direct Route → 已读回 Named Custom Agent → 项目 selected-only Profile → Generic Native Subagent + Role Packet → CLI read-only compat → Root 直接执行。
 7. `prepare_execution_launch.py` 只生成 Execution Session Packet 和 `execution-session.json`，状态最多到 `native_launch_ready` 或 `manual_launch_ready`；它不会把调用方 JSON 当成创建证明。
-8. 宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。
+8. 宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。调用 `create_thread` 时把 `execution-session.json` 的 `requested_thread_title` 原样作为 `title`，不让新 Root 自行猜名。
 9. `create_thread` 可能把首条提示词放进精确的 `<codex_delegation>` transport envelope。该 envelope 只允许承载 Execution Session；Runtime 严格解出 source task ID 与 `<input>` 中的原始 packet，并从 App Server 与 canonical state 证明 source 是非自引用的 user-owned Root。Worker/Subagent source 和任意畸形/嵌套 envelope 均 fail closed。
 10. 宿主创建后运行 `bind_execution_session.py`；该脚本不接收调用方 readback JSON，而是连接当前 App Server 的 `thread/read`、live model catalog 与 `codexHome/state_5.sqlite`，再核对 rollout turn context。
 11. 只有 Task ID、Root 身份、完整 packet、transport/source task、provider、model、reasoning、cwd/worktree、未归档状态与 rollout 实际 turn 全部机械一致，才从 `execution_ready` 进入 `executing`，写入 `native_task_id` 并更新进度；整个绑定可回滚。
+
+## 执行对话命名
+
+`prepare_execution_launch.py` 从已校验任务标题生成单行、最多 80 字符的 `requested_thread_title`，格式为 `Agency · <任务标题>`。Root 创建真实 Task/Thread 时必须直接传给宿主 `title` 参数；创建后用 task/thread readback 核对实际标题。若宿主没有创建时命名能力但提供 `set_thread_title`，最多补做一次重命名并再次读回；仍不一致时只标记标题 `未验证`，不得因此否定已经机械绑定的 Task 身份、模型、CWD 或 Worktree，也不得把请求值当作实际标题。
 
 ## Execution Session Packet
 

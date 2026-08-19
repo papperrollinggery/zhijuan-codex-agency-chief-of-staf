@@ -13,9 +13,11 @@ from lifecycle_test_support import ROOT, create_fixture_task, task_plan, work_it
 sys.path.insert(0, str(ROOT / "scripts"))
 import resolve_team_plan as team_plan_module  # noqa: E402
 from resolve_team_plan import (  # noqa: E402
+    ACCOUNTABLE_PROFILE_BY_WORK_TYPE,
     MAX_ACTIVE_POSITIONS,
     MAX_PARALLEL_POSITIONS,
     MAX_PARALLEL_WRITERS,
+    PROFILE_TITLES,
     resolve_team_plan,
     write_team_plan,
 )
@@ -26,6 +28,20 @@ def profiles(team: dict[str, object]) -> list[str]:
 
 
 class TeamPlannerTests(unittest.TestCase):
+    def test_runtime_profile_sets_stay_consistent_across_planner_and_policies(self) -> None:
+        routing = json.loads(
+            (ROOT / "assets/agent-routing.json").read_text(encoding="utf-8")
+        )
+        role_policy = json.loads(
+            (ROOT / "assets/role-model-policy.json").read_text(encoding="utf-8")
+        )
+        planner_profiles = set(PROFILE_TITLES) - {"execution-root"}
+        self.assertEqual(planner_profiles, set(routing["profiles"]))
+        self.assertEqual(planner_profiles, set(role_policy["profiles"]))
+        self.assertTrue(
+            set(ACCOUNTABLE_PROFILE_BY_WORK_TYPE.values()) <= planner_profiles
+        )
+
     def test_team_plan_writer_rejects_an_unmanaged_task_directory(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             task_dir = Path(raw) / "task-unmanaged-001"

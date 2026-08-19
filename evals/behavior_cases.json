@@ -470,7 +470,7 @@
     "expected_artifacts": [
       {
         "path_glob": ".agency/tasks/active/task-model-smoke-launch/execution-session.json",
-        "must_contain": ["\"display_model_request\": \"GPT-5.6 Sol\"", "\"reasoning_request\": \"ultra\""],
+        "must_contain": ["\"display_model_request\": \"GPT-5.6 Sol\"", "\"reasoning_request\": \"ultra\"", "\"requested_thread_title\": \"Agency · Lifecycle model smoke task\""],
         "must_contain_any": ["manual_launch_ready", "native_launch_ready", "executing"],
         "must_not_contain": ["same-thread"]
       },
