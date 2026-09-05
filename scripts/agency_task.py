@@ -1207,6 +1207,60 @@ def list_active_tasks(project: Path) -> list[dict[str, Any]]:
     return result
 
 
+def start_current_execution(project: Path, task_id: str) -> dict[str, Any]:
+    """Start an authorized saved plan here; never imply Native task/model proof."""
+    root = safe_project_root(project)
+    with task_index_lock(root):
+        _recover_task_creations_unlocked(root)
+        task_dir = active_task_dir(root, task_id)
+        session_path = task_dir / "execution-session.json"
+        if session_path.exists() or session_path.is_symlink():
+            raise ValueError("task has an execution session; use its launch/binding or recovery path")
+        plan_path = task_dir / "task-plan.json"
+        plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)
+        before = plan["status"]
+        if before not in {"plan_ready", "execution_ready", "blocked", "executing"}:
+            raise ValueError(f"cannot start current execution from {before}")
+        if not plan["work_items"]:
+            raise ValueError("current execution requires actionable work items")
+        missing_checks = [
+            item["work_id"] for item in plan["work_items"]
+            if item.get("required", True) and not item["verification"]
+        ]
+        if missing_checks:
+            raise ValueError("required work has no verification method: " + ", ".join(missing_checks))
+        index = _load_or_initialize_index_unlocked(root)
+        if index["tasks"].get(task_id, {}).get("status") != before or task_id not in index["active_task_ids"]:
+            raise ValueError("task plan and task index status are inconsistent")
+        result = {
+            "task_id": task_id,
+            "status_before": before,
+            "status_after": "executing",
+            "execution_surface": "current_conversation",
+            "new_conversation_created": False,
+            "model_identity_verified": False,
+        }
+        if before == "executing":
+            return {**result, "status": "already-executing"}
+        paths = (plan_path, task_dir / "TASK_EXECUTION_CHECKLIST.md", root / ".agency/task-index.json")
+        snapshots = {path: read_regular_text(path) for path in paths}
+        try:
+            if before == "plan_ready":
+                _transition_task_unlocked(root, task_id, "execution_ready")
+            _transition_task_unlocked(root, task_id, "executing")
+        except Exception as exc:
+            failures = []
+            for path, text in snapshots.items():
+                try:
+                    atomic_write_text(path, text)
+                except (OSError, ValueError) as rollback_exc:
+                    failures.append(str(rollback_exc))
+            if failures:
+                raise RuntimeError("current execution failed and rollback was incomplete: " + "; ".join(failures)) from exc
+            raise
+        return {**result, "status": "executing"}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage durable project Agency tasks.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1215,6 +1269,11 @@ def main() -> None:
     create.add_argument("--project", type=Path, default=Path.cwd())
     create.add_argument("--input", type=Path, required=True)
     create.add_argument("--json", action="store_true")
+
+    start = subparsers.add_parser("start", help="Start an authorized plan in the current conversation without Native launch.")
+    start.add_argument("--project", type=Path, default=Path.cwd())
+    start.add_argument("--task-id", required=True)
+    start.add_argument("--json", action="store_true")
 
     transition = subparsers.add_parser("transition", help="Apply one legal lifecycle transition.")
     transition.add_argument("--project", type=Path, default=Path.cwd())
@@ -1235,6 +1294,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "create":
         result: object = create_task(args.project, load_json(args.input))
+    elif args.command == "start":
+        result = start_current_execution(args.project, args.task_id)
     elif args.command == "transition":
         result = transition_task(
             args.project,

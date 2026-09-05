@@ -1,6 +1,6 @@
 # Project Task Lifecycle
 
-只有用户明确需要跨对话连续性、持续进度、独立执行对话或归档时使用四阶段生命周期。普通复杂任务继续使用 Direct/Focused，不创建 `.agency`。
+只有用户明确要求保存执行清单、跨对话连续性、独立执行对话或归档时使用持久生命周期。普通复杂任务与“持续更新进度”继续使用 Direct/Focused，除非确有保存计划的请求。已有执行授权包含验证和收口，不要求逐阶段重新确认。
 
 ## 意图与停止点
 
@@ -12,13 +12,38 @@
 - 不修改项目文件，不创建 Agent、Task、Thread，不运行实现命令。
 - 只读取用户明确要求核对的当前资料。
 - 宿主普通 delegation envelope 的 source ID 不是读取授权；不自行检索 source task、历史对话、memory、项目或 Git。
-- 一次只问一个会改变结果的问题。
+- 信息不足时只问会改变结果的问题；已有输入足够则给专业判断，不为维持讨论状态补问。
 - 在当前对话维护 objective、constraints、accepted decisions、assumptions、open questions、acceptance criteria 和 out of scope。
 - 不自行从讨论进入计划或执行。“只讨论不执行”是合法停止点。
 
 ### 执行清单
 
-只有用户明确要求把讨论整理成执行清单时，才把计划写入项目 `.agency`。使用 `scripts/agency_task.py create` 创建最小初始状态：
+用户明确要求保存执行清单时，才把计划写入项目 `.agency`。创建与执行可以在同一请求中获得授权，不需要先单独讨论。`create` 接收 `--input` JSON 文件，task ID 写在 JSON 的 `task_id`，命令本身没有 `--task-id`。先写输入文件，再只运行一次：
+
+```text
+python3 <skill-root>/scripts/agency_task.py create --project <project> --input <plan-input.json> --json
+```
+
+最小输入示例（用本任务的目标、路径和验证替换示例值；不预填完成或角色声明）：
+
+```json
+{
+  "task_id": "task-example-001",
+  "title": "修复平均数",
+  "objective": "平均数保留小数，空输入抛 ValueError",
+  "source_discussion": {"summary": "用户已要求保存清单并执行修复"},
+  "acceptance_criteria": ["平均数行为和回归测试通过"],
+  "work_items": [{
+    "work_id": "W-01", "title": "修复并验证", "outcome": "平均数满足要求",
+    "work_type": "implementation", "risk": "low",
+    "read_scope": ["math_utils.py", "test_math_utils.py"],
+    "write_scope": ["math_utils.py", "test_math_utils.py"],
+    "verification": ["python3 -B -m unittest -v"]
+  }]
+}
+```
+
+额外字段仅在实际需要时查 [输入 schema](../assets/task-execution-plan.schema.json)。输入文件是准备材料，不是最终交付物；无需为找参数枚举脚本、猜不存在的模板目录或试错调用。helper 创建以下初始状态：
 
 ```text
 .agency/
@@ -48,6 +73,8 @@
 
 #### Execution Root 快速路径
 
+用户已经要求执行已保存清单、且选择在当前对话完成时，调用 `python3 <skill-root>/scripts/agency_task.py start --project <project> --task-id <task-id> --json`。该入口原子推进到 `executing`，不查询模型、不创建新 Task、不生成 Session 或虚构 Native 身份；当前 Root 沿用宿主设置。已有 `execution-session.json` 时按 Session 的绑定/恢复路径处理，不能用 start 抢占。任务状态就绪不表示项目内容已经执行；首项真实内容工作仍记录开始事件。
+
 Durable 负责保存必要连续性，不应占用项目判断。进入执行后默认只读一次当前 `task-plan.json`；若已有 ready Team Plan，只在确需委派或确认 Reviewer 时读一次当前分工。task ID 与 plan 路径已给出时，不用 `rg` / `find` 枚举 `.agency`，不读作为人类视图的 checklist；全新任务首次进入时不读取零事件 `progress.jsonl`，只有恢复既有事件时才读一次。先确定当前 Work Item，然后按“开始事件 → 项目内容工作 → 当前验证 → 完成事件”推进：
 
 下列命令是参数结构示例，不是可做字符串替换的 shell 模板。所有动态值都按单个 argv 传入，包括 skill root、project、task/work ID、summary、完成标准、证据和路径；能传 argv 数组时不拼 shell 字符串，只能使用 shell 时必须对每个动态值做 POSIX shell escaping。不得把尖括号占位符原样交给 shell，不得使用 `eval`，也不得把任务文本直接插入引号。`<skill-root>` 表示本轮已完整读取的 Canonical `SKILL.md` 所在目录。
@@ -65,7 +92,9 @@ python3 <skill-root>/scripts/update_task_progress.py \
   --artifact '<项目相对产物>' --verification '<当前验证证据>' --json
 ```
 
-`work_completed` 已同时接收 artifact 与 verification；它的 exit 0 JSON 就是本次状态读回。没有独立的新事实时，不再追加 `artifact_generated`、重读 progress/checklist，或为管理文件运行 `git status` / `git diff`。只要求进度更新时到此停止；不要再运行 task validator。全部工作项完成且用户要求收口时才运行一次 completion。每一条完成标准都必须用其在 plan 中的精确文本重复传一个 `--criterion-evidence-item '<完成标准>' '<证据引用>'`；该双 argv 形式允许文本本身含 `::`，不要在新调用中使用有歧义的旧 `CRITERION::EVIDENCE` 形式。当前验证用可重复的 `--validation-item '<验证摘要>' '<证据引用>'`，产物也可重复传入。
+`work_completed` 必须带本轮真实 verification；artifact 必须是实际常规文件，helper 自动记录其字节摘要。它的 exit 0 JSON 就是本次状态读回。没有独立的新事实时，不再追加 `artifact_generated`、重读 progress/checklist，或为管理文件运行 `git status` / `git diff`。只要求进度更新时到此停止；不要再运行 task validator。已获完整执行授权且全部工作项完成时直接运行一次 completion，无需额外“收口”授权。每一条完成标准用 plan 中的精确文本传一个 `--criterion-evidence-item '<完成标准>' '<已记录证据引用>'`；该双 argv 形式允许文本本身含 `::`。当前验证用可重复的 `--validation-item '<验证摘要>' '<已记录验证引用>'`，产物也可重复传入。
+
+验收和验证引用须来自本任务成功工作事件，不能在收口时临时编造 PASS；文件与验证时的字节不一致就先重新验证，必要时对对应 Work Item 记录一次 `verification_completed`（同样接收 `--artifact` 与 `--verification`）。失败用 `verification_failed --work-id … --blocker …`，工作项转 blocked，修复时 `work_started` 重启，再完成并记录当前验证。历史事件仍可读；缺少验证或字节绑定的旧记录不自动升级为当前证明。helper 只证明记录一致和文件未漂移，实际测试是否运行、事实正确与领域质量由 Root 的真实工具结果和审核负责。
 
 以下任一条件成立就必须追加至少一个 `--review-evidence`：Team Plan 选择了 Reviewer、任何 Work Item 为 high/critical risk，或 work type 为 review/release。收口前只确认这一布尔要求，不为此读取无关 Team Plan 内容。
 

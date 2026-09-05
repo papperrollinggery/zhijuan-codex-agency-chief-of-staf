@@ -1580,9 +1580,11 @@ class ProfileCompatibilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             fixture = self.make_fixture(Path(tmp))
             fixture["slow"].write_text("1", encoding="utf-8")
-            result = self.run_compat(fixture, timeout_seconds=1)
+            # Allow the fake CLI to announce its thread before its deliberate
+            # 5-second stall; this case tests cleanup of an announced thread.
+            result = self.run_compat(fixture, timeout_seconds=2)
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("exceeded the 1-second limit", result.stderr)
+            self.assertIn("exceeded the 2-second limit", result.stderr)
             self.assertIn(self.thread_id, result.stderr)
             connection = sqlite3.connect(fixture["database"])
             archived = connection.execute(

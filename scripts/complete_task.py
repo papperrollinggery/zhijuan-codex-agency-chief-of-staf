@@ -21,7 +21,12 @@ from agency_task import (
     validate_task_plan,
 )
 from update_task_progress import record_terminal_progress
-from validate_task_archive import safe_artifact, task_requires_reviewer, validate_closure
+from validate_task_archive import (
+    safe_artifact,
+    task_requires_reviewer,
+    validate_closure,
+    validate_completion_evidence,
+)
 
 
 def _snapshot(path: Path) -> tuple[bool, str]:
@@ -208,6 +213,10 @@ def complete_task(
         if session.get("native_task_id") and cleanup_status == "closed" and not cleanup_refs:
             raise ValueError("closed native task/thread requires cleanup readback evidence")
 
+    evidence_plan = {**plan, "acceptance_evidence": normalized_evidence}
+    closure["artifact_snapshots"] = validate_completion_evidence(
+        root, task_dir, evidence_plan, closure
+    )
     closure_path = task_dir / "closure.json"
     cleanup_resolution = False
     closure_missing = not closure_path.is_file()
@@ -234,6 +243,7 @@ def complete_task(
         "review_status": closure["review"]["status"],
         "cleanup_status": closure["execution_cleanup"]["status"],
         "cleanup_resolution": cleanup_resolution,
+        "evidence_scope": "recorded-verification-and-current-artifact-bytes",
     }
     if not apply:
         return result

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import tempfile
+import json
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -45,7 +46,31 @@ class ProgressUpdateTests(unittest.TestCase):
             second = update_progress(project, **kwargs)
             self.assertEqual(first["status"], "recorded")
             self.assertEqual(second["status"], "duplicate")
-            self.assertEqual(len(load_events(task_dir / "progress.jsonl")), 1)
+            events = load_events(task_dir / "progress.jsonl")
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["event_type"], "work_started")
+
+    def test_historical_event_without_event_type_or_snapshots_remains_readable(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            _, task_dir = self.executing_task(project)
+            legacy = {
+                "event_id": "evt-legacy",
+                "task_id": "task-progress-001",
+                "work_id": "W-01",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "actor": "execution-root",
+                "status_before": "pending",
+                "status_after": "in_progress",
+                "summary": "Legacy work started",
+                "artifacts": [],
+                "verification": [],
+                "blockers": [],
+            }
+            (task_dir / "progress.jsonl").write_text(
+                json.dumps(legacy) + "\n", encoding="utf-8"
+            )
+            self.assertEqual(load_events(task_dir / "progress.jsonl"), [legacy])
 
     def test_cli_argv_preserves_untrusted_summary_without_shell_execution(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -132,10 +157,152 @@ class ProgressUpdateTests(unittest.TestCase):
                 self.assertIn(heading, text)
             self.assertNotIn("%", text)
 
+    def test_work_completed_requires_verification_and_records_artifact_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            artifact = project / "artifact.txt"
+            artifact.write_text("verified\n", encoding="utf-8")
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="work_started",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Implementation started",
+            )
+            with self.assertRaisesRegex(ValueError, "requires verification"):
+                update_progress(
+                    project,
+                    task_id=task_id,
+                    event_type="work_completed",
+                    work_id="W-01",
+                    actor="execution-root",
+                    summary="Implementation completed",
+                )
+            with self.assertRaisesRegex(ValueError, "cannot include blockers"):
+                update_progress(
+                    project,
+                    task_id=task_id,
+                    event_type="work_completed",
+                    work_id="W-01",
+                    actor="execution-root",
+                    summary="Implementation completed",
+                    verification=["unit test exit 0"],
+                    blockers=["stale blocker"],
+                )
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="work_completed",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Implementation completed",
+                artifacts=["artifact.txt"],
+                verification=["unit test exit 0"],
+            )
+            event = load_events(task_dir / "progress.jsonl")[-1]
+            self.assertEqual(event["event_type"], "work_completed")
+            self.assertEqual(
+                event["artifact_snapshots"]["artifact.txt"]["bytes"], len("verified\n")
+            )
+            self.assertRegex(event["artifact_snapshots"]["artifact.txt"]["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_verification_failure_blocks_work_and_discards_prior_evidence_for_retry(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, task_dir = self.executing_task(project)
+            (project / "verification.txt").write_text("test output\n", encoding="utf-8")
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="work_started",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Implementation started",
+            )
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="verification_completed",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Focused test passed before later failure",
+                artifacts=["verification.txt"],
+                verification=["focused test exit 0"],
+            )
+            verification_event = load_events(task_dir / "progress.jsonl")[-1]
+            self.assertEqual(
+                verification_event["artifact_snapshots"]["verification.txt"]["bytes"],
+                len("test output\n"),
+            )
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="verification_failed",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Integration test failed",
+                blockers=["integration test exit 1"],
+            )
+            item = read_json(task_dir / "task-plan.json")["work_items"][0]
+            self.assertEqual(item["status"], "blocked")
+            self.assertEqual(item["evidence_refs"], [])
+            update_progress(
+                project,
+                task_id=task_id,
+                event_type="work_started",
+                work_id="W-01",
+                actor="execution-root",
+                summary="Implementation retry started",
+            )
+            retried = read_json(task_dir / "task-plan.json")["work_items"][0]
+            self.assertEqual(retried["status"], "in_progress")
+            self.assertEqual(retried["blockers"], [])
+
+    def test_work_mutation_requires_executing_state_but_duplicate_retry_survives(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            task_id, _ = create_fixture_task(project, "task-progress-nonexecuting-001")
+            with self.assertRaisesRegex(ValueError, "executing"):
+                update_progress(
+                    project,
+                    task_id=task_id,
+                    event_type="work_started",
+                    work_id="W-01",
+                    actor="execution-root",
+                    summary="Must not start at plan ready",
+                )
+
+            transition_task(project, task_id, "execution_ready")
+            transition_task(project, task_id, "executing")
+            kwargs = {
+                "task_id": task_id,
+                "event_type": "work_started",
+                "work_id": "W-01",
+                "actor": "execution-root",
+                "summary": "Started once",
+                "idempotency_key": "start-once",
+            }
+            update_progress(project, **kwargs)
+            transition_task(project, task_id, "verifying")
+            duplicate = update_progress(project, **kwargs)
+            self.assertEqual(duplicate["status"], "duplicate")
+            with self.assertRaisesRegex(ValueError, "executing"):
+                update_progress(
+                    project,
+                    task_id=task_id,
+                    event_type="artifact_generated",
+                    work_id="W-01",
+                    actor="execution-root",
+                    summary="Must not mutate while verifying",
+                )
+
     def test_task_completion_event_cannot_bypass_guarded_completion(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
             task_id, task_dir = self.executing_task(project)
+            (project / "artifact.txt").write_text("verified\n", encoding="utf-8")
             update_progress(
                 project,
                 task_id=task_id,
@@ -152,6 +319,7 @@ class ProgressUpdateTests(unittest.TestCase):
                 actor="execution-root",
                 summary="Implementation completed",
                 artifacts=["artifact.txt"],
+                verification=["unit test exit 0"],
             )
             transition_task(project, task_id, "verifying")
             with self.assertRaisesRegex(ValueError, "terminal task events are guarded"):
@@ -213,6 +381,7 @@ class ProgressUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
             task_id, task_dir = self.executing_task(project)
+            (project / "artifact.txt").write_text("verified\n", encoding="utf-8")
             update_progress(
                 project,
                 task_id=task_id,
@@ -229,6 +398,7 @@ class ProgressUpdateTests(unittest.TestCase):
                 actor="execution-root",
                 summary="Implementation completed",
                 artifacts=["artifact.txt"],
+                verification=["unit test exit 0"],
             )
             plan = read_json(task_dir / "task-plan.json")
             plan["acceptance_evidence"] = {

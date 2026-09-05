@@ -51,6 +51,7 @@ ACCOUNTABLE_PROFILE_BY_WORK_TYPE = {
     "integration": "developer",
     "writing": "writer",
     "testing": "test-debugger",
+    "review": "reviewer",
 }
 MAX_ACTIVE_POSITIONS = TEAM_LIMITS["max_active_positions"]
 MAX_PARALLEL_POSITIONS = TEAM_LIMITS["max_parallel_positions"]
@@ -103,6 +104,43 @@ def dependency_depth(items: list[dict[str, Any]]) -> int:
         return memo[work_id]
 
     return max((depth(work_id) for work_id in graph), default=0)
+
+
+def _depends_on(
+    work_id: str, prerequisite: str, graph: dict[str, list[str]], memo: dict[tuple[str, str], bool]
+) -> bool:
+    key = (work_id, prerequisite)
+    if key not in memo:
+        memo[key] = any(
+            dependency == prerequisite or _depends_on(dependency, prerequisite, graph, memo)
+            for dependency in graph[work_id]
+        )
+    return memo[key]
+
+
+def _pairwise_independent(
+    work_items: list[dict[str, Any]], all_items: list[dict[str, Any]]
+) -> bool:
+    """Allow common prerequisites, but never fan out a work-item dependency chain."""
+    graph = {item["work_id"]: item["dependencies"] for item in all_items}
+    memo: dict[tuple[str, str], bool] = {}
+    return all(
+        not _depends_on(left["work_id"], right["work_id"], graph, memo)
+        and not _depends_on(right["work_id"], left["work_id"], graph, memo)
+        for index, left in enumerate(work_items)
+        for right in work_items[index + 1 :]
+    )
+
+
+def _independent_work_count(
+    work_items: list[dict[str, Any]], all_items: list[dict[str, Any]]
+) -> int:
+    """Return a deterministic independent subset size for team-size scoring."""
+    selected: list[dict[str, Any]] = []
+    for item in work_items:
+        if _pairwise_independent(selected + [item], all_items):
+            selected.append(item)
+    return len(selected)
 
 
 def write_conflict_pairs(items: list[dict[str, Any]]) -> list[tuple[str, str]]:
@@ -180,10 +218,11 @@ def score_dimensions(plan: dict[str, Any], signals: dict[str, Any]) -> dict[str,
     parallel_items = [
         item
         for item in items
-        if item["parallelizable"] and item["context_coupling"] == "low"
+        if item["parallelizable"]
+        and item["context_coupling"] == "low"
     ]
     specialist_types = types & {"research", "architecture", "writing", "testing", "release"}
-    parallel_gain = min(2, max(0, len(parallel_items) - 1))
+    parallel_gain = min(2, max(0, _independent_work_count(parallel_items, items) - 1))
     parallel_gain = max(0, parallel_gain - min(2, len(conflicts)))
     return {
         "workstream_count": min(3, max(0, len(types) - 1)),
@@ -243,9 +282,11 @@ def _dedicated_research_positions(items: list[dict[str, Any]]) -> list[dict[str,
     if len(research) <= 1:
         return []
     independently_parallel = all(
-        item["parallelizable"] and item["context_coupling"] == "low" and item["read_scope"]
+        item["parallelizable"]
+        and item["context_coupling"] == "low"
+        and item["read_scope"]
         for item in research
-    )
+    ) and _pairwise_independent(research, items)
     distinct_scopes = all(
         not scopes_overlap(left["read_scope"], right["read_scope"])
         for index, left in enumerate(research)
@@ -266,7 +307,7 @@ def _dedicated_research_positions(items: list[dict[str, Any]]) -> list[dict[str,
 
 
 def _parallel_implementation_streams(
-    implementation: list[dict[str, Any]],
+    implementation: list[dict[str, Any]], all_items: list[dict[str, Any]]
 ) -> bool:
     return (
         len(implementation) > 1
@@ -277,6 +318,7 @@ def _parallel_implementation_streams(
             and item["isolated_worktree_required"]
             for item in implementation
         )
+        and _pairwise_independent(implementation, all_items)
         and not write_conflict_pairs(implementation)
         and len({item["outcome"] for item in implementation}) == len(implementation)
     )
@@ -290,7 +332,7 @@ def _developer_positions(
     ]
     if not implementation:
         return []
-    parallel_streams = _parallel_implementation_streams(implementation)
+    parallel_streams = _parallel_implementation_streams(implementation, items)
     cross_module_delivery = (
         is_cross_module(items, plan)
         and not all(item["context_coupling"] == "high" for item in implementation)
@@ -342,16 +384,155 @@ def _candidate_positions(
     return candidates
 
 
-def _waves(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _has_interleaved_dependency(
+    position: dict[str, Any], all_items: list[dict[str, Any]]
+) -> bool:
+    """Detect a same-profile group split by work assigned to another profile."""
+    assigned = set(position["work_items"])
+    if len(assigned) < 2:
+        return False
+    graph = {item["work_id"]: item["dependencies"] for item in all_items}
+
+    def ancestors(work_id: str) -> set[str]:
+        result: set[str] = set()
+        for dependency in graph[work_id]:
+            result.add(dependency)
+            result.update(ancestors(dependency))
+        return result
+
+    for work_id in assigned:
+        upstream = ancestors(work_id)
+        if upstream & assigned and upstream - assigned:
+            return True
+    return False
+
+
+def _split_interleaved_positions(
+    positions: list[dict[str, Any]], all_items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    by_id = {item["work_id"]: item for item in all_items}
+    expanded: list[dict[str, Any]] = []
+    for position in positions:
+        if not _has_interleaved_dependency(position, all_items):
+            expanded.append(position)
+            continue
+        expanded.extend(
+            _position(
+                position["profile"],
+                [by_id[work_id]],
+                instance,
+                position_suffix=work_id,
+            )
+            for instance, work_id in enumerate(position["work_items"], 1)
+        )
+    return expanded
+
+
+def _waves(
+    positions: list[dict[str, Any]], items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Schedule position waves after their non-root work dependencies.
+
+    The Execution Root is intentionally assigned every work item for coordination.
+    It is not a completion signal, so an item that depends only on root-owned work
+    is reported as blocked rather than treated as ready for parallel dispatch.
+    """
+    non_root_positions = [
+        position for position in positions if position["profile"] != "execution-root"
+    ]
+    work_types = {item["work_id"]: item["work_type"] for item in items}
+    owners: dict[str, set[str]] = {}
+    for position in non_root_positions:
+        for work_id in position["work_items"]:
+            if position["profile"] == ACCOUNTABLE_PROFILE_BY_WORK_TYPE.get(
+                work_types[work_id]
+            ):
+                owners.setdefault(work_id, set()).add(position["position_id"])
+    dependencies_by_position: dict[str, set[str]] = {}
+    root_dependencies_by_position: dict[str, set[str]] = {}
+    work_dependencies = {item["work_id"]: item["dependencies"] for item in items}
+    work_statuses = {item["work_id"]: item["status"] for item in items}
+    for position in non_root_positions:
+        position_id = position["position_id"]
+        position_dependencies: set[str] = set()
+        root_dependencies: set[str] = set()
+        for work_id in position["work_items"]:
+            for dependency in work_dependencies[work_id]:
+                dependency_owners = owners.get(dependency, set()) - {position_id}
+                if dependency_owners:
+                    position_dependencies.update(dependency_owners)
+                elif (
+                    dependency not in position["work_items"]
+                    and work_statuses[dependency] not in {"completed", "waived"}
+                ):
+                    root_dependencies.add(dependency)
+        if position["profile"] in {"reviewer", "supervisor"}:
+            for observed_work_id in position["work_items"]:
+                # An explicit review item is performed by the reviewer itself;
+                # only observation of somebody else's delivery waits for an owner.
+                if (
+                    ACCOUNTABLE_PROFILE_BY_WORK_TYPE.get(work_types[observed_work_id])
+                    == position["profile"]
+                ):
+                    continue
+                accountable_positions = owners.get(observed_work_id, set()) - {position_id}
+                if accountable_positions:
+                    position_dependencies.update(accountable_positions)
+                elif work_statuses[observed_work_id] not in {"completed", "waived"}:
+                    root_dependencies.add(observed_work_id)
+        dependencies_by_position[position_id] = position_dependencies
+        root_dependencies_by_position[position_id] = root_dependencies
+
+    positions_by_id = {position["position_id"]: position for position in positions}
+    base_waves = {position["position_id"]: position["wave"] for position in positions}
+    resolved_waves: dict[str, int] = {}
+    resolving: set[str] = set()
+
+    def wave_for(position_id: str) -> int:
+        if position_id in resolved_waves:
+            return resolved_waves[position_id]
+        if position_id in resolving:
+            raise AssertionError("position dependency cycle detected")
+        resolving.add(position_id)
+        position = positions_by_id[position_id]
+        dependency_waves = [
+            wave_for(dependency)
+            for dependency in dependencies_by_position.get(position_id, set())
+        ]
+        resolved_waves[position_id] = max(
+            base_waves[position_id], max(dependency_waves, default=-1) + 1
+        )
+        resolving.remove(position_id)
+        return resolved_waves[position_id]
+
+    for position in positions:
+        wave_for(position["position_id"])
+    for position in positions:
+        position["wave"] = resolved_waves[position["position_id"]]
+
     result: list[dict[str, Any]] = []
-    for wave in range(6):
-        members = [item for item in positions if item["wave"] == wave]
+    labels = {
+        0: "Execution Root 读取计划和项目状态",
+        1: "独立研究与架构判断",
+        2: "实现与文档工作",
+        3: "测试诊断，仅在需要时",
+        4: "独立 Review",
+        5: "Supervisor 收口，仅在需要时",
+    }
+    for wave in sorted(set(resolved_waves.values())):
+        members = [
+            item for item in positions if resolved_waves[item["position_id"]] == wave
+        ]
         if not members:
             continue
         parallel: list[str] = []
         sequential: list[str] = []
+        pending_root_dependency: list[str] = []
         parallel_writers = 0
         for member in members:
+            if root_dependencies_by_position.get(member["position_id"]):
+                pending_root_dependency.append(member["position_id"])
+                continue
             writable = member["profile"] in {"developer", "writer"} and bool(
                 member["write_scope"]
             )
@@ -375,16 +556,28 @@ def _waves(positions: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result.append(
             {
                 "wave": wave,
-                "label": {
-                    0: "Execution Root 读取计划和项目状态",
-                    1: "独立研究与架构判断",
-                    2: "实现与文档工作",
-                    3: "测试诊断，仅在需要时",
-                    4: "独立 Review",
-                    5: "Supervisor 收口，仅在需要时",
-                }[wave],
+                "label": labels.get(wave, "依赖完成后的后续工作"),
                 "parallel_position_ids": parallel,
                 "sequential_position_ids": sequential,
+                "pending_root_dependency_position_ids": pending_root_dependency,
+                "blocked_by_position_ids": sorted(
+                    {
+                        dependency
+                        for member in members
+                        for dependency in dependencies_by_position.get(
+                            member["position_id"], set()
+                        )
+                    }
+                ),
+                "root_owned_dependency_work_ids": sorted(
+                    {
+                        dependency
+                        for member in members
+                        for dependency in root_dependencies_by_position.get(
+                            member["position_id"], set()
+                        )
+                    }
+                ),
             }
         )
     return result
@@ -403,7 +596,9 @@ def resolve_team_plan(
     score = sum(breakdown.values())
     tier = tier_for_score(score)
     root = _position("execution-root", items, 1)
-    candidates = _candidate_positions(plan, signals)
+    candidates = _split_interleaved_positions(
+        _candidate_positions(plan, signals), items
+    )
 
     profile_priority = {
         "technical-architect": 100,
@@ -477,7 +672,7 @@ def resolve_team_plan(
         "score": score,
         "score_breakdown": breakdown,
         "positions": selected,
-        "waves": _waves(selected),
+        "waves": _waves(selected, items),
         "write_conflicts": [list(pair) for pair in conflicts],
         "root_owned_work_items": root_owned,
         "limits": {

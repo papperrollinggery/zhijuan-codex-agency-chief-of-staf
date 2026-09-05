@@ -195,6 +195,8 @@ def _status_for_event(
         before = item["status"]
         after = before
         if event_type == "work_started":
+            if plan["status"] == "verifying" and before != "blocked":
+                raise ValueError("new work requires executing task state; verification may only retry blocked work")
             if before not in {"pending", "blocked"}:
                 raise ValueError("work_started requires pending or blocked work")
             dependencies = {
@@ -217,6 +219,13 @@ def _status_for_event(
             if item["blockers"]:
                 raise ValueError("work_completed has unresolved blockers")
             after = "completed"
+        elif event_type == "verification_completed":
+            if before not in {"in_progress", "completed"}:
+                raise ValueError("verification_completed requires in_progress or completed work")
+        elif event_type == "verification_failed":
+            if before not in {"in_progress", "completed"}:
+                raise ValueError("verification_failed requires in_progress or completed work")
+            after = "blocked"
         elif event_type == "blocker_found":
             if before not in {"pending", "in_progress", "blocked"}:
                 raise ValueError("blocker_found cannot block completed or waived work")
@@ -334,6 +343,10 @@ def update_progress(
     blockers = _string_list(blockers or [], "blockers")
     if event_type == "verification_completed" and not verification:
         raise ValueError("verification_completed requires verification evidence")
+    if event_type == "work_completed" and not verification:
+        raise ValueError("work_completed requires verification evidence")
+    if event_type in {"work_completed", "verification_completed"} and blockers:
+        raise ValueError(f"{event_type} cannot include blockers")
     if event_type in {"verification_failed", "blocker_found"} and not blockers:
         raise ValueError(f"{event_type} requires blockers")
 
@@ -364,6 +377,32 @@ def update_progress(
     progress_snapshot = _optional_text_snapshot(progress_path)
     progress_markdown_path = task_dir / "PROGRESS.md"
     progress_markdown_snapshot = _optional_text_snapshot(progress_markdown_path)
+    events_before = load_events(progress_path)
+    artifact_snapshots: dict[str, dict[str, object]] | None = None
+    if event_type in {"work_completed", "verification_completed"} and artifacts:
+        from validate_task_archive import snapshot_artifact
+
+        artifact_snapshots = {
+            artifact: snapshot_artifact(root, artifact) for artifact in artifacts
+        }
+    event_key = idempotency_key
+    if event_type in WORK_EVENTS and work_id is not None:
+        item = _work_by_id(plan, work_id)
+        attempts = sum(
+            event.get("work_id") == work_id and (
+                event.get("event_type") == "work_started" or (
+                    "event_type" not in event and event.get("status_after") == "in_progress"
+                    and event.get("status_before") in {"pending", "blocked"}
+                )
+            )
+            for event in events_before
+        )
+        if event_type == "work_started" and item["status"] in {"pending", "blocked"}:
+            attempts += 1
+        event_key = json.dumps(
+            {"attempt": attempts, "key": idempotency_key, "artifacts": artifact_snapshots},
+            sort_keys=True, separators=(",", ":"),
+        )
     identifier = event_id_for(
         task_id=task_id,
         event_type=event_type,
@@ -372,10 +411,10 @@ def update_progress(
         artifacts=artifacts,
         verification=verification,
         blockers=blockers,
-        idempotency_key=idempotency_key,
+        idempotency_key=event_key,
     )
     existing = next(
-        (event for event in load_events(progress_path) if event.get("event_id") == identifier),
+        (event for event in events_before if event.get("event_id") == identifier),
         None,
     )
     if existing is not None:
@@ -386,10 +425,18 @@ def update_progress(
             "progress_file": str(progress_path),
         }
 
+    if event_type in WORK_EVENTS and plan["status"] not in {"executing", "verifying"}:
+        raise ValueError("work progress mutations require executing task state")
+    if event_type in WORK_EVENTS and plan["status"] == "verifying" and event_type not in {
+        "verification_completed", "verification_failed", "work_started", "work_completed",
+    }:
+        raise ValueError("new artifact/blocker work requires executing task state")
+
     status_before, status_after = _status_for_event(plan, event_type, work_id)
     event = {
         "event_id": identifier,
         "task_id": task_id,
+        "event_type": event_type,
         "work_id": work_id,
         "timestamp": utc_now(),
         "actor": "execution-root",
@@ -400,6 +447,8 @@ def update_progress(
         "verification": verification,
         "blockers": blockers,
     }
+    if artifact_snapshots is not None:
+        event["artifact_snapshots"] = artifact_snapshots
     original_index = (
         copy.deepcopy(load_or_initialize_index(root))
         if event_type == "task_completed"
@@ -409,6 +458,10 @@ def update_progress(
         if event_type in WORK_EVENTS and work_id is not None:
             item = _work_by_id(plan, work_id)
             item["status"] = status_after
+            if event_type == "verification_failed":
+                # Prior success evidence belongs to the failed attempt and cannot
+                # satisfy a later retry.
+                item["evidence_refs"] = []
             for blocker in blockers:
                 if blocker not in item["blockers"]:
                     item["blockers"].append(blocker)
@@ -424,8 +477,7 @@ def update_progress(
         if event_type == "task_completed":
             _transition_guarded_terminal(root, task_id, "completed")
             plan = validate_task_plan(load_json(plan_path), expected_task_id=task_id)
-        events = load_events(progress_path)
-        atomic_write_text(progress_markdown_path, render_progress(plan, events))
+        atomic_write_text(progress_markdown_path, render_progress(plan, events_before + [event]))
     except Exception as exc:
         rollback_errors: list[str] = []
         restores = [

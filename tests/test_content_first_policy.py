@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import unittest
 from pathlib import Path
 
@@ -13,7 +12,8 @@ class ContentFirstPolicyTests(unittest.TestCase):
     def test_main_skill_stays_a_small_routing_map(self) -> None:
         text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertLessEqual(len(text.splitlines()), 160)
-        self.assertLessEqual(len(re.findall(r"\S+", text)), 750)
+        # Whitespace word counts do not measure Chinese instruction size.
+        self.assertLessEqual(len(text.encode("utf-8")), 12000)
         self.assertIn("解锁项目判断、协调真实并行、证明当前结果", text)
         self.assertIn("若不读取某个 reference 也能安全完成任务，就不要读取它", text)
         self.assertNotIn("所有普通主会话必须", text)

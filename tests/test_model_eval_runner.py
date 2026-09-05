@@ -19,6 +19,132 @@ import run_profile_compat  # noqa: E402
 
 
 class ModelEvalRunnerTests(unittest.TestCase):
+    def test_outcome_oracle_rejects_algorithm_decoy_that_keeps_integer_division(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            (fixture / "math_utils.py").write_text(
+                "def mean(values):\n    return sum(values) // len(values)\n"
+                "\n# expected result: 2.5\n",
+                encoding="utf-8",
+            )
+            result = runner.run_outcome_oracle(fixture, "algorithm-mean-fraction")
+            self.assertFalse(result["outcome_passed"])
+            self.assertIn("mean([2, 3])", "\n".join(result["failures"]))
+
+    def test_outcome_oracle_accepts_algorithm_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            (fixture / "math_utils.py").write_text(
+                "def mean(values):\n"
+                "    if not values:\n"
+                "        raise ValueError('values must not be empty')\n"
+                "    return sum(values) / len(values)\n",
+                encoding="utf-8",
+            )
+            result = runner.run_outcome_oracle(fixture, "algorithm-mean-fraction")
+            self.assertTrue(result["outcome_passed"])
+            self.assertEqual(result["failures"], [])
+
+    def test_outcome_oracle_rejects_module_early_success_exit_without_terminal_proof(self) -> None:
+        for body in ("import sys\nsys.exit(0)\n", "import os\nos._exit(0)\n"):
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as tmp:
+                fixture = Path(tmp)
+                (fixture / "math_utils.py").write_text(body, encoding="utf-8")
+                result = runner.run_outcome_oracle(fixture, "algorithm-mean-fraction")
+                self.assertFalse(result["outcome_passed"])
+                self.assertIn(
+                    "unique oracle terminal proof", "\n".join(result["failures"])
+                )
+
+    def test_outcome_oracle_bounds_timeout_and_start_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            timeout = subprocess.TimeoutExpired(
+                ["python"], 5, output="x" * 5000, stderr="y" * 5000
+            )
+            with mock.patch.object(runner.subprocess, "run", side_effect=timeout):
+                result = runner.run_outcome_oracle(fixture, "algorithm-mean-fraction")
+            self.assertFalse(result["outcome_passed"])
+            self.assertIn("timed out", result["failures"][0])
+            self.assertLessEqual(len(result["failures"][0]), 1220)
+            with mock.patch.object(runner.subprocess, "run", side_effect=OSError("z" * 5000)):
+                result = runner.run_outcome_oracle(fixture, "algorithm-mean-fraction")
+            self.assertFalse(result["outcome_passed"])
+            self.assertIn("could not start", result["failures"][0])
+            self.assertLessEqual(len(result["failures"][0]), 1220)
+
+    def test_outcome_oracle_rejects_compatibility_plan_without_runtime_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            (fixture / "compat.py").write_text(
+                "def upgrade_legacy(raw):\n    raise ValueError('legacy unsupported')\n",
+                encoding="utf-8",
+            )
+            (fixture / "settings.py").write_text(
+                "from compat import upgrade_legacy\n"
+                "def normalize(raw):\n"
+                "    if raw.get('schema_version') == 2:\n"
+                "        return {'retries': raw['retries'], 'strategy': raw['strategy']}\n"
+                "    return upgrade_legacy(raw)\n",
+                encoding="utf-8",
+            )
+            (fixture / "app.py").write_text(
+                "from settings import normalize\n"
+                "def render_plan(raw):\n"
+                "    item = normalize(raw)\n"
+                "    return f\"{item['strategy']}:{item['retries'] + 1}\"\n",
+                encoding="utf-8",
+            )
+            result = runner.run_outcome_oracle(fixture, "compat-retry-plan-v1-v2")
+            self.assertFalse(result["outcome_passed"])
+            self.assertIn("legacy", "\n".join(result["failures"]))
+
+    def test_outcome_oracle_accepts_compatibility_feature(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp)
+            (fixture / "compat.py").write_text(
+                "def upgrade_legacy(raw):\n"
+                "    value = raw.get('max_retries')\n"
+                "    if not isinstance(value, str) or not value.isdigit():\n"
+                "        raise ValueError('invalid legacy retry count')\n"
+                "    retries = int(value)\n"
+                "    if retries < 0:\n"
+                "        raise ValueError('invalid legacy retry count')\n"
+                "    return {'retries': retries, 'strategy': 'standard'}\n",
+                encoding="utf-8",
+            )
+            (fixture / "settings.py").write_text(
+                "from compat import upgrade_legacy\n\n"
+                "def normalize(raw):\n"
+                "    if raw.get('schema_version') == 2:\n"
+                "        return {'retries': raw['retries'], 'strategy': raw['strategy']}\n"
+                "    return upgrade_legacy(raw)\n",
+                encoding="utf-8",
+            )
+            (fixture / "app.py").write_text(
+                "from settings import normalize\n\n"
+                "def render_plan(raw):\n"
+                "    item = normalize(raw)\n"
+                "    return f\"{item['strategy']}:{item['retries'] + 1}\"\n",
+                encoding="utf-8",
+            )
+            result = runner.run_outcome_oracle(fixture, "compat-retry-plan-v1-v2")
+            self.assertTrue(result["outcome_passed"])
+            self.assertEqual(result["failures"], [])
+
+    def test_outcome_fixtures_start_red_before_the_model_edits_them(self) -> None:
+        for kind, oracle in (
+            ("algorithm_bug", "algorithm-mean-fraction"),
+            ("compat_feature", "compat-retry-plan-v1-v2"),
+        ):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                fixture = Path(tmp)
+                runner.prepare_lifecycle_fixture(
+                    fixture, {"kind": kind, "task_id": "task-outcome-fixture"}
+                )
+                result = runner.run_outcome_oracle(fixture, oracle)
+                self.assertFalse(result["outcome_passed"])
+                self.assertTrue(result["failures"])
     def base_case(self) -> dict[str, object]:
         return {
             "id": "safe-case",
@@ -37,6 +163,30 @@ class ModelEvalRunnerTests(unittest.TestCase):
         self.assertEqual(runner.validate_runtime_case(case)["max_tool_events"], 7)
         case["max_tool_events"] = -1
         with self.assertRaisesRegex(RuntimeError, "max_tool_events"):
+            runner.validate_runtime_case(case)
+
+    def test_runtime_case_rejects_unowned_outcome_oracle(self) -> None:
+        case = self.base_case()
+        case.update(
+            {
+                "sandbox": "workspace-write",
+                "fixture_setup": {"kind": "algorithm_bug", "task_id": "task-oracle"},
+                "outcome_oracle": "python -c arbitrary",
+            }
+        )
+        with self.assertRaisesRegex(RuntimeError, "outcome_oracle is unsupported"):
+            runner.validate_runtime_case(case)
+
+    def test_runtime_case_rejects_non_string_outcome_oracle(self) -> None:
+        case = self.base_case()
+        case.update(
+            {
+                "sandbox": "workspace-write",
+                "fixture_setup": {"kind": "algorithm_bug", "task_id": "task-oracle"},
+                "outcome_oracle": ["algorithm-mean-fraction"],
+            }
+        )
+        with self.assertRaisesRegex(RuntimeError, "outcome_oracle is unsupported"):
             runner.validate_runtime_case(case)
 
     def test_empty_artifact_contract_requires_a_real_zero_byte_file(self) -> None:
@@ -824,6 +974,14 @@ class ModelEvalRunnerTests(unittest.TestCase):
             )
             self.assertEqual(index["tasks"]["task-model-fixture"]["status"], "completed")
             self.assertTrue((task_dir / "closure.json").is_file())
+            events = [
+                json.loads(line)
+                for line in (task_dir / "progress.jsonl").read_text(encoding="utf-8").splitlines()
+                if line
+            ]
+            completed = [event for event in events if event["event_type"] == "work_completed"]
+            self.assertEqual(len(completed), 1)
+            self.assertEqual(completed[0]["verification"], ["README.md readback"])
             self.assertTrue((task_dir / "knowledge-candidates-input.json").is_file())
             self.assertTrue((fixture / "docs/testing/lifecycle.md").is_file())
 

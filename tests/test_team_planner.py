@@ -28,6 +28,34 @@ def profiles(team: dict[str, object]) -> list[str]:
 
 
 class TeamPlannerTests(unittest.TestCase):
+    def test_release_execution_is_not_owned_by_readonly_supervisor(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            _, task_dir = create_fixture_task(
+                project, items=[work_item("W-01", work_type="release", write_scope=["dist/"])],
+            )
+            plan = json.loads((task_dir / "task-plan.json").read_text())
+            team = resolve_team_plan(plan)
+            self.assertIn("supervisor", profiles(team))
+            self.assertIn("reviewer", profiles(team))
+            self.assertIn("W-01", team["root_owned_work_items"])
+            observer_waves = [
+                wave
+                for wave in team["waves"]
+                if any(
+                    position["profile"] in {"reviewer", "supervisor"}
+                    and position["position_id"] in wave["pending_root_dependency_position_ids"]
+                    for position in team["positions"]
+                )
+            ]
+            self.assertEqual(len(observer_waves), 2)
+            self.assertTrue(
+                all("W-01" in wave["root_owned_dependency_work_ids"] for wave in observer_waves)
+            )
+            write_team_plan(task_dir, team)
+            written = json.loads((task_dir / "task-plan.json").read_text())
+            self.assertIsNone(written["work_items"][0]["profile"])
+
     def test_runtime_profile_sets_stay_consistent_across_planner_and_policies(self) -> None:
         routing = json.loads(
             (ROOT / "assets/agent-routing.json").read_text(encoding="utf-8")
@@ -255,6 +283,29 @@ class TeamPlannerTests(unittest.TestCase):
         research = [p for p in team["positions"] if p["profile"] == "codebase-researcher"]
         self.assertEqual(len(research), 1)
 
+    def test_dependent_research_is_not_dispatched_as_parallel_positions(self) -> None:
+        items = [
+            work_item(
+                "W-01",
+                work_type="research",
+                read_scope=["api/"],
+                parallelizable=True,
+                context_coupling="low",
+            ),
+            work_item(
+                "W-02",
+                work_type="research",
+                read_scope=["domain/"],
+                dependencies=["W-01"],
+                parallelizable=True,
+                context_coupling="low",
+            ),
+        ]
+        team = resolve_team_plan(task_plan(items=items, title="Dependent research"))
+        research = [p for p in team["positions"] if p["profile"] == "codebase-researcher"]
+        self.assertEqual(len(research), 1)
+        self.assertEqual(research[0]["work_items"], ["W-01", "W-02"])
+
     def test_overlapping_writes_are_reported_and_not_parallel(self) -> None:
         items = [
             work_item(
@@ -318,6 +369,170 @@ class TeamPlannerTests(unittest.TestCase):
         self.assertEqual(len(wave_two["parallel_position_ids"]), MAX_PARALLEL_WRITERS)
         self.assertEqual(len(wave_two["sequential_position_ids"]), 2)
 
+    def test_shared_completed_prerequisite_allows_parallel_implementation_streams(self) -> None:
+        items = [
+            work_item("W-01", work_type="architecture", read_scope=["api/"]),
+            work_item(
+                "W-02",
+                read_scope=["client/"],
+                write_scope=["client/feature.py"],
+                dependencies=["W-01"],
+                parallelizable=True,
+                isolated_worktree_required=True,
+                context_coupling="low",
+            ),
+            work_item(
+                "W-03",
+                read_scope=["server/"],
+                write_scope=["server/feature.py"],
+                dependencies=["W-01"],
+                parallelizable=True,
+                isolated_worktree_required=True,
+                context_coupling="low",
+            ),
+        ]
+        team = resolve_team_plan(task_plan(items=items, title="Cross-module migration"))
+        developers = [p for p in team["positions"] if p["profile"] == "developer"]
+        self.assertEqual(len(developers), 2)
+        wave_two = next(wave for wave in team["waves"] if wave["wave"] == 2)
+        self.assertEqual(
+            set(wave_two["parallel_position_ids"]),
+            {developer["position_id"] for developer in developers},
+        )
+
+    def test_dependent_implementation_is_not_dispatched_in_parallel(self) -> None:
+        items = [
+            work_item(
+                "W-01",
+                read_scope=["src/a.py"],
+                write_scope=["src/a.py"],
+                parallelizable=True,
+                isolated_worktree_required=True,
+                context_coupling="low",
+            ),
+            work_item(
+                "W-02",
+                read_scope=["src/b.py"],
+                write_scope=["src/b.py"],
+                dependencies=["W-01"],
+                parallelizable=True,
+                isolated_worktree_required=True,
+                context_coupling="low",
+            ),
+        ]
+        team = resolve_team_plan(
+            task_plan(items=items, title="Dependent implementation"),
+            signals={"explicit_delegate_implementation": True},
+        )
+        developers = [p for p in team["positions"] if p["profile"] == "developer"]
+        self.assertEqual(len(developers), 1)
+        self.assertEqual(developers[0]["work_items"], ["W-01", "W-02"])
+        wave_two = next(wave for wave in team["waves"] if wave["wave"] == 2)
+        self.assertEqual(wave_two["parallel_position_ids"], [developers[0]["position_id"]])
+
+    def test_position_wave_waits_for_another_selected_position_dependency(self) -> None:
+        items = [
+            work_item(
+                "W-01",
+                work_type="research",
+                read_scope=["api/"],
+                parallelizable=True,
+                context_coupling="low",
+            ),
+            work_item(
+                "W-02",
+                work_type="research",
+                read_scope=["domain/"],
+                parallelizable=True,
+                context_coupling="low",
+            ),
+            work_item(
+                "W-03",
+                work_type="architecture",
+                read_scope=["api/", "domain/"],
+                dependencies=["W-01"],
+                title="Cross-module architecture",
+            ),
+        ]
+        team = resolve_team_plan(task_plan(items=items, title="Cross-module migration"))
+        researcher = next(
+            p
+            for p in team["positions"]
+            if p["profile"] == "codebase-researcher" and p["work_items"] == ["W-01"]
+        )
+        architect = next(p for p in team["positions"] if p["profile"] == "technical-architect")
+        architect_wave = next(
+            wave for wave in team["waves"] if architect["position_id"] in wave["parallel_position_ids"]
+        )
+        self.assertGreater(architect_wave["wave"], 1)
+        self.assertEqual(architect["wave"], architect_wave["wave"])
+        self.assertIn(researcher["position_id"], architect_wave["blocked_by_position_ids"])
+
+    def test_interleaved_same_profile_dependencies_split_into_executable_waves(self) -> None:
+        items = [
+            work_item(
+                "W-01",
+                work_type="writing",
+                read_scope=["docs/"],
+                write_scope=["docs/intro.md"],
+            ),
+            work_item(
+                "W-02",
+                work_type="implementation",
+                read_scope=["src/"],
+                write_scope=["src/feature.py"],
+                dependencies=["W-01"],
+            ),
+            work_item(
+                "W-03",
+                work_type="writing",
+                read_scope=["docs/"],
+                write_scope=["docs/reference.md"],
+                dependencies=["W-02"],
+            ),
+        ]
+        team = resolve_team_plan(
+            task_plan(items=items, title="Documented implementation"),
+            signals={"explicit_delegate_implementation": True},
+        )
+        writers = [p for p in team["positions"] if p["profile"] == "writer"]
+        developer = next(p for p in team["positions"] if p["profile"] == "developer")
+        self.assertEqual([p["work_items"] for p in writers], [["W-01"], ["W-03"]])
+        self.assertEqual(developer["work_items"], ["W-02"])
+        self.assertEqual([p["wave"] for p in writers], [2, 4])
+        self.assertEqual(developer["wave"], 3)
+
+    def test_root_owned_prerequisite_is_not_listed_as_ready_parallel_work(self) -> None:
+        items = [
+            work_item("W-01", work_type="research", read_scope=["src/"]),
+            work_item(
+                "W-02",
+                read_scope=["src/"],
+                write_scope=["src/feature.py"],
+                dependencies=["W-01"],
+            ),
+        ]
+        team = resolve_team_plan(
+            task_plan(items=items, title="Root prerequisite"),
+            signals={"explicit_delegate_implementation": True},
+        )
+        developer = next(p for p in team["positions"] if p["profile"] == "developer")
+        wave = next(wave for wave in team["waves"] if wave["wave"] == developer["wave"])
+        self.assertIn(developer["position_id"], wave["pending_root_dependency_position_ids"])
+        self.assertNotIn(developer["position_id"], wave["parallel_position_ids"])
+
+    def test_review_work_is_accountable_to_the_reviewer(self) -> None:
+        item = work_item("W-01", work_type="review", read_scope=["src/"])
+        with tempfile.TemporaryDirectory() as raw:
+            project = Path(raw)
+            _, task_dir = create_fixture_task(project, items=[item])
+            team = resolve_team_plan(json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8")))
+            write_team_plan(task_dir, team)
+            assigned = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))["work_items"][0]
+            self.assertEqual(assigned["profile"], "reviewer")
+            self.assertEqual(assigned["review_profile"], "reviewer")
+            self.assertNotIn("W-01", team["root_owned_work_items"])
+
     def test_ordinary_multifile_medium_risk_delivery_does_not_force_reviewer(self) -> None:
         item = work_item(
             "W-01",
@@ -365,6 +580,29 @@ class TeamPlannerTests(unittest.TestCase):
             with self.subTest(title=plan["title"], signals=signals):
                 team = resolve_team_plan(plan, signals=signals)
                 self.assertIn("reviewer", profiles(team))
+
+    def test_reviewer_waits_for_root_owned_high_risk_implementation(self) -> None:
+        item = work_item("W-01", risk="high", context_coupling="high")
+        team = resolve_team_plan(task_plan(items=[item], title="High risk root change"))
+        reviewer = next(p for p in team["positions"] if p["profile"] == "reviewer")
+        wave = next(wave for wave in team["waves"] if wave["wave"] == reviewer["wave"])
+        self.assertIn(reviewer["position_id"], wave["pending_root_dependency_position_ids"])
+        self.assertNotIn(reviewer["position_id"], wave["parallel_position_ids"])
+
+    def test_satisfied_root_owned_work_does_not_keep_reviewer_pending(self) -> None:
+        for status in ("completed", "waived"):
+            with self.subTest(status=status):
+                item = work_item("W-01", risk="high", context_coupling="high")
+                item["status"] = status
+                if status == "waived":
+                    item["waiver_reason"] = "Accepted fixture waiver"
+                team = resolve_team_plan(
+                    task_plan(items=[item], title="Reviewed satisfied root change")
+                )
+                reviewer = next(p for p in team["positions"] if p["profile"] == "reviewer")
+                wave = next(wave for wave in team["waves"] if wave["wave"] == reviewer["wave"])
+                self.assertNotIn(reviewer["position_id"], wave["pending_root_dependency_position_ids"])
+                self.assertIn(reviewer["position_id"], wave["parallel_position_ids"])
 
     def test_required_architect_and_reviewer_are_not_crowded_out_by_researchers(self) -> None:
         items = [

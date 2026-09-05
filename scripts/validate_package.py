@@ -155,10 +155,16 @@ ALLOWED_TEAM_EXPECTATIONS = {
     "root_owned",
 }
 ALLOWED_FIXTURE_SETUP_KINDS = {
+    "algorithm_bug",
+    "compat_feature",
     "plan_ready",
     "executing",
     "completed_archive",
     "small_bug",
+}
+ALLOWED_OUTCOME_ORACLES = {
+    "algorithm-mean-fraction",
+    "compat-retry-plan-v1-v2",
 }
 REQUIRED_PUBLIC_FILES = {
     "README.md",
@@ -182,6 +188,8 @@ PUBLIC_MARKDOWN_LINK_FILES = (
     "docs/REPOSITORY_DISCOVERY.md",
 )
 REQUIRED_MODEL_SMOKE_IDS = {
+    "outcome-algorithm-mean-bugfix",
+    "outcome-compat-retry-plan",
     "explicit-small-direct",
     "explicit-readonly-structured",
     "delegated-worker-bypass",
@@ -651,6 +659,12 @@ def validate_lifecycle_case(case: dict[str, object], case_id: str) -> None:
             r"[a-z0-9][a-z0-9._-]{2,95}", setup["task_id"]
         ):
             fail(f"behavior case {case_id} fixture_setup task_id is unsafe")
+    oracle_id = case.get("outcome_oracle")
+    if oracle_id is not None:
+        if not isinstance(oracle_id, str) or oracle_id not in ALLOWED_OUTCOME_ORACLES:
+            fail(f"behavior case {case_id} outcome_oracle is unsupported")
+        if case.get("sandbox", "read-only") != "workspace-write" or setup is None:
+            fail(f"behavior case {case_id} outcome_oracle needs a workspace-write fixture")
     validate_string_list(case, "allowed_changed_prefixes", case_id)
     for prefix in case.get("allowed_changed_prefixes", []):
         if prefix not in {".agency/", "docs/"}:
@@ -854,6 +868,10 @@ def validate_behavior_cases(path: Path) -> int:
         fail("behavior cases need a real write-and-verify model smoke")
     if not any(case.get("model_smoke") and case.get("require_collab_event") for case in cases):
         fail("behavior cases need an independently observed cold-review event")
+    used_oracles = {case.get("outcome_oracle") for case in smoke}
+    missing_oracles = sorted(ALLOWED_OUTCOME_ORACLES - used_oracles)
+    if missing_oracles:
+        fail("behavior cases missing required outcome oracle: " + ", ".join(missing_oracles))
     missing_visual = sorted(REQUIRED_VISUAL_BEHAVIOR_CASES - ids)
     if missing_visual:
         fail(f"behavior cases missing visualization coverage: {', '.join(missing_visual)}")

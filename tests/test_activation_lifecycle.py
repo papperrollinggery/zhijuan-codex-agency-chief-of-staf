@@ -23,16 +23,12 @@ class ActivationLifecycleTests(unittest.TestCase):
             self.assertIn(phrase, description)
         self.assertLessEqual(len(description), 150)
 
-    def test_host_metadata_describes_the_staged_lifecycle(self) -> None:
+    def test_host_metadata_preserves_the_users_requested_scope(self) -> None:
         metadata = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
-        self.assertIn(
-            'short_description: "讨论需求、建立执行清单、启动执行团队并沉淀长期资产"',
-            metadata,
-        )
-        self.assertIn(
-            "先和我讨论需求；确认后建立任务执行清单，再创建独立执行对话推进任务、更新进度",
-            metadata,
-        )
+        validate_package.validate_openai_yaml(ROOT / "agents" / "openai.yaml")
+        self.assertIn("$agency-chief-of-staff", metadata)
+        for unsolicited_stage in ("先和我讨论需求", "创建独立执行对话", "完成后归档", "沉淀长期资产"):
+            self.assertNotIn(unsolicited_stage, metadata)
 
     def test_action_named_discovery_bridge_is_lightweight_and_exclusion_safe(self) -> None:
         bridge_root = ROOT / "activation" / "agency-discuss-plan-execute-progress-archive"
@@ -91,6 +87,9 @@ class ActivationLifecycleTests(unittest.TestCase):
     def test_lifecycle_intents_include_exclusions_and_all_four_phases(self) -> None:
         value = json.loads((ROOT / "assets/lifecycle-intents.json").read_text(encoding="utf-8"))
         self.assertEqual(set(value["phases"]), {"discussion", "plan", "execution_launch", "archive"})
+        self.assertTrue(value["routing_rules"]["examples_are_not_keyword_triggers"])
+        for request in ("安排团队来做", "安排几个专业角色", "持续更新进度"):
+            self.assertNotIn(request, value["phases"]["execution_launch"])
         exclusions = "\n".join(value["exclusions"])
         for marker in (
             "单句翻译",

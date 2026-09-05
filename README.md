@@ -5,6 +5,8 @@
 
 一个内容优先、结果负责的 Codex 协调 Skill。它默认把上下文和工具预算留给项目研究、判断、实现与验证；只有协调真实并行、保持跨对话连续性或证明高风险结果时，才增加团队、`.agency` 状态、Task/Thread、模型 readback 或独立审核。
 
+`v0.3.0-rc.7` 新增同对话执行清单入口、基于工作依赖的调度、失败重试与产物证据绑定，以及实际运行代码的行为评测。完整执行请求会连续推进到交付，“团队”或“进度”不再被当成新对话授权。具体发现、修复与验证边界见[本轮深度优化记录](docs/OPTIMIZATION_REVIEW_2026-09-05.md)。
+
 内部按最轻执行面选择 Direct、Focused、Durable 或 Assured。普通单次任务直接完成；多步骤单会话任务只保留短计划；明确需要跨对话时才进入持久生命周期；发布、安全、高风险迁移或审计才进入强证明路径。安装器和默认运行不会向用户配置、仓库主工作区或项目根 `AGENTS.md` 注入路由。
 
 ## 用户看到的交互
@@ -22,13 +24,13 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | 核心模型提供方 | OpenAI / Codex；Claude/Fable 仅为默认关闭的可选 advisor 位 |
 | Python | 3.10+ |
 | 最新 stable tag | [`v0.1.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.1.7) |
-| 本发布版本 | [`v0.3.0-rc.6`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.3.0-rc.6)，host-scoped prerelease |
-| 发布前远端 prerelease | `v0.3.0-rc.5`；rc.6 必须以发布后 API readback 为准 |
-| 当前 checkout | `v0.3.0-rc.6` release source |
+| 本发布目标 | [`v0.3.0-rc.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.3.0-rc.7)，host-scoped prerelease |
+| 发布前远端 prerelease | `v0.3.0-rc.6`；rc.7 的发布状态以 GitHub Release/API 为准 |
+| 当前源码版本 | `v0.3.0-rc.7` release source |
 
 入口：[文档索引](docs/README.md) · [内容优先设计依据](docs/CONTENT_FIRST_DESIGN.md) · [LLM 索引](llms.txt) · [发现性与发布元数据](docs/REPOSITORY_DISCOVERY.md) · [Changelog](CHANGELOG.md) · [示例](examples) · [贡献](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [行为规范](CODE_OF_CONDUCT.md) · [全部 Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases)
 
-本 README 正文描述 `v0.3.0-rc.6` host-scoped prerelease。它不是 stable release，也不代表任一宿主已经安装、自然语言隐式唤起必然成功，或无人值守/跨宿主行为已经验证。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
+本 README 正文描述 `v0.3.0-rc.7` host-scoped prerelease。它不是 stable release，也不代表任一宿主已经安装、自然语言隐式唤起必然成功，或无人值守/跨宿主行为已经验证。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
 
 | 版本线 | 能力边界 |
 | --- | --- |
@@ -40,6 +42,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | `v0.3.0-rc.4` 本地源码候选 | 用真实生命周期 trace 把持久执行收敛为内容优先快路径，增加失败调用也计数的 tool-event 预算、无歧义完成证据 argv、恢复/归档边界与评测防伪；尚未发布，安装态 Native 行为仍需单独 readback |
 | `v0.3.0-rc.5` host-scoped prerelease | 汇总 rc.4 后的生命周期/安装完整性修复，增加确定性 Execution Root 标题、场景模式地图、强制 Native 降级门与角色策略一致性检查；标题请求已实现，安装态 Skill→title 端到端、自然触发、无人值守与跨宿主仍需分别验证 |
 | `v0.3.0-rc.6` host-scoped prerelease | 默认 Astra/max，支持显式其他模型与 effort、旧 Sol 兼容；计划到机械绑定传递同一请求；子代理维持 Luna/Terra/Astra 分层，三个安装入口使用源码内的紧凑描述，无本地 metadata 覆盖 |
+| `v0.3.0-rc.7` host-scoped prerelease | 目标导向工作流、当前对话启动、依赖调度与审核时序、失败重试、完成/归档证据绑定，以及实际实现的行为 oracle；完整 Native 与跨宿主验证仍单独报告 |
 
 ## v0.3 迁移
 
@@ -71,10 +74,10 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | --- | --- | --- |
 | Direct | 单目标、低风险、一次对话可完成 | Root 直接完成，不建团队、不建 Thread、不写 `.agency` |
 | Focused | 多步骤或多文件，但上下文强耦合且本对话可收口 | 维护短计划；只有独立收益明确时自动派发少量终端 Subagent |
-| Durable | 用户明确要执行清单、跨对话推进、独立执行对话或持续进度 | Plan 先落 `.agency`；Execution Launch 再按 Work Item 生成岗位与波次，并创建或手动启动新的 Execution Root |
-| Assured | 发布、安全、高风险迁移、审计、客户交付或明确要求 receipt | 在对应模式上增加一次独立审核、宿主 readback 与必要 cleanup 证明 |
+| Durable | 用户明确要求保存执行清单或跨对话连续性 | Plan 先落 `.agency`；可用 `agency_task.py start` 在当前对话执行，明确要求新 Task 时才走 Execution Launch |
+| Assured | 发布、安全、高风险迁移、复杂客户成果或明确复审 | 在对应模式上增加必要独立审核；readback、receipt 与 cleanup 只按实际证明需求使用 |
 
-自动分配分两层：Root 先把用户目标拆成有依赖、范围、风险和验证要求的 Work Item；`resolve_team_plan.py` 再确定 Root 自留项、专业岗位、并行波次与写冲突。内部 Subagent 可在净收益为正时自动派发；用户可见的真实 Codex Task/Thread 只在用户明确要求独立执行面或跨对话生命周期时创建，不因“任务复杂”三个字自动占用侧边栏和 Worktree。新的 Execution Root 使用确定性的 `Agency · <任务标题>` 请求名；只有宿主读回一致才算命名成功。
+自动分配分两层：Root 先把用户目标拆成有依赖、范围、风险和验证要求的 Work Item；`resolve_team_plan.py` 再确定 Root 自留项、专业岗位、并行波次与写冲突。内部 Subagent 可在净收益为正时自动派发；用户可见的真实 Codex Task/Thread 只在用户明确要求新任务或独立执行对话时创建，不因“任务复杂”三个字自动占用侧边栏和 Worktree。新的 Execution Root 使用确定性的 `Agency · <任务标题>` 请求名；只有宿主读回一致才算命名成功。
 
 `allow_implicit_invocation: true` 是路由许可，不是宿主运行证明。若 Codex 新会话报告 `Exceeded skills context budget of 2%. All skill descriptions were removed`，当前宿主已经在推理前移除了自然语言匹配所需的 Description；本 Skill 的发现桥也不能单独越过这一宿主级限制。此时使用显式 `$agency-chief-of-staff`，或由用户自行停用不需要的 Skills/Plugins 后重开会话。安装器不会为修复宿主预算而删除、停用或改写其他全局资产。
 
@@ -85,7 +88,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 ```text
 需求讨论
   → 持久化任务执行清单
-  → 新执行对话中的角色化团队执行、事件进度与验证
+  → 当前对话执行，或明确请求的新执行对话；按需团队、事件进度与验证
   → 任务归档与长期知识沉淀
 ```
 
@@ -135,7 +138,7 @@ cd zhijuan-codex-agency-chief-of-staf
 python3 scripts/install_skill.py
 ```
 
-`v0.3.0-rc.6` 发布并完成 API readback 后，可固定该 tag 安装。发布前验证本候选时只从已审阅的 release-source checkout 直接运行；需要此前已公开 prerelease 时固定 `v0.3.0-rc.5`：
+`v0.3.0-rc.7` 发布并完成 API readback 后，可固定该 tag 安装。发布前验证本候选时只从已审阅的 release-source checkout 直接运行；此前已公开 prerelease 为 `v0.3.0-rc.6`：
 
 ```bash
 python3 scripts/install_skill.py

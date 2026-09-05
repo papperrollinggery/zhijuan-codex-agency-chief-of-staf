@@ -20,7 +20,7 @@
 根据以上讨论，创建任务执行清单；只生成计划，不自动开始执行。
 ```
 
-检查：初始任务目录只有 `task-plan.json` 和可读 checklist，项目另有 index；状态为 `plan_ready`。Team Plan、launch prompt、progress、evidence 和 session 都尚未生成。
+检查：一次 helper 创建完整八文件 bundle 和项目 index，状态为 `plan_ready`；Team 为 pending、progress 为零事件、Evidence 明示没有执行证据，Session 尚未生成。文件存在不代表执行开始。
 
 启动独立执行对话：
 
@@ -67,6 +67,18 @@
 检查：同一 `codebase-researcher` Profile 的三个实例不因 Profile 名相同而合并。
 
 ## 直接闭环
+
+```text
+使用 $agency-chief-of-staff。先检查当前实现，再把问题修好并完成验证；中途告诉我实质进展，就在当前对话做完。
+```
+
+检查：分析后继续完成实现和验证；“先检查”不被当成只讨论，“进度”不触发新 Task/Thread；不要求用户再次批准收口。算法与多文件兼容行为由 `outcome-algorithm-mean-bugfix`、`outcome-compat-retry-plan` 的独立执行 oracle 验收，不能只输出正确措辞或修改自测来通过。
+
+```text
+按已经保存的 task plan，在这个对话直接执行到完成；不另开任务。
+```
+
+检查：无 Native Session 时使用 `agency_task.py start`，不查模型或造 Native 回执；已准备 Session 时按真实已有状态恢复。失败验证阻止完成，修复后使用当前工作证据收口。
 
 ```text
 使用 $agency-chief-of-staff。只读 README，告诉我仓库名称，不要修改文件。

@@ -146,6 +146,7 @@ def _record_archive_event(
         task_dir / "progress.jsonl",
         {
             "event_id": identifier,
+            "event_type": "task_archived",
             "task_id": plan["task_id"],
             "work_id": None,
             "timestamp": utc_now(),

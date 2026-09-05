@@ -7,6 +7,7 @@
   "required": ["event_id", "task_id", "work_id", "timestamp", "actor", "status_before", "status_after", "summary", "artifacts", "verification", "blockers"],
   "properties": {
     "event_id": {"type": "string", "minLength": 1},
+    "event_type": {"type": "string", "minLength": 1},
     "task_id": {"type": "string", "minLength": 1},
     "work_id": {"type": ["string", "null"]},
     "timestamp": {"type": "string", "format": "date-time"},
@@ -16,6 +17,18 @@
     "summary": {"type": "string", "minLength": 1},
     "artifacts": {"type": "array", "items": {"type": "string"}},
     "verification": {"type": "array", "items": {"type": "string"}},
-    "blockers": {"type": "array", "items": {"type": "string"}}
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "artifact_snapshots": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sha256", "bytes"],
+        "properties": {
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "bytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
   }
 }

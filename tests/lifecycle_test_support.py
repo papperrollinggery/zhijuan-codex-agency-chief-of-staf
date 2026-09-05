@@ -143,25 +143,27 @@ def completed_task(
     *,
     reviewer: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
+    from agency_task import transition_task
+    from complete_task import complete_task
+    from update_task_progress import update_progress
+
     _, task_dir = create_fixture_task(project, task_id)
-    plan = read_json(task_dir / "task-plan.json")
-    plan["status"] = "completed"
-    for item in plan["work_items"]:
-        item["status"] = "completed"
-        item["evidence_refs"] = ["artifact.txt", "test exit 0"]
-    plan["acceptance_evidence"] = {
-        criterion: ["test exit 0"] for criterion in plan["acceptance_criteria"]
-    }
-    atomic_write_json(task_dir / "task-plan.json", plan)
-    index_path = project / ".agency/task-index.json"
-    index = read_json(index_path)
-    index["tasks"][task_id]["status"] = "completed"
-    atomic_write_json(index_path, index)
+    transition_task(project, task_id, "execution_ready")
+    transition_task(project, task_id, "executing")
+    update_progress(
+        project, task_id=task_id, event_type="work_started", work_id="W-01",
+        actor="execution-root", summary="Inspect fixture output",
+    )
     positions = [{"profile": "execution-root"}]
     if reviewer:
         positions.append({"profile": "reviewer"})
     atomic_write_json(task_dir / "TEAM_PLAN.json", {"positions": positions})
     (project / "artifact.txt").write_text("verified\n", encoding="utf-8")
+    update_progress(
+        project, task_id=task_id, event_type="work_completed", work_id="W-01",
+        actor="execution-root", summary="Fixture verified",
+        artifacts=["artifact.txt"], verification=["test exit 0"],
+    )
     closure = {
         "schema_version": "1.0",
         "review": {
@@ -182,7 +184,14 @@ def completed_task(
         ],
         "artifacts": ["artifact.txt"],
     }
-    return task_dir, closure
+    plan = read_json(task_dir / "task-plan.json")
+    complete_task(
+        project, task_id=task_id, apply=True,
+        acceptance_evidence={criterion: ["test exit 0"] for criterion in plan["acceptance_criteria"]},
+        validation_results=closure["validation_results"], artifacts=closure["artifacts"],
+        review_evidence=closure["review"]["evidence_refs"],
+    )
+    return task_dir, read_json(task_dir / "closure.json")
 
 
 def knowledge_candidate(

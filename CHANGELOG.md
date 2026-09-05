@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v0.3.0-rc.7 - 2026-09-05 (host-scoped prerelease)
+
+- Route from the user's requested outcome and existing authorization. Complete analysis, implementation and verification together when requested; do not infer a new Task, archive, knowledge deposit or Goal from progress/team language or the default prompt.
+- Add an atomic, idempotent `agency_task.py start` for saved plans executed in the current conversation, without creating a Native Session or claiming model identity.
+- Schedule independent work using DAG reachability, preserve common-prerequisite parallelism, split interleaved responsibility instances, and keep unresolved Root dependencies pending. Assign explicit Review work to its Reviewer while keeping release execution with the Root.
+- Persist progress event types and verified artifact byte snapshots. Require verification to complete work, recover failed attempts without reusing their evidence, and bind completion/archive to recorded work evidence and unchanged files. Checks establish evidence consistency, not the truth of prose or domain quality.
+- Add fixed behavioral model-eval oracles for an arithmetic bug and a multi-module compatibility feature. They execute the final implementation and reject plan-only, keyword-only and early-success-exit substitutes. Preserve existing installer and Native proof boundaries.
+
+This release targets current-host installation and execution paths. Full Native lifecycle, portable model-eval evidence, unattended operation and stable release eligibility remain separate claims; see the release notes for the checks actually completed.
+
 ## v0.3.0-rc.6 - 2026-09-05 (host-scoped prerelease)
 
 - Default new Execution Roots to GPT-6 Astra / max while preserving explicit supported model/effort choices and legacy GPT-5.6 Sol / ultra requests.

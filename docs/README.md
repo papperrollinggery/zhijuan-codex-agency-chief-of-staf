@@ -4,7 +4,7 @@
 >
 > As of: 2026-09-05
 >
-> Reviewed release target: `v0.3.0-rc.6`; publication requires tag, Release, and API readback
+> Reviewed release target: `v0.3.0-rc.7`; publication requires tag, Release, and API readback
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 
@@ -19,6 +19,7 @@
 - [Repository discovery and release metadata](REPOSITORY_DISCOVERY.md)
 - [Canonical Skill instructions](../SKILL.md)
 - [Content-first runtime design](CONTENT_FIRST_DESIGN.md)
+- [2026-09-05 深度优化与验证](OPTIMIZATION_REVIEW_2026-09-05.md)
 - [Real-world prompts](../examples/real-world-prompts.md)
 - [Changelog](../CHANGELOG.md)
 - [Contributing](../CONTRIBUTING.md)

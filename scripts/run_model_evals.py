@@ -25,6 +25,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shlex
 import stat
 import subprocess
@@ -183,6 +184,7 @@ if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
 from agency_task import atomic_write_json, create_task, transition_task
+from complete_task import complete_task
 from install_skill import (
     LEGACY_SKILL_NAME,
     RUNTIME_FILES,
@@ -203,6 +205,7 @@ from run_profile_compat import (
     run_hardened_git,
     stop_process_group,
 )
+from update_task_progress import update_progress
 from validate_package import (
     REQUIRED_VISUAL_SURFACES,
     REVIEW_OUTCOME_RE,
@@ -288,16 +291,44 @@ ALLOWED_TEAM_EXPECTATIONS = {
     "root_owned",
 }
 ALLOWED_FIXTURE_SETUP_KINDS = {
+    "algorithm_bug",
+    "compat_feature",
     "plan_ready",
     "executing",
     "completed_archive",
     "small_bug",
+}
+OUTCOME_ORACLE_COVERAGE = {
+    "algorithm-mean-fraction": (
+        "Executes the fixture mean() implementation on fractional, signed, and empty inputs; "
+        "it does not assess algorithmic performance or broader numerical APIs."
+    ),
+    "compat-retry-plan-v1-v2": (
+        "Executes the public retry-plan path for v1 and v2 payloads plus malformed inputs; "
+        "it does not cover external configuration formats or persistence."
+    ),
 }
 EVALUATOR_DEPENDENCIES = (
     "scripts/install_skill.py",
     "scripts/validate_package.py",
 )
 REQUIRED_SMOKE_CONTRACT = {
+    "outcome-algorithm-mean-bugfix": {
+        "should_trigger": True,
+        "mode": "direct",
+        "collaboration": "none",
+        "activation": "explicit",
+        "sandbox": "workspace-write",
+        "outcome_oracle": "algorithm-mean-fraction",
+    },
+    "outcome-compat-retry-plan": {
+        "should_trigger": True,
+        "mode": "direct",
+        "collaboration": "none",
+        "activation": "explicit",
+        "sandbox": "workspace-write",
+        "outcome_oracle": "compat-retry-plan-v1-v2",
+    },
     "explicit-small-direct": {
         "should_trigger": True,
         "mode": "direct",
@@ -572,6 +603,44 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
         return
     kind = setup["kind"]
     task_id = setup["task_id"]
+    if kind == "algorithm_bug":
+        (fixture / "math_utils.py").write_text(
+            "def mean(values):\n"
+            "    \"\"\"Return the arithmetic mean of non-empty numeric values.\"\"\"\n"
+            "    return sum(values) // len(values)\n",
+            encoding="utf-8",
+        )
+        (fixture / "test_math_utils.py").write_text(
+            "import unittest\n\n"
+            "from math_utils import mean\n\n"
+            "class MeanTest(unittest.TestCase):\n"
+            "    def test_fraction_is_preserved(self):\n"
+            "        self.assertEqual(mean([2, 3]), 2.5)\n",
+            encoding="utf-8",
+        )
+        return
+    if kind == "compat_feature":
+        (fixture / "compat.py").write_text(
+            "def upgrade_legacy(raw):\n"
+            "    raise ValueError('legacy retry payloads are unsupported')\n",
+            encoding="utf-8",
+        )
+        (fixture / "settings.py").write_text(
+            "from compat import upgrade_legacy\n\n"
+            "def normalize(raw):\n"
+            "    if raw.get('schema_version') == 2:\n"
+            "        return {'retries': raw['retries'], 'strategy': raw['strategy']}\n"
+            "    return upgrade_legacy(raw)\n",
+            encoding="utf-8",
+        )
+        (fixture / "app.py").write_text(
+            "from settings import normalize\n\n"
+            "def render_plan(raw):\n"
+            "    item = normalize(raw)\n"
+            "    return f\"{item['strategy']}:{item['retries'] + 1}\"\n",
+            encoding="utf-8",
+        )
+        return
     if kind == "small_bug":
         (fixture / "utils.py").write_text('LABEL = "teh"\n', encoding="utf-8")
         (fixture / "test_utils.py").write_text(
@@ -630,7 +699,7 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
     }
     created = create_task(fixture, plan)
     task_dir = Path(created["task_dir"])
-    if kind == "executing":
+    if kind in {"executing", "completed_archive"}:
         transition_task(fixture, task_id, "execution_ready")
         transition_task(fixture, task_id, "executing")
         atomic_write_json(
@@ -665,24 +734,18 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
                 },
             },
         )
-        return
+        if kind == "executing":
+            return
     if kind != "completed_archive":
         return
-    completed = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
-    completed["status"] = "completed"
-    completed["work_items"][0]["status"] = "completed"
-    completed["work_items"][0]["evidence_refs"] = ["README.md"]
-    completed["acceptance_evidence"] = {
-        completed["acceptance_criteria"][0]: ["README.md readback"]
-    }
-    atomic_write_json(task_dir / "task-plan.json", completed)
-    index_path = fixture / ".agency" / "task-index.json"
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    now = datetime.now(timezone.utc).isoformat()
-    index["tasks"][task_id]["status"] = "completed"
-    index["tasks"][task_id]["updated_at"] = now
-    index["updated_at"] = now
-    atomic_write_json(index_path, index)
+    update_progress(
+        fixture,
+        task_id=task_id,
+        event_type="work_started",
+        work_id="W-01",
+        actor="execution-root",
+        summary="Read fixture evidence",
+    )
     atomic_write_json(
         task_dir / "TEAM_PLAN.json",
         {
@@ -695,24 +758,35 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
             ],
         },
     )
-    closure = {
-        "schema_version": "1.0",
-        "review": {"status": "handled", "evidence_refs": ["review PASS"]},
-        "execution_cleanup": {
-            "status": "not_applicable",
-            "evidence_refs": [],
-            "blocker": None,
+    verification = ["README.md readback"]
+    update_progress(
+        fixture,
+        task_id=task_id,
+        event_type="work_completed",
+        work_id="W-01",
+        actor="execution-root",
+        summary="Fixture evidence verified",
+        artifacts=["README.md"],
+        verification=verification,
+    )
+    plan = json.loads((task_dir / "task-plan.json").read_text(encoding="utf-8"))
+    complete_task(
+        fixture,
+        task_id=task_id,
+        apply=True,
+        acceptance_evidence={
+            criterion: verification for criterion in plan["acceptance_criteria"]
         },
-        "validation_results": [
+        validation_results=[
             {
                 "status": "passed",
                 "summary": "README readback passed",
-                "evidence_refs": ["README.md readback"],
+                "evidence_refs": verification,
             }
         ],
-        "artifacts": ["README.md"],
-    }
-    atomic_write_json(task_dir / "closure.json", closure)
+        artifacts=["README.md"],
+        review_evidence=["review PASS"],
+    )
     candidates = [
         {
             "knowledge_id": "knowledge-lifecycle-smoke-001",
@@ -731,6 +805,109 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
     testing_doc = fixture / "docs" / "testing" / "lifecycle.md"
     testing_doc.parent.mkdir(parents=True)
     testing_doc.write_text("# Lifecycle Testing\n", encoding="utf-8")
+
+
+def run_outcome_oracle(fixture: Path, oracle_id: str) -> dict[str, object]:
+    """Run a fixed, credential-free behavioral oracle owned by this runner.
+
+    Cases may select only a named oracle.  They cannot supply commands or code,
+    so the evaluated model cannot redefine its own completion criterion.
+    """
+    if not isinstance(oracle_id, str):
+        raise RuntimeError("outcome oracle id must be a string")
+    coverage = OUTCOME_ORACLE_COVERAGE.get(oracle_id)
+    if coverage is None:
+        raise RuntimeError(f"unsupported outcome oracle: {oracle_id}")
+
+    def bounded_failure(prefix: str, detail: object) -> str:
+        return (prefix + str(detail).strip())[:1200]
+
+    scripts = {
+        "algorithm-mean-fraction": """
+import math_utils
+
+if math_utils.mean([2, 3]) != 2.5:
+    raise AssertionError('mean([2, 3]) must preserve the fraction 2.5')
+if math_utils.mean([-1, 2]) != 0.5:
+    raise AssertionError('mean([-1, 2]) must preserve the fraction 0.5')
+try:
+    math_utils.mean([])
+except ValueError:
+    pass
+else:
+    raise AssertionError('mean([]) must raise ValueError')
+""",
+        "compat-retry-plan-v1-v2": """
+from app import render_plan
+
+if render_plan({'schema_version': 2, 'retries': 3, 'strategy': 'aggressive'}) != 'aggressive:4':
+    raise AssertionError('v2 payload did not produce aggressive:4')
+if render_plan({'schema_version': 1, 'max_retries': '2'}) != 'standard:3':
+    raise AssertionError('legacy payload did not produce standard:3')
+for malformed in ({'schema_version': 1, 'max_retries': '-1'}, {'schema_version': 1, 'max_retries': 'two'}):
+    try:
+        render_plan(malformed)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError('malformed legacy payload must raise ValueError')
+""",
+    }
+    terminal = f"ORACLE_TERMINAL:{secrets.token_hex(16)}"
+    checker = (
+        "import sys\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        + scripts[oracle_id]
+        + f"\nprint({terminal!r})\n"
+    )
+    environment = {
+        "PATH": EVAL_TOOL_PATH,
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", "-c", checker, str(fixture)],
+            cwd=fixture,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        detail = (exc.stderr or exc.stdout or "oracle timed out")
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        return {
+            "oracle_id": oracle_id,
+            "outcome_passed": False,
+            "failures": [bounded_failure("oracle timed out: ", detail)],
+            "coverage_boundary": coverage,
+        }
+    except OSError as exc:
+        return {
+            "oracle_id": oracle_id,
+            "outcome_passed": False,
+            "failures": [bounded_failure("oracle could not start: ", exc)],
+            "coverage_boundary": coverage,
+        }
+    stdout = completed.stdout.strip()
+    stderr = completed.stderr.strip()
+    outcome_passed = completed.returncode == 0 and stdout == terminal and not stderr
+    detail = (stderr or stdout)[:1200]
+    if completed.returncode == 0 and stdout != terminal:
+        detail = f"missing unique oracle terminal proof: {detail}"[:1200]
+    return {
+        "oracle_id": oracle_id,
+        "outcome_passed": outcome_passed,
+        "failures": []
+        if outcome_passed
+        else [bounded_failure("", detail or f"oracle exited {completed.returncode}")],
+        "coverage_boundary": coverage,
+    }
 
 
 def source_git_state(root: Path) -> dict[str, object]:
@@ -1535,6 +1712,14 @@ def validate_runtime_case(case: object) -> dict[str, Any]:
             r"[a-z0-9][a-z0-9._-]{2,95}", setup["task_id"]
         ) is None:
             raise RuntimeError(f"case {case_id} fixture_setup task_id is unsafe")
+    oracle_id = case.get("outcome_oracle")
+    if oracle_id is not None:
+        if not isinstance(oracle_id, str) or oracle_id not in OUTCOME_ORACLE_COVERAGE:
+            raise RuntimeError(f"case {case_id} outcome_oracle is unsupported")
+        if case.get("sandbox", "read-only") != "workspace-write" or not isinstance(setup, dict):
+            raise RuntimeError(
+                f"case {case_id} outcome_oracle needs a workspace-write fixture"
+            )
     prefixes = case.get("allowed_changed_prefixes", [])
     if not isinstance(prefixes, list) or any(
         not isinstance(prefix, str) or prefix not in {".agency/", "docs/"}
@@ -3205,6 +3390,23 @@ def run_case(
         path.startswith("docs/") for path in observed_artifact_paths
     ):
         failures.append("knowledge-required case did not prove a docs patch")
+    outcome: dict[str, object] | None = None
+    oracle_id = case.get("outcome_oracle")
+    if isinstance(oracle_id, str):
+        try:
+            outcome = run_outcome_oracle(fixture, oracle_id)
+        except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
+            outcome = {
+                "oracle_id": oracle_id,
+                "outcome_passed": False,
+                "failures": [f"oracle could not run: {exc}"],
+                "coverage_boundary": OUTCOME_ORACLE_COVERAGE.get(oracle_id, "unknown"),
+            }
+        if outcome["outcome_passed"] is not True:
+            details = outcome.get("failures", [])
+            failures.append(
+                f"outcome oracle {oracle_id} failed: " + "; ".join(map(str, details))
+            )
 
     completed_reviews = parsed["reviews_completed"]
     assert isinstance(completed_reviews, dict)
@@ -3334,6 +3536,11 @@ def run_case(
         "expected_artifact_sha256": sha256_bytes(artifact_text.encode())
         if expected_relative is not None and artifact_text
         else None,
+        "outcome_oracle": outcome,
+        "outcome_passed": None if outcome is None else outcome["outcome_passed"],
+        "outcome_coverage_boundary": None
+        if outcome is None
+        else outcome["coverage_boundary"],
         "artifact_dir": str(case_dir),
     }
 

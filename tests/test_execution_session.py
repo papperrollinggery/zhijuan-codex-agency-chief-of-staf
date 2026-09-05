@@ -406,12 +406,14 @@ class ExecutionSessionTests(unittest.TestCase):
                 self.assertFalse(launch_worker.is_alive())
                 self.assertFalse(progress_worker.is_alive())
 
-            self.assertEqual(failures, [])
+            self.assertEqual(len(failures), 1)
+            self.assertIsInstance(failures[0], ValueError)
+            self.assertIn("executing task state", str(failures[0]))
             plan = read_json(task_dir / "task-plan.json")
             self.assertEqual(plan["status"], "execution_ready")
-            self.assertEqual(plan["work_items"][0]["status"], "in_progress")
+            self.assertEqual(plan["work_items"][0]["status"], "pending")
             progress_text = (task_dir / "progress.jsonl").read_text(encoding="utf-8")
-            self.assertIn("Implementation started after launch handoff", progress_text)
+            self.assertNotIn("Implementation started after launch handoff", progress_text)
 
     def test_launch_session_write_failure_restores_every_managed_file(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

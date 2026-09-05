@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import stat
 import tempfile
 from pathlib import Path
@@ -47,7 +48,116 @@ def safe_artifact(project: Path, raw: str) -> Path:
     resolved = current.resolve(strict=True)
     if not resolved.is_relative_to(root):
         raise ValueError(f"archive artifact escapes project: {raw}")
+    if not stat.S_ISREG(resolved.stat().st_mode):
+        raise ValueError(f"archive artifact must be a regular file: {raw}")
     return resolved
+
+
+def snapshot_artifact(project: Path, raw: str) -> dict[str, Any]:
+    """Bind a regular artifact's bytes without loading large media into memory."""
+    path = safe_artifact(project, raw)
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError(f"artifact must be a regular file: {raw}")
+        digest = hashlib.sha256()
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        after = os.fstat(descriptor)
+        current = path.lstat()
+        identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if identity(before) != identity(after) or identity(after) != identity(current):
+            raise ValueError(f"artifact changed while reading: {raw}")
+        return {"sha256": digest.hexdigest(), "bytes": after.st_size}
+    finally:
+        os.close(descriptor)
+
+
+def _progress_kind(event: dict[str, Any]) -> str | None:
+    """Read legacy logs conservatively; new writers persist the event type."""
+    if "event_type" in event:
+        return event["event_type"]
+    before, after = event.get("status_before"), event.get("status_after")
+    if event.get("blockers"):
+        return "verification_failed"
+    if before == "in_progress" and after == "completed":
+        return "work_completed"
+    if before in {"pending", "blocked"} and after == "in_progress":
+        return "work_started"
+    if before == after and event.get("verification"):
+        return "verification_completed"
+    return None
+
+
+def validate_completion_evidence(
+    project: Path,
+    task_dir: Path,
+    plan: dict[str, Any],
+    closure: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Check recorded execution and current bytes, not the truth of prose claims.
+
+    Verification references are Root-recorded observations. Matching them cannot
+    prove a command ran or judge domain quality; model evals and review do that.
+    """
+    from update_task_progress import load_events
+
+    events = load_events(task_dir / "progress.jsonl")
+    known_refs: set[str] = set()
+    verified_refs: set[str] = set()
+    snapshots: dict[str, dict[str, Any]] = {}
+    accepted_event_ids: set[str] = set()
+    for item in plan["work_items"]:
+        if item["status"] != "completed":
+            continue
+        successful: list[dict[str, Any]] = []
+        completed = False
+        for event in events:
+            if event.get("work_id") != item["work_id"]:
+                continue
+            if event.get("task_id") != plan["task_id"]:
+                raise ValueError("work completion evidence belongs to a different task")
+            kind = _progress_kind(event)
+            if kind in {"work_started", "verification_failed", "blocker_found"}:
+                successful = []
+                completed = False
+            elif kind in {"work_completed", "verification_completed"} and event.get("verification"):
+                successful.append(event)
+                completed = completed or kind == "work_completed"
+        if not completed:
+            raise ValueError(f"missing current work completion evidence: {item['work_id']}")
+        for event in successful:
+            accepted_event_ids.add(event["event_id"])
+            verified_refs.update(_string_list(event.get("verification"), "recorded verification"))
+            known_refs.update(_string_list(event.get("artifacts"), "recorded artifacts"))
+    # Preserve global chronology when different work items verify the same file.
+    for event in events:
+        if event.get("event_id") in accepted_event_ids:
+            snapshot_map = event.get("artifact_snapshots", {})
+            if not isinstance(snapshot_map, dict):
+                raise ValueError("recorded artifact verification must be an object")
+            snapshots.update(snapshot_map)
+    known_refs.update(verified_refs)
+    for result in closure["validation_results"]:
+        if not set(result["evidence_refs"]).issubset(verified_refs):
+            raise ValueError("completion validation must reference recorded verification")
+    for refs in plan.get("acceptance_evidence", {}).values():
+        if not set(refs).issubset(known_refs):
+            raise ValueError("acceptance must reference recorded work evidence")
+    current_snapshots = {}
+    for raw in closure["artifacts"]:
+        current = snapshot_artifact(project, raw)
+        if raw not in snapshots:
+            raise ValueError(f"missing current artifact verification: {raw}; record a verification_completed event")
+        if snapshots[raw] != current:
+            raise ValueError(f"artifact changed since verification: {raw}")
+        current_snapshots[raw] = current
+    bound = closure.get("artifact_snapshots")
+    if bound is not None and bound != current_snapshots:
+        raise ValueError("artifact changed since task completion")
+    return current_snapshots
 
 
 def _safe_archive_entry(root: Path, relative: Path) -> Path:
@@ -206,6 +316,10 @@ def validate_archive_readiness(
             if cleanup["status"] == "closed" and not cleanup["evidence_refs"]:
                 raise ValueError("closed native task/thread requires cleanup readback evidence")
     resolved_artifacts = [safe_artifact(root, raw) for raw in normalized_closure["artifacts"]]
+    if disposition == "completed":
+        normalized_closure["artifact_snapshots"] = validate_completion_evidence(
+            root, task_dir, plan, normalized_closure
+        )
     return {
         "status": "ready",
         "task_id": plan["task_id"],
@@ -217,6 +331,7 @@ def validate_archive_readiness(
         "cleanup_status": normalized_closure["execution_cleanup"]["status"],
         "artifact_paths": [str(path.relative_to(root)) for path in resolved_artifacts],
         "validation_count": len(normalized_closure["validation_results"]),
+        "evidence_scope": "recorded-verification-and-current-artifact-bytes" if disposition == "completed" else "disposition-only",
         "closure": normalized_closure,
     }
 

@@ -16,19 +16,20 @@
     "execution_launch": [
       "开一个新对话执行",
       "单独创建任务执行",
-      "创建新对话",
-      "安排团队来做",
-      "安排几个专业角色",
-      "持续更新进度"
+      "创建新对话"
     ],
     "archive": [
       "归档任务",
       "归档任务执行清单",
-      "沉淀长期资产",
-      "总结到已有文档",
-      "写入已有文档",
-      "把经验保留下来"
+      "归档已完成项目"
     ]
+  },
+  "routing_rules": {
+    "examples_are_not_keyword_triggers": true,
+    "combined_analysis_and_execution": "Continue through implementation and verification when requested; stop after planning only when explicitly limited.",
+    "team_request": "Use scoped subagents only when useful; creating a new user-owned task needs an explicit request.",
+    "progress_request": "Read or update existing progress without launching a task; a status question during execution does not cancel the work.",
+    "knowledge_request": "Save only the requested knowledge; archiving a task requires its own authorization."
   },
   "exclusions": [
     "单次小问题",

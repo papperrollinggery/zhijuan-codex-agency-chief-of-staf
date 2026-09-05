@@ -1,6 +1,6 @@
 # Repository discovery and release metadata
 
-> Status: release metadata target for the authorized `v0.3.0-rc.6` public update
+> Status: release metadata target for the authorized `v0.3.0-rc.7` public update
 >
 > Pre-publish release/tag and About metadata readback: 2026-09-05; post-write readback required
 >
@@ -10,7 +10,7 @@
 
 ## Current public state
 
-At the 2026-09-05 pre-publish readback, `v0.1.7` remained the latest stable tag and `v0.3.0-rc.5` the latest prerelease tag; `v0.3.0-rc.6` is the release target represented by this commit. This update publishes source and release metadata without changing repository About settings or topics. The target remains host-scoped and does not claim stable, unattended, or cross-host behavior.
+At the 2026-09-05 pre-publish readback, `v0.1.7` remained the latest stable tag and `v0.3.0-rc.6` the latest prerelease tag; `v0.3.0-rc.7` is the release target represented by this commit. This update publishes source and release metadata without changing repository About settings or topics. The target remains host-scoped and does not claim stable, unattended, or cross-host behavior.
 
 GitHub documents topics as a discovery mechanism for finding repositories by purpose and subject. Topic names must use lowercase letters, numbers, and hyphens, be at most 50 characters, and a repository may have at most 20. Applying repository metadata is an external write and requires maintainer authorization and working GitHub authentication.
 

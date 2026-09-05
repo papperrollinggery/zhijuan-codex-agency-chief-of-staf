@@ -92,6 +92,11 @@ class TaskCompletionTests(unittest.TestCase):
             atomic_write_json(task_dir / "task-plan.json", plan)
             marker = project / "must-not-exist"
             evidence = f"artifact.txt readback::x'; touch {marker}; : '"
+            update_progress(
+                project, task_id=task_id, event_type="verification_completed",
+                work_id="W-01", actor="execution-root", summary="Read artifact",
+                artifacts=["artifact.txt"], verification=[evidence],
+            )
             result = subprocess.run(
                 [
                     sys.executable,
@@ -198,7 +203,7 @@ class TaskCompletionTests(unittest.TestCase):
                     "evidence_refs": ["different test exit 0"],
                 }
             ]
-            with self.assertRaisesRegex(ValueError, "closure does not match"):
+            with self.assertRaisesRegex(ValueError, "recorded verification|closure does not match"):
                 complete_task(project, task_id=task_id, apply=True, **changed)
 
     def test_completed_native_cleanup_blocker_can_resolve_to_closed(self) -> None:
@@ -258,7 +263,7 @@ class TaskCompletionTests(unittest.TestCase):
                     "evidence_refs": ["different test exit 0"],
                 }
             ]
-            with self.assertRaisesRegex(ValueError, "closure does not match"):
+            with self.assertRaisesRegex(ValueError, "recorded verification|closure does not match"):
                 complete_task(
                     project,
                     task_id=task_id,
