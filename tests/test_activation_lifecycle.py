@@ -15,43 +15,13 @@ import validate_package  # noqa: E402
 
 class ActivationLifecycleTests(unittest.TestCase):
     def test_canonical_description_covers_natural_lifecycle_intents(self) -> None:
-        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        description = validate_package.parse_frontmatter(ROOT / "SKILL.md")["description"]
         for phrase in (
-            "这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划",
-            "先讨论需求",
-            "先把需求聊清楚",
-            "根据以上讨论创建执行清单",
-            "整理成任务清单",
-            "开一个新对话执行",
-            "单独创建任务执行",
-            "安排团队来做",
-            "安排几个专业角色",
-            "持续更新进度",
-            "归档任务",
-            "沉淀长期资产",
-            "总结到已有文档",
+            "需求讨论", "执行清单", "独立任务", "模型路由", "进度", "验证", "归档",
+            "普通问答", "简单代码修改", "AGENCY_WORKER", "源码维护不触发",
         ):
-            self.assertIn(phrase, skill)
-        description = skill.splitlines()[2]
-        self.assertIn("choose only the value after =", description)
-        for phase, status in (
-            ("Discussion", "任务已接管｜需求讨论中"),
-            ("Plan", "任务已接管｜正在创建执行清单"),
-            ("Execution Launch", "任务已接管｜正在启动执行对话"),
-            ("Execution Session/Progress", "任务已接管｜团队执行中"),
-            ("Verify", "任务已接管｜正在验证"),
-            ("Archive", "任务已接管｜正在归档"),
-        ):
-            self.assertIn(f"{phase}={status}", description)
-        self.assertIn("notice only on line 2", description)
-        self.assertIn("choose only the value after =", description)
-        canonical_description = validate_package.parse_frontmatter(ROOT / "SKILL.md")[
-            "description"
-        ]
-        self.assertLessEqual(
-            len(canonical_description.strip()),
-            validate_package.MAX_SKILL_DESCRIPTION_CHARS,
-        )
+            self.assertIn(phrase, description)
+        self.assertLessEqual(len(description), 150)
 
     def test_host_metadata_describes_the_staged_lifecycle(self) -> None:
         metadata = (ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
@@ -81,26 +51,14 @@ class ActivationLifecycleTests(unittest.TestCase):
             "maintenance of the Agency Chief of Staff source repository",
         ):
             self.assertIn(exclusion, skill)
-            self.assertIn(exclusion, description)
-        self.assertIn("thread or release readiness without work intent", description)
-        for phase, status in (
-            ("Discussion", "任务已接管｜需求讨论中"),
-            ("Plan", "任务已接管｜正在创建执行清单"),
-            ("Execution Launch", "任务已接管｜正在启动执行对话"),
-            ("Execution Session/Progress", "任务已接管｜团队执行中"),
-            ("Verify", "任务已接管｜正在验证"),
-            ("Archive", "任务已接管｜正在归档"),
-        ):
-            self.assertIn(f"{phase}={status}", description)
-        self.assertIn("notice only on line 2", description)
+        for phase in ("discuss", "plan", "launch", "progress", "verify", "archive"):
+            self.assertIn(phase, description)
+        self.assertIn("small tasks and source maintenance", description)
         bridge_description = validate_package.parse_frontmatter(
             bridge_root / "SKILL.md", install_skill.DISCOVERY_SKILL_NAME
         )["description"]
-        self.assertLessEqual(
-            len(bridge_description.strip()),
-            validate_package.MAX_SKILL_DESCRIPTION_CHARS,
-        )
-        self.assertIn("no source-thread, history, memory, project, or Git lookup", description)
+        self.assertLessEqual(len(bridge_description), 150)
+        self.assertIn("Do not inspect a source task", skill)
         self.assertIn("before any other commentary", skill)
         self.assertIn("delegation envelope", skill)
         self.assertIn("Do not invoke this bridge again", skill)

@@ -31,7 +31,7 @@ class AgencyDoctorTests(unittest.TestCase):
                 "codex": "/usr/bin/codex",
                 "agents_namespace": {"status": "read", "value": "agents"},
                 "task_thread": {"status": "read-surface-available", "create_verified": False},
-                "model_catalog": {"status": "live-read", "requested_sol_matches": []},
+                "model_catalog": {"status": "live-read", "requested_model_matches": []},
                 "error": None,
             }
             with mock.patch.object(agency_doctor, "native_report", return_value=native):

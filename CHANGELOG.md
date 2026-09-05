@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v0.3.0-rc.6 - 2026-09-05 (host-scoped prerelease)
+
+- Default new Execution Roots to GPT-6 Astra / max while preserving explicit supported model/effort choices and legacy GPT-5.6 Sol / ultra requests.
+- Resolve exact IDs from the live host catalog, reject ambiguous, duplicated, hidden or unavailable models and unsupported effort, and carry the chosen request through the plan, launch packet, session and mechanical binding.
+- Keep Subagents tiered: Luna for bounded scans, Terra for ordinary implementation and validation, Astra for complex decisions and high-risk review. Role templates remain catalog-bound rather than pinned to the Root model.
+- Maintain compact canonical, legacy and discovery descriptions in source so the standard installer produces exact content/permission parity without local metadata overlays. Keep detailed lifecycle and exclusion rules in the Skill bodies.
+- Respect authorized user choices, avoid redundant confirmation, and scale delegation and verification to the work. Host-model availability and mechanical execution identity remain separate evidence.
+
+This prerelease does not claim stable, unattended, cross-host or natural-language activation guarantees. The dedicated-credential model-eval suite and complete installed Durable launch/title/bind flow remain separately unverified; release notes report only fresh checks and host-scoped smoke actually performed.
+
 ## v0.3.0-rc.5 - 2026-08-19 (host-scoped prerelease)
 
 - Give every prepared Execution Root a deterministic, compact `requested_thread_title` and require Native `create_thread` to pass it as the host title, followed by separate title readback. Naming remains UI metadata: a mismatch is reported as unverified and never invalidates a mechanically proven Task/model/CWD identity. Add a user-facing Direct/Focused/Durable/Assured scenario map that distinguishes automatic terminal-Subagent dispatch from explicitly requested user-owned Task/Thread creation.

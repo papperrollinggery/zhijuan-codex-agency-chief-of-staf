@@ -14,7 +14,7 @@ from unittest import mock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lifecycle_test_support import ROOT, create_fixture_task, live_catalog, read_json, work_item
+from lifecycle_test_support import ROOT, create_fixture_task, live_catalog, read_json, task_plan, work_item
 
 sys.path.insert(0, str(ROOT / "scripts"))
 import bind_execution_session as bind_execution_session_module  # noqa: E402
@@ -24,7 +24,7 @@ from bind_execution_session import (  # noqa: E402
     bind_execution_session,
     validate_bound_execution_session,
 )
-from agency_task import atomic_write_json, utc_now  # noqa: E402
+from agency_task import atomic_write_json, create_task, utc_now  # noqa: E402
 from prepare_execution_launch import (  # noqa: E402
     MAX_EXECUTION_THREAD_TITLE_LENGTH,
     execution_packet,
@@ -48,11 +48,12 @@ NATIVE_TASK_ID = "019f7a4e-f1be-7771-9f67-38fcde417f48"
 
 
 def trusted_readback(project: Path, task_id: str) -> dict[str, object]:
+    request = read_json(project / f".agency/tasks/active/{task_id}/task-plan.json")["execution_model_request"]
     return {
         "native_task_id": NATIVE_TASK_ID,
         "provider": "openai",
-        "actual_model_id": "gpt-5.6-sol",
-        "actual_reasoning_effort": "ultra",
+        "actual_model_id": request["resolved_model_id"] or "gpt-6-astra",
+        "actual_reasoning_effort": request["reasoning_request"],
         "cwd": str(project.resolve()),
         "isolated_worktree": False,
         "worktree_path": None,
@@ -73,7 +74,7 @@ def trusted_readback(project: Path, task_id: str) -> dict[str, object]:
         },
         "state_source": "appServer",
         "prompt_sha256": hashlib.sha256(
-            execution_packet(project.resolve(), task_id).encode("utf-8")
+            execution_packet(project.resolve(), task_id, request).encode("utf-8")
         ).hexdigest(),
         "rollout_sha256": "a" * 64,
         "model_turns_observed": 1,
@@ -103,6 +104,61 @@ def launch_managed_snapshot(project: Path, task_dir: Path) -> dict[str, bytes | 
 
 
 class ExecutionSessionTests(unittest.TestCase):
+    def test_explicit_choices_round_trip_plan_packet_session_and_binding(self) -> None:
+        for model_id, display, effort in (
+            ("gpt-6-astra", "GPT-6 Astra", "high"),
+            ("gpt-5.6-terra", "GPT-5.6 Terra", "medium"),
+            ("gpt-5.6-sol", "GPT-5.6 Sol", "ultra"),
+            ("gpt-5.6-luna", "gpt-5.6-luna", "low"),
+        ):
+            with self.subTest(model=model_id), tempfile.TemporaryDirectory() as raw:
+                project = Path(raw).resolve()
+                plan = task_plan(items=[work_item("W-01", work_type="research")])
+                request = plan["execution_model_request"]
+                request.update(display_request=display, reasoning_request=effort)
+                created = create_task(project, plan)
+                task_id, task_dir = created["task_id"], Path(created["task_dir"])
+                initial_prompt = (task_dir / "EXECUTION_LAUNCH_PROMPT.md").read_text()
+                self.assertIn(display, initial_prompt)
+                self.assertIn(effort, initial_prompt)
+                catalog = live_catalog()
+                catalog["models"] = [{"id": model_id, "display_name": display, "provider": "openai", "supported_reasoning": [effort]}]
+                result = prepare_execution_launch(project, task_id=task_id, catalog=catalog, catalog_mechanically_verified=True)
+                self.assertEqual(result["status"], "manual_launch_ready")
+                parsed = parse_execution_session_packet((task_dir / "EXECUTION_LAUNCH_PROMPT.md").read_text().rstrip("\n"))
+                self.assertEqual((parsed["执行模型请求"], parsed["推理强度请求"]), (display, effort))
+                with mock.patch.object(bind_execution_session_module, "_mechanical_readback", return_value=trusted_readback(project, task_id)):
+                    bind_execution_session(project, task_id=task_id, native_task_id=NATIVE_TASK_ID, apply=True)
+                session = read_json(task_dir / "execution-session.json")
+                bound_plan = read_json(task_dir / "task-plan.json")
+                validate_bound_execution_session(session, bound_plan, project)
+                self.assertEqual(session["native_readback"]["actual_model_id"], model_id)
+                self.assertEqual(session["reasoning_request"], effort)
+                if jsonschema:
+                    jsonschema.validate(bound_plan, read_json(ROOT / "assets/task-execution-plan.schema.json"))
+                    jsonschema.validate(session, read_json(ROOT / "assets/execution-session.schema.json"))
+                for key, value in (("display_request", "Another Model"), ("reasoning_request", "xhigh")):
+                    mutated = copy.deepcopy(bound_plan)
+                    mutated["execution_model_request"][key] = value
+                    with self.assertRaisesRegex(ValueError, "inconsistent"):
+                        validate_bound_execution_session(session, mutated, project)
+
+    def test_changed_request_cannot_bind_stale_ready_session(self) -> None:
+        for key, value in (("display_request", "GPT-5.6 Sol"), ("reasoning_request", "high"), ("resolved_model_id", "another-model")):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as raw:
+                project = Path(raw).resolve()
+                task_id, task_dir = create_fixture_task(project, items=[work_item("W-01", work_type="research")])
+                prepare_execution_launch(project, task_id=task_id, catalog=live_catalog(), catalog_mechanically_verified=True)
+                plan = read_json(task_dir / "task-plan.json")
+                plan["execution_model_request"][key] = value
+                atomic_write_json(task_dir / "task-plan.json", plan)
+                before = launch_managed_snapshot(project, task_dir)
+                with mock.patch.object(bind_execution_session_module, "_mechanical_readback") as reader:
+                    with self.assertRaisesRegex(ValueError, "no longer matches"):
+                        bind_execution_session(project, task_id=task_id, native_task_id=NATIVE_TASK_ID, apply=True)
+                reader.assert_not_called()
+                self.assertEqual(before, launch_managed_snapshot(project, task_dir))
+
     def test_execution_packet_is_distinct_and_strict(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             project = Path(raw)
@@ -115,8 +171,8 @@ class ExecutionSessionTests(unittest.TestCase):
                     "执行 Skill：$agency-chief-of-staff",
                 ],
             )
-            self.assertEqual(parsed["执行模型请求"], "GPT-5.6 Sol")
-            self.assertEqual(parsed["推理强度请求"], "ultra")
+            self.assertEqual(parsed["执行模型请求"], "GPT-6 Astra")
+            self.assertEqual(parsed["推理强度请求"], "max")
             self.assertEqual(parsed["编排深度"], "0")
             self.assertEqual(parsed["执行 Skill"], "$agency-chief-of-staff")
             self.assertNotIn("AGENCY_WORKER: true", packet)
@@ -530,8 +586,8 @@ class ExecutionSessionTests(unittest.TestCase):
             readback = {
                 "native_task_id": "019f7a4e-f1be-7771-9f67-38fcde417f48",
                 "provider": "openai",
-                "actual_model_id": "gpt-5.6-sol",
-                "actual_reasoning_effort": "ultra",
+                "actual_model_id": "gpt-6-astra",
+                "actual_reasoning_effort": "max",
                 "cwd": str(worktree),
                 "worktree_path": str(worktree),
                 "isolated_worktree": True,
@@ -575,7 +631,7 @@ class ExecutionSessionTests(unittest.TestCase):
                 items=[work_item("W-01", work_type="research", read_scope=["src/"])],
             )
             plan = read_json(task_dir / "task-plan.json")
-            plan["execution_model_request"]["resolved_model_id"] = "gpt-5.6-sol"
+            plan["execution_model_request"]["resolved_model_id"] = "gpt-6-astra"
             plan["execution_model_request"]["resolution_status"] = "resolved"
             plan["status"] = "executing"
             forged = {
@@ -586,9 +642,9 @@ class ExecutionSessionTests(unittest.TestCase):
                 "task_plan": f".agency/tasks/active/{task_id}/task-plan.json",
                 "team_plan": f".agency/tasks/active/{task_id}/TEAM_PLAN.json",
                 "progress_file": f".agency/tasks/active/{task_id}/PROGRESS.md",
-                "display_model_request": "GPT-5.6 Sol",
-                "reasoning_request": "ultra",
-                "resolved_model_id": "gpt-5.6-sol",
+                "display_model_request": "GPT-6 Astra",
+                "reasoning_request": "max",
+                "resolved_model_id": "gpt-6-astra",
                 "model_resolution_status": "resolved",
                 "launch_policy": "prefer_native",
                 "session_status": "executing",
@@ -789,7 +845,7 @@ class ExecutionSessionTests(unittest.TestCase):
                 items=[work_item("W-01", work_type="research", read_scope=["src/"])],
             )
             plan = read_json(task_dir / "task-plan.json")
-            plan["execution_model_request"]["resolved_model_id"] = "gpt-5.6-sol"
+            plan["execution_model_request"]["resolved_model_id"] = "gpt-6-astra"
             plan["execution_model_request"]["resolution_status"] = "resolved"
             packet = execution_packet(project, task_id)
             source_thread_id = "019f7a4e-f1be-7771-9f67-38fcde417f49"
@@ -817,8 +873,8 @@ class ExecutionSessionTests(unittest.TestCase):
                                 "type": "turn_context",
                                 "payload": {
                                     "turn_id": "turn-1",
-                                    "model": "gpt-5.6-sol",
-                                    "effort": "ultra",
+                                    "model": "gpt-6-astra",
+                                    "effort": "max",
                                 },
                             }
                         ),
@@ -845,8 +901,8 @@ class ExecutionSessionTests(unittest.TestCase):
                     str(rollout),
                     "appServer",
                     "openai",
-                    "gpt-5.6-sol",
-                    "ultra",
+                    "gpt-6-astra",
+                    "max",
                     str(project),
                     0,
                     transported_packet,
@@ -860,8 +916,8 @@ class ExecutionSessionTests(unittest.TestCase):
                 str(rollout),
                 "appServer",
                 "openai",
-                "gpt-5.6-sol",
-                "ultra",
+                "gpt-6-astra",
+                "max",
                 str(project),
                 0,
                 "source task",
@@ -923,14 +979,14 @@ class ExecutionSessionTests(unittest.TestCase):
 
             session = {
                 "created_at": "2026-07-21T00:00:00Z",
-                "resolved_model_id": "gpt-5.6-sol",
-                "reasoning_request": "ultra",
+                "resolved_model_id": "gpt-6-astra",
+                "reasoning_request": "max",
             }
             model = {
-                "model": "gpt-5.6-sol",
+                "model": "gpt-6-astra",
                 "modelProvider": "openai",
                 "available": True,
-                "supportedReasoningEfforts": [{"reasoningEffort": "ultra"}],
+                "supportedReasoningEfforts": [{"reasoningEffort": "max"}],
             }
             fake_app = FakeApp()
             with mock.patch.object(
@@ -1072,8 +1128,8 @@ class ExecutionSessionTests(unittest.TestCase):
                     )
             database.close()
             self.assertEqual(observed["native_task_id"], NATIVE_TASK_ID)
-            self.assertEqual(observed["actual_model_id"], "gpt-5.6-sol")
-            self.assertEqual(observed["actual_reasoning_effort"], "ultra")
+            self.assertEqual(observed["actual_model_id"], "gpt-6-astra")
+            self.assertEqual(observed["actual_reasoning_effort"], "max")
             self.assertEqual(observed["status"], "active-unarchived")
             self.assertEqual(observed["model_turns_observed"], 1)
             self.assertEqual(observed["prompt_transport"], "codex_delegation")
@@ -1094,7 +1150,7 @@ class ExecutionSessionTests(unittest.TestCase):
                     "native_task_id": "019f7a4e-f1be-7771-9f67-38fcde417f48",
                     "provider": "openai",
                     "actual_model_id": "different-model",
-                    "actual_reasoning_effort": "ultra",
+                    "actual_reasoning_effort": "max",
                     "cwd": str(project),
                     "worktree_path": str(project),
                     "isolated_worktree": True,

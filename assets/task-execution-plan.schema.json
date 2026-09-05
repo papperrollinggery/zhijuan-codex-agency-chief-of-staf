@@ -39,8 +39,8 @@
       "additionalProperties": false,
       "required": ["display_request", "reasoning_request", "resolved_model_id", "resolution_status"],
       "properties": {
-        "display_request": {"const": "GPT-5.6 Sol"},
-        "reasoning_request": {"const": "ultra"},
+        "display_request": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9 ._/-]{0,126}[A-Za-z0-9._/-])?$"},
+        "reasoning_request": {"enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]},
         "resolved_model_id": {"type": ["string", "null"]},
         "resolution_status": {
           "enum": ["pending", "resolved", "user_choice_required", "unavailable", "readback_mismatch"]

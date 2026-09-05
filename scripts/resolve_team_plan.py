@@ -636,8 +636,8 @@ def _self_test_plan(work_items: list[dict[str, Any]], title: str = "Team planner
         "acceptance_criteria": ["Team is bounded"],
         "out_of_scope": [],
         "execution_model_request": {
-            "display_request": "GPT-5.6 Sol",
-            "reasoning_request": "ultra",
+            "display_request": "GPT-6 Astra",
+            "reasoning_request": "max",
             "resolved_model_id": None,
             "resolution_status": "pending",
         },

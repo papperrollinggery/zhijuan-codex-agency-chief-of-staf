@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 
+from agency_task import validate_execution_model_selection
 
 CONTRACT_PATH = Path(__file__).resolve().parents[1] / "assets" / "WORKER_PROTOCOL_CONTRACT.json"
 _CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
@@ -175,10 +176,7 @@ def parse_execution_session_packet(text: str) -> dict[str, str]:
             raise ValueError(
                 f"execution session {label} is not bound to task {task_id}"
             )
-    if result["执行模型请求"] != "GPT-5.6 Sol":
-        raise ValueError("execution session model request must be GPT-5.6 Sol")
-    if result["推理强度请求"] != "ultra":
-        raise ValueError("execution session reasoning request must be ultra")
+    validate_execution_model_selection(result["执行模型请求"], result["推理强度请求"])
     if result["执行职责"] != EXECUTION_SESSION_DUTY:
         raise ValueError("execution session duty is not exact")
     if result["停止条件"] != EXECUTION_SESSION_STOP:

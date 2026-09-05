@@ -79,8 +79,8 @@
       "independent_required": true
     },
     "test-debugger": {
-      "default_model_class": "efficient",
-      "high_risk_model_class": "balanced",
+      "default_model_class": "balanced",
+      "high_risk_model_class": "judgment",
       "budget_priority": 60,
       "independent_required": false
     },

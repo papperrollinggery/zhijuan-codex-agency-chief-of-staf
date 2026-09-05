@@ -13,6 +13,7 @@ from agency_task import (
     active_task_dir,
     atomic_write_json,
     atomic_write_text,
+    default_execution_model_request,
     list_active_tasks,
     load_json,
     read_regular_text,
@@ -29,7 +30,7 @@ from protocol_contract import (
     EXECUTION_SESSION_STOP,
     parse_execution_session_packet,
 )
-from resolve_execution_model import live_catalog, resolve_execution_model
+from resolve_execution_model import live_catalog, resolve_execution_model, verify_spawn_model_readback
 from resolve_team_plan import resolve_team_plan, write_team_plan
 from update_task_progress import update_progress
 
@@ -67,8 +68,11 @@ def execution_thread_title(plan: dict[str, Any]) -> str:
     return prefix + title
 
 
-def execution_packet(project: Path, task_id: str) -> str:
+def execution_packet(
+    project: Path, task_id: str, model_request: dict[str, Any] | None = None
+) -> str:
     base = f".agency/tasks/active/{task_id}"
+    request = default_execution_model_request() if model_request is None else model_request
     text = "\n".join(
         [
             EXECUTION_SESSION_HEADER,
@@ -79,8 +83,8 @@ def execution_packet(project: Path, task_id: str) -> str:
             f"任务清单：{base}/task-plan.json",
             f"团队计划：{base}/TEAM_PLAN.json",
             f"进度文件：{base}/PROGRESS.md",
-            "执行模型请求：GPT-5.6 Sol",
-            "推理强度请求：ultra",
+            f"执行模型请求：{request['display_request']}",
+            f"推理强度请求：{request['reasoning_request']}",
             f"执行职责：{EXECUTION_SESSION_DUTY}",
             f"停止条件：{EXECUTION_SESSION_STOP}",
         ]
@@ -114,22 +118,7 @@ def inspect_native_environment_fields(
             "resolution_status": "readback_mismatch",
             "reason": f"native readback missing fields: {', '.join(missing)}",
         }
-    model_result = resolve_execution_model(
-        {
-            "source": "active-host-catalog",
-            "live_readback_verified": True,
-            "models": [
-                {
-                    "id": resolution["resolved_model_id"],
-                    "display_name": "GPT-5.6 Sol",
-                    "provider": resolution["provider"],
-                    "supported_reasoning": [resolution["resolved_reasoning"]],
-                }
-            ],
-        },
-        spawn_readback=readback,
-        catalog_mechanically_verified=True,
-    )
+    model_result = verify_spawn_model_readback(resolution, readback)
     if model_result.get("status") == "FAIL":
         return model_result
     native_task_id = readback.get("native_task_id")
@@ -214,20 +203,14 @@ def _prepare_execution_launch_locked(
     plan = validate_task_plan(
         load_json(task_dir / "task-plan.json"), expected_task_id=selected_task_id
     )
+    model_request = plan["execution_model_request"]
     resolution = resolve_execution_model(
         catalog,
+        model_request=model_request["display_request"],
+        reasoning_request=model_request["reasoning_request"],
         catalog_mechanically_verified=catalog_mechanically_verified,
     )
     requested_thread_title = execution_thread_title(plan)
-    model_request = plan.setdefault(
-        "execution_model_request",
-        {
-            "display_request": "GPT-5.6 Sol",
-            "reasoning_request": "ultra",
-            "resolved_model_id": None,
-            "resolution_status": "pending",
-        },
-    )
     model_request["resolved_model_id"] = resolution.get(
         "resolved_model_id"
     )
@@ -235,7 +218,7 @@ def _prepare_execution_launch_locked(
         "resolution_status"
     ]
     atomic_write_json(task_dir / "task-plan.json", plan)
-    packet = execution_packet(root, selected_task_id)
+    packet = execution_packet(root, selected_task_id, model_request)
     atomic_write_text(task_dir / "EXECUTION_LAUNCH_PROMPT.md", packet)
 
     launch_policy = "require_native" if require_native else "prefer_native"
@@ -282,8 +265,8 @@ def _prepare_execution_launch_locked(
         "team_plan": f".agency/tasks/active/{selected_task_id}/TEAM_PLAN.json",
         "progress_file": f".agency/tasks/active/{selected_task_id}/PROGRESS.md",
         "requested_thread_title": requested_thread_title,
-        "display_model_request": "GPT-5.6 Sol",
-        "reasoning_request": "ultra",
+        "display_model_request": model_request["display_request"],
+        "reasoning_request": model_request["reasoning_request"],
         "resolved_model_id": resolution.get("resolved_model_id"),
         "model_resolution_status": plan["execution_model_request"]["resolution_status"],
         "launch_policy": launch_policy,

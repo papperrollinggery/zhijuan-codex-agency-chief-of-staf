@@ -2,9 +2,9 @@
 
 > Status: Current documentation index
 >
-> As of: 2026-08-19
+> As of: 2026-09-05
 >
-> Reviewed release target: `v0.3.0-rc.5`; publication requires tag, Release, and API readback
+> Reviewed release target: `v0.3.0-rc.6`; publication requires tag, Release, and API readback
 >
 > Evidence boundary: this index describes the repository; it does not prove model behavior, cross-host compatibility, or stable-release eligibility.
 

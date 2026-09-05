@@ -8,16 +8,16 @@
 
 ## 启动顺序
 
-用户明确请求“创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行并更新进度”时：
+用户明确请求创建新的执行对话时，使用计划中保存的模型与 effort；缺省为 GPT-6 Astra / `max`，明确的其他选择（包括旧 Sol / `ultra`）保持不变：
 
 1. 找到唯一 active 的 `plan_ready` 任务；有多个时只问用户选哪一个。
 2. 校验 task plan、依赖和完成标准。
 3. 用 `resolve_team_plan.py` 生成 Team Plan。
-4. 从当前 Codex App Server live catalog 按显示名查找 GPT-5.6 Sol 的精确 ID。若 live model item 没有 provider 字段，调用 `prepare_execution_launch.py` 时显式传 `--thread-id "$CODEX_THREAD_ID"`；helper 会从同一 App Server 的 canonical `codexHome/state_5.sqlite` 机械读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，因此最终仍必须由 binder 读回新执行 Task；selector 缺失、状态读回失败或 provider 不匹配时 fail closed，不从模型名猜 provider。
-5. 验证该 ID 支持 `ultra`；不支持或不存在时停止并给用户唯一模型选择，不静默降级。
+4. 从当前 Codex App Server live catalog 解析计划请求的精确 ID（先匹配 exact ID，再匹配规范化显示名）。若 live model item 没有 provider 字段，调用 `prepare_execution_launch.py` 时显式传 `--thread-id "$CODEX_THREAD_ID"`；helper 会从同一 App Server 的 canonical `codexHome/state_5.sqlite` 机械读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，因此最终仍必须由 binder 读回新执行 Task；selector 缺失、状态读回失败或 provider 不匹配时 fail closed，不从模型名猜 provider。
+5. 验证该 ID 支持计划请求的 effort；不支持或不存在时停止并给用户唯一模型选择，不静默降级。
 6. 按执行面优先级准备所需 Profile：Native Direct Route → 已读回 Named Custom Agent → 项目 selected-only Profile → Generic Native Subagent + Role Packet → CLI read-only compat → Root 直接执行。
 7. `prepare_execution_launch.py` 只生成 Execution Session Packet 和 `execution-session.json`，状态最多到 `native_launch_ready` 或 `manual_launch_ready`；它不会把调用方 JSON 当成创建证明。
-8. 宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。调用 `create_thread` 时把 `execution-session.json` 的 `requested_thread_title` 原样作为 `title`，不让新 Root 自行猜名。
+8. 将解析结果 `resolved_model_id` 与 `resolved_reasoning` 分别传入宿主 `model` 与 `thinking` 参数，不能只在提示词中写模型名。宿主优先创建真实 Codex Task/Thread；写任务必须使用隔离 Worktree。调用 `create_thread` 时把 `execution-session.json` 的 `requested_thread_title` 原样作为 `title`，不让新 Root 自行猜名。
 9. `create_thread` 可能把首条提示词放进精确的 `<codex_delegation>` transport envelope。该 envelope 只允许承载 Execution Session；Runtime 严格解出 source task ID 与 `<input>` 中的原始 packet，并从 App Server 与 canonical state 证明 source 是非自引用的 user-owned Root。Worker/Subagent source 和任意畸形/嵌套 envelope 均 fail closed。
 10. 宿主创建后运行 `bind_execution_session.py`；该脚本不接收调用方 readback JSON，而是连接当前 App Server 的 `thread/read`、live model catalog 与 `codexHome/state_5.sqlite`，再核对 rollout turn context。
 11. 只有 Task ID、Root 身份、完整 packet、transport/source task、provider、model、reasoning、cwd/worktree、未归档状态与 rollout 实际 turn 全部机械一致，才从 `execution_ready` 进入 `executing`，写入 `native_task_id` 并更新进度；整个绑定可回滚。
@@ -37,11 +37,13 @@ AGENCY_EXECUTION_SESSION: true
 任务清单：<project-relative-task-plan>
 团队计划：<project-relative-team-plan>
 进度文件：<project-relative-progress>
-执行模型请求：GPT-5.6 Sol
-推理强度请求：ultra
+执行模型请求：GPT-6 Astra
+推理强度请求：max
 执行职责：作为本任务 Execution Root，按清单执行、调度、验证并更新进度。
 停止条件：全部完成标准有当前证据，或记录真实阻塞；不得创建新的 Chief-of-Staff 根任务。
 ```
+
+示例展示默认值；实际 Packet 的模型和 effort 必须与 `task-plan.json`、`execution-session.json` 完全一致。改选模型后重新准备尚未绑定的启动包，旧请求不能复用新的回执。独立解析可用 `resolve_execution_model.py --model <显示名或精确ID> --reasoning-effort <effort>`；准备会话始终读取保存的计划请求。
 
 `执行 Skill` 是传输协议的一部分，不是第二个 Root。它让 Codex 在 Skill 元数据因宿主预算被裁剪时仍能显式注入 Canonical Runtime；marker 仍必须是 packet 与原生 `<codex_delegation>` 的 `<input>` 首行。
 
@@ -62,15 +64,15 @@ Root 使用独立的 `execution-model-policy.json`，不属于 Efficient/Balance
 
 - 只从 live App Server catalog 解析精确 ID，不从字符串或文档猜测。
 - 从 `--catalog` 读取的序列化 JSON 一律是 `caller-asserted-unverified`，即使自称 `live_readback_verified` 也不能启动；只有同一调用机械连接 App Server 得到的目录才可解析为 launchable。
-- catalog 中存在 Sol 但没有 `ultra` 时，用户选择当前 Sol 最高 Effort、替代模型或暂不启动。
-- Sol 不存在时不猜 ID。
+- catalog 中模型存在但不支持请求 effort 时，用户选择当前模型最高 Effort、替代模型或暂不启动；helper 不自动修改请求。
+- 请求模型不存在、匹配多个 ID、同 ID 重复、隐藏或不可用时不猜 ID，也不启动。
 - Native spawn 后必须读回实际 provider/model/effort；不一致为 FAIL，不能进入 executing。
 - 单独传给准备 helper 的 `native_readback` 只返回 `fields_consistent_unverified` 诊断；不会写入 session，也不能产生证明。没有机械绑定时，`new_conversation_created` 必须保持 `false`。
 - `session_status=executing` 的 schema 只负责结构约束，不能把固定字符串变成宿主证明。唯一公共写入路径是 `bind_execution_session.py`：它内部读取 App Server、canonical state 与 rollout，校验顶层/嵌套 Task、模型、Effort、CWD 和 packet 语义一致后写入 `app-server-canonical-state-mechanically-bound`。调用方不能上传一个 JSON 来替代该读取。
 - 缺少 `执行 Skill` 的旧 raw 或 envelope Prompt 一律 fail closed，不能重新绑定。尚未绑定的 `plan_ready` / `execution_ready` 任务必须重新运行 `prepare_execution_launch.py` 生成新 Packet；若旧 Prompt 已启动 Native Task 但尚未绑定，先关闭该 Task 或记录 Cleanup Blocker，再创建替代任务。
 - 已经用当前 Packet 绑定并处于 `executing` 的 session，若只是持久化 readback 缺少早期 transport 字段，可在 binder 对当前 Host、Prompt 与模型再次机械验证完全一致后原子回填。这个兼容面不包含旧 Prompt；部分字段、envelope 伪装或无当前 readback 均不迁移。
 - canonical state 没有稳定的“当前正在采样”字段，绑定状态精确写为 `active-unarchived`，不把未归档误报为正在运行。任务完成或清理仍需后续 readback 证据。
-- Subagent 仍按原有能力档路由，不要求全部使用 Ultra。
+- Subagent 仍按原有能力档路由，不要求全部使用 Root 的 max。
 
 ## Native 不可用时
 

@@ -75,8 +75,8 @@ def task_plan(
         "acceptance_criteria": ["The fixture has current evidence"],
         "out_of_scope": ["Remote publication"],
         "execution_model_request": {
-            "display_request": "GPT-5.6 Sol",
-            "reasoning_request": "ultra",
+            "display_request": "GPT-6 Astra",
+            "reasoning_request": "max",
             "resolved_model_id": None,
             "resolution_status": "pending",
         },
@@ -108,19 +108,19 @@ def create_fixture_task(
     return result["task_id"], Path(result["task_dir"])
 
 
-def live_catalog(*, ultra: bool = True, include_sol: bool = True) -> dict[str, Any]:
-    efforts = ["high", "xhigh"] + (["ultra"] if ultra else [])
+def live_catalog(*, max_effort: bool = True, include_astra: bool = True) -> dict[str, Any]:
+    efforts = ["high", "xhigh"] + (["max"] if max_effort else [])
     models = (
         [
             {
-                "id": "gpt-5.6-sol",
-                "display_name": "GPT-5.6-Sol",
+                "id": "gpt-6-astra",
+                "display_name": "GPT-6-Astra",
                 "provider": "openai",
                 "supported_reasoning": efforts,
                 "provider_evidence": "catalog-advertised",
             }
         ]
-        if include_sol
+        if include_astra
         else []
     )
     return {

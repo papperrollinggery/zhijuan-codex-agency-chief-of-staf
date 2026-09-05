@@ -91,8 +91,8 @@ class ExecutionChecklistTests(unittest.TestCase):
         self.assertEqual(
             persisted["execution_model_request"],
             {
-                "display_request": "GPT-5.6 Sol",
-                "reasoning_request": "ultra",
+                "display_request": "GPT-6 Astra",
+                "reasoning_request": "max",
                 "resolved_model_id": None,
                 "resolution_status": "pending",
             },

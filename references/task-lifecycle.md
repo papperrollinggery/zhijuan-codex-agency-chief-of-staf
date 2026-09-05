@@ -40,7 +40,7 @@
 
 创建入口按字段白名单拒绝未知完成声明，并拒绝任何调用方预填的已完成/waived Work Item、evidence、blocker、岗位/Profile、acceptance evidence 或已解析模型 ID；新任务只能从全 pending、模型 `null + pending` 的诚实初态开始。旧 v1.0 任务读取仍会补齐缺失的模型请求字段，schema 不把后来新增字段倒灌成旧文件的必填项。
 
-输入可以只提供每个 Work Item 的 `work_id`、`title`、`outcome` 和 `work_type`；确定性脚本补齐安全默认字段并把完整规范写入 `task-plan.json`。Plan 固定记录 GPT-5.6 Sol / `ultra` 请求为 `pending`，但不解析 Live Model Catalog，也不把显示名称当运行证明；真正启动 Execution Session 时才解析和读回。
+输入可以只提供每个 Work Item 的 `work_id`、`title`、`outcome` 和 `work_type`；确定性脚本补齐安全默认字段并把完整规范写入 `task-plan.json`。Plan 默认记录 GPT-6 Astra / `max` 请求为 `pending`；用户明确选择其他模型或 effort 时保存该选择，旧 Sol / `ultra` 请求仍合法，但不解析 Live Model Catalog，也不把显示名称当运行证明；真正启动 Execution Session 时才解析和读回。
 
 首次真实执行事件才向零事件 `progress.jsonl` 追加记录并重绘 `PROGRESS.md`。工作项全部完成且当前验收、验证、Review（如需要）及 Task/Thread 清理证据齐备后，使用 `scripts/complete_task.py`。默认只做 readiness 检查；传入 `--apply` 才从 `executing`/`verifying` 收口到 `completed`，并生成归档可复用的 `closure.json`。
 

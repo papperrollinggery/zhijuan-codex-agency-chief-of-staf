@@ -10,7 +10,12 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from agency_task import load_json
+from agency_task import (
+    load_execution_model_policy,
+    load_json,
+    validate_execution_model_policy,
+    validate_execution_model_selection,
+)
 from inspect_codex_models import (
     CodexAppServer,
     canonical_state_connection,
@@ -26,21 +31,7 @@ MODEL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}\Z")
 
 
 def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
-    policy = load_json(path)
-    if (
-        policy.get("schema_version") != "1.0"
-        or policy.get("display_model") != "GPT-5.6 Sol"
-        or policy.get("reasoning") != "ultra"
-        or policy.get("provider") != "openai"
-        or policy.get("require_live_catalog") is not True
-        or policy.get("fallback") != "manual_user_decision"
-        or policy.get("silent_downgrade_allowed") is not False
-    ):
-        raise ValueError("execution model policy is invalid")
-    order = policy.get("reasoning_order")
-    if not isinstance(order, list) or "ultra" not in order or len(order) != len(set(order)):
-        raise ValueError("execution model reasoning order is invalid")
-    return policy
+    return load_execution_model_policy(path)
 
 
 def _normalized_display(value: str) -> str:
@@ -75,9 +66,6 @@ def _effort_fields(item: dict[str, Any]) -> list[str]:
         effort = entry.get("reasoningEffort") if isinstance(entry, dict) else entry
         if isinstance(effort, str) and effort not in result:
             result.append(effort)
-    default = item.get("defaultReasoningEffort", item.get("default_reasoning"))
-    if isinstance(default, str) and default not in result:
-        result.append(default)
     return result
 
 
@@ -100,15 +88,15 @@ def normalize_catalog(raw: dict[str, Any]) -> dict[str, Any]:
         provider = _provider_field(item)
         if model_id is None or not MODEL_ID_RE.fullmatch(model_id):
             raise ValueError("execution model catalog contains an invalid model id")
-        if display is None:
-            continue
         normalized.append(
             {
                 "id": model_id,
-                "display_name": display,
+                "display_name": display or model_id,
                 "provider": provider,
                 "supported_reasoning": _effort_fields(item),
                 "provider_evidence": item.get("provider_evidence"),
+                "available": item.get("hidden") is not True
+                and item.get("available", item.get("isAvailable", True)) is True,
             }
         )
     return {
@@ -156,12 +144,14 @@ def live_catalog(
         display = _display_field(item)
         advertised_provider = item.get("modelProvider", item.get("provider"))
         provider = advertised_provider if isinstance(advertised_provider, str) else root_provider
-        if not isinstance(model_id, str) or display is None:
+        if not isinstance(model_id, str):
             continue
         models.append(
             {
                 "id": model_id,
-                "display_name": display,
+                "display_name": display or model_id,
+                "hidden": item.get("hidden"),
+                "available": item.get("available", item.get("isAvailable", True)),
                 "provider": provider,
                 "provider_evidence": (
                     "catalog-advertised" if isinstance(advertised_provider, str) else provider_evidence
@@ -210,14 +200,19 @@ def resolve_execution_model(
     raw_catalog: dict[str, Any],
     *,
     policy: dict[str, Any] | None = None,
+    model_request: str | None = None,
+    reasoning_request: str | None = None,
     spawn_readback: dict[str, Any] | None = None,
     catalog_mechanically_verified: bool = False,
 ) -> dict[str, Any]:
-    policy = policy or load_policy()
+    policy = load_policy() if policy is None else validate_execution_model_policy(policy)
+    requested_model = policy["display_model"] if model_request is None else model_request
+    requested_effort = policy["reasoning"] if reasoning_request is None else reasoning_request
+    validate_execution_model_selection(requested_model, requested_effort)
     catalog = normalize_catalog(raw_catalog)
     base = {
-        "display_request": policy["display_model"],
-        "reasoning_request": policy["reasoning"],
+        "display_request": requested_model,
+        "reasoning_request": requested_effort,
         "provider": policy["provider"],
         "fallback": policy["fallback"],
         "catalog_source": catalog["source"],
@@ -249,8 +244,9 @@ def resolve_execution_model(
             ),
             "choices": ["使用用户指定替代模型", "暂不启动"],
         }
-    requested_display = _normalized_display(policy["display_model"])
-    display_matches = [
+    requested_display = _normalized_display(requested_model)
+    # An exact host ID disambiguates a display alias; never synthesize an ID.
+    display_matches = [item for item in catalog["models"] if item["id"] == requested_model] or [
         item
         for item in catalog["models"]
         if _normalized_display(item["display_name"]) == requested_display
@@ -288,7 +284,7 @@ def resolve_execution_model(
             "choices": ["使用用户指定替代模型", "暂不启动"],
         }
     exact_ids = {item["id"] for item in matches}
-    if len(exact_ids) != 1:
+    if len(matches) != 1:
         return {
             **base,
             "status": "user_choice_required",
@@ -301,10 +297,21 @@ def resolve_execution_model(
             "choices": ["使用用户指定替代模型", "暂不启动"],
         }
     match = matches[0]
+    if not match["available"]:
+        return {
+            **base,
+            "status": "user_choice_required",
+            "resolution_status": "unavailable",
+            "resolved_model_id": None,
+            "resolved_reasoning": None,
+            "launch_allowed": False,
+            "reason": "requested_model_unavailable",
+            "choices": ["使用用户指定替代模型", "暂不启动"],
+        }
     supported = [
         effort for effort in policy["reasoning_order"] if effort in match["supported_reasoning"]
     ]
-    if policy["reasoning"] not in supported:
+    if requested_effort not in supported:
         highest = supported[-1] if supported else None
         return {
             **base,
@@ -316,7 +323,7 @@ def resolve_execution_model(
             "launch_allowed": False,
             "reason": "requested_reasoning_not_supported",
             "choices": [
-                f"使用当前 Sol 支持的最高 Effort：{highest or '无可用值'}",
+                f"使用当前 {match['display_name']} 支持的最高 Effort：{highest or '无可用值'}",
                 "使用用户指定替代模型",
                 "暂不启动",
             ],
@@ -326,7 +333,7 @@ def resolve_execution_model(
         "status": "resolved",
         "resolution_status": "resolved",
         "resolved_model_id": match["id"],
-        "resolved_reasoning": policy["reasoning"],
+        "resolved_reasoning": requested_effort,
         "provider_evidence": match.get("provider_evidence"),
         "launch_allowed": True,
         "choices": [],
@@ -350,22 +357,22 @@ def run_self_test() -> dict[str, Any]:
     available = catalog(
         [
             {
-                "id": "gpt-5.6-sol-2026-07",
-                "display_name": "GPT-5.6 Sol",
+                "id": "gpt-6-astra-2026-07",
+                "display_name": "GPT-6 Astra",
                 "provider": "openai",
-                "supported_reasoning": ["high", "ultra"],
+                "supported_reasoning": ["high", "max"],
             }
         ]
     )
     resolved = resolve_execution_model(available, catalog_mechanically_verified=True)
-    if resolved["resolved_model_id"] != "gpt-5.6-sol-2026-07" or not resolved["launch_allowed"]:
-        raise AssertionError("Sol ultra did not resolve")
+    if resolved["resolved_model_id"] != "gpt-6-astra-2026-07" or not resolved["launch_allowed"]:
+        raise AssertionError("Astra max did not resolve")
     unsupported = resolve_execution_model(
         catalog(
             [
                 {
-                    "id": "gpt-5.6-sol-2026-07",
-                    "display_name": "GPT-5.6 Sol",
+                    "id": "gpt-6-astra-2026-07",
+                    "display_name": "GPT-6 Astra",
                     "provider": "openai",
                     "supported_reasoning": ["high", "xhigh"],
                 }
@@ -374,16 +381,16 @@ def run_self_test() -> dict[str, Any]:
         catalog_mechanically_verified=True,
     )
     if unsupported["resolution_status"] != "user_choice_required":
-        raise AssertionError("unsupported ultra did not require user choice")
+        raise AssertionError("unsupported max did not require user choice")
     absent = resolve_execution_model(catalog([]), catalog_mechanically_verified=True)
     if absent["resolved_model_id"] is not None or absent["reason"] != "requested_display_model_not_found":
-        raise AssertionError("missing Sol was guessed")
+        raise AssertionError("missing Astra was guessed")
     mismatch = resolve_execution_model(
         available,
         spawn_readback={
             "provider": "openai",
             "actual_model_id": "different-model",
-            "actual_reasoning_effort": "ultra",
+            "actual_reasoning_effort": "max",
         },
         catalog_mechanically_verified=True,
     )
@@ -391,9 +398,9 @@ def run_self_test() -> dict[str, Any]:
         raise AssertionError("spawn model mismatch did not fail")
     return {
         "status": "self-test-passed",
-        "sol_ultra": resolved["resolution_status"],
-        "ultra_unsupported": unsupported["resolution_status"],
-        "sol_absent": absent["resolution_status"],
+        "astra_max": resolved["resolution_status"],
+        "max_unsupported": unsupported["resolution_status"],
+        "astra_absent": absent["resolution_status"],
         "spawn_mismatch": mismatch["status"],
     }
 
@@ -408,6 +415,8 @@ def main() -> None:
     parser.add_argument("--thread-id")
     parser.add_argument("--timeout-seconds", type=int, default=20)
     parser.add_argument("--spawn-readback", type=Path)
+    parser.add_argument("--model", help="Explicit display name or exact current-host model ID")
+    parser.add_argument("--reasoning-effort", help="Explicit effort; checked against the live model")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -429,6 +438,8 @@ def main() -> None:
         readback = load_json(args.spawn_readback) if args.spawn_readback else None
         result = resolve_execution_model(
             catalog,
+            model_request=args.model,
+            reasoning_request=args.reasoning_effort,
             spawn_readback=readback,
             catalog_mechanically_verified=catalog_mechanically_verified,
         )

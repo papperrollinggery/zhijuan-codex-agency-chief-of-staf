@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "policy_name": "agency-root-execution-model",
-  "display_model": "GPT-5.6 Sol",
-  "reasoning": "ultra",
+  "display_model": "GPT-6 Astra",
+  "reasoning": "max",
   "provider": "openai",
   "require_live_catalog": true,
   "fallback": "manual_user_decision",
-  "reasoning_order": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
+  "reasoning_order": ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"],
   "readback_required": [
     "native_task_id",
     "provider",

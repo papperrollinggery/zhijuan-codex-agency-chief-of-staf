@@ -20,10 +20,12 @@
 | developer | balanced | judgment | 有界实现与集成 |
 | writer | balanced | judgment | 用户文档、release notes、报告和交付文字 |
 | reviewer | judgment | judgment | 独立审核、安全和发布判断 |
-| test-debugger | efficient | balanced | 测试、日志和根因分类 |
+| test-debugger | balanced | judgment | 普通验证、测试、日志和根因分类 |
 | supervisor | judgment | judgment | Goal 覆盖、证据缺口和发布边界只读审计 |
 
 `developer` 是代码 executor。`supervisor` 不协调其他 Agent、不批准最终交付，也不取代 root outcome owner。
+
+默认选择偏好为：Efficient → Luna（有界提取、扫描），Balanced → Terra（普通实现与验证），Judgment → Astra（复杂决策与高风险审查）。这些是工作分工偏好，精确 ID 和支持 effort 仍由本次宿主目录决定；`--class-binding` 显式绑定当前可用模型，用户的其他支持选择优先。只需机械提取测试日志时可交给 Efficient 扫描角色，验证结论由 Balanced 或 Root 负责。角色模板不固定具体模型，也不继承 Root 的 `max` 要求。
 
 当预算允许自动升级时，`high` 与 `critical` 都升级到角色的高风险模型能力档；只有 `critical` 再把 reasoning 从该能力档的默认值升到 elevated 值。`economy` 的自动升级额度为 0，因此即使风险为 `high` 或 `critical`，也保留角色默认模型能力档与默认 reasoning；若该强度不足，工作回到主线程或改用更高预算。高风险包括安全、发布、迁移、不可逆操作、跨系统兼容、证据冲突，或一次有界尝试后仍存在多个竞争根因。每个角色最多自动升级一次；不要让低成本角色反复失败后持续重试。
 
@@ -101,11 +103,12 @@ catalog 缺失、provider 不明、模型不可用或 schema 不支持时，回�
 
 Efficient/Balanced/Judgment 只用于 Team Planner 已选 Subagent。新的 Execution Root 不进入这些成本档，单独读取 `assets/execution-model-policy.json` 并使用 `scripts/resolve_execution_model.py`：
 
-- 默认显示请求为 GPT-5.6 Sol，reasoning 为 ultra，provider 为 OpenAI。
+- 默认显示请求为 GPT-6 Astra，reasoning 为 `max`，provider 为 OpenAI；当前宿主精确 ID 通过 live catalog 解析。
+- 用户明确选择其他模型或 effort 时，保存到计划的 `execution_model_request.display_request` / `reasoning_request`；保留旧 GPT-5.6 Sol / `ultra` 合法请求。`display_request` 也接受精确宿主 ID，先精确匹配 ID，再匹配规范化显示名。
 - 精确 ID 必须来自本次 live App Server catalog；显示名不是运行证明。
-- Ultra 不受支持时只给用户三项选择，不静默改成较低 effort。
+- 请求 effort 不受支持时给用户替代选择，不静默改成较低 effort；缺失、多匹配、隐藏或不可用模型均不能启动。
 - Native spawn 后必须回读实际 provider/model/effort；不一致为 FAIL。
-- Root 解析不改变 Subagent 路由预算，也不要求所有角色使用 Ultra。
+- Root 解析不改变 Subagent 路由预算，也不要求所有角色使用 `max`。
 
 后台状态对应的前台表达：
 

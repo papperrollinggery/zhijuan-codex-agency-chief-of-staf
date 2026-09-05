@@ -1,6 +1,6 @@
 ---
 name: agency-chief-of-staff
-description: "内容优先的复杂项目协调与跨对话生命周期。用于多阶段复杂任务、先讨论需求再执行、根据讨论创建任务执行清单、创建新的 Codex 对话或 Task 执行、跨对话进度管理、角色化团队安排、Codex Thread/Worktree 调度、任务归档、长期知识沉淀、Goal/长期项目及验证审核交付闭环。自然触发包括“这件事比较复杂，先跟我把目标和边界聊清楚，之后再做执行计划”“先讨论需求”“先把需求聊清楚”“根据以上讨论创建执行清单”“整理成任务清单”“开一个新对话执行”“单独创建任务执行”“安排团队来做”“安排几个专业角色”“持续更新进度”“归档任务”“沉淀长期资产”“总结到已有文档”。Pre-read: choose only the value after = for the user's intent as the exact first line: Discussion=任务已接管｜需求讨论中; Plan=任务已接管｜正在创建执行清单; Execution Launch=任务已接管｜正在启动执行对话; Execution Session/Progress=任务已接管｜团队执行中; Verify=任务已接管｜正在验证; Archive=任务已接管｜正在归档. Required Skill notice only on line 2 of that message, then read once. Also use for explicit $agency-chief-of-staff or AGENCY_EXECUTION_SESSION. Do not implicitly trigger for 单次小问题、单句翻译、简单代码修改、单文件明确修复、普通信息问答、仅出现 thread/release readiness 而无工作意图、合法 AGENCY_WORKER packet 或本 Skill 源码维护。"
+description: "复杂项目的需求讨论、执行清单、独立任务启动、分工与模型路由、进度、验证、归档。用于多阶段或跨对话协作，以及明确调用 agency-chief-of-staff；普通问答、简单代码修改、合法 AGENCY_WORKER 与本 Skill 源码维护不触发。"
 ---
 
 # Agency Chief of Staff
@@ -8,6 +8,8 @@ description: "内容优先的复杂项目协调与跨对话生命周期。用于
 把注意力留给用户项目本身。先形成专业判断和实际产出，再添加真正必要的协调、持久化或证明。
 
 核心判断：每个治理动作必须至少做到一项——解锁项目判断、协调真实并行、证明当前结果。否则跳过。
+
+用户明确指令优先于本 Skill 的默认流程。同一范围已获授权就继续；只为会改变结果的缺失信息或新增高风险边界提问。若本 Skill 的具体条款导致暂停，指出实际条款与路径，不把示例升级为重复确认。
 
 ## Durable 入口硬契约
 
@@ -72,6 +74,8 @@ Root 保留需求、核心判断、强耦合实现、整合和最终输出。只
 
 单一研究、单一文档、普通单文件修改和高耦合连续实现默认 Root 完成。不要为凑 Team Tier 安排职位。并行最多 3 个终端 worker，递归深度固定为 1。
 
+新的 Execution Root 默认请求 GPT-6 Astra / `max`，用户明确选择其他模型或 effort 时保留其选择；本 Skill 不自行切换当前主线程或写全局配置。Subagent 按工作性质分层：有界提取扫描优先 Luna，普通实现与验证优先 Terra，复杂决策与高风险审查优先 Astra。具体 ID 和 effort 必须经当前宿主目录及参数验证，不能从显示名推断实际运行，也不能把 Root 默认值套给所有子代理。详见 [模型路由](references/model-routing-and-budget.md)。
+
 用户只要求比较或规划团队、且没有要求创建执行清单或启动执行时，作为 Direct/Focused 的团队咨询处理：读取 [references/team-orchestration.md](references/team-orchestration.md)，使用其中稳定的用户可见职位名，但不进入 Plan、不显示 Durable 阶段状态、不写 `.agency`、不创建 Agent/Task/Thread。没有结构化 Work Item 时不要为了咨询运行规划脚本。
 
 Durable Execution Launch 读取同一 reference 并运行 `scripts/resolve_team_plan.py`。调用方不需要先选角色；Team Planner 必须先过净收益门，再生成 position instance。
@@ -98,6 +102,8 @@ Native 新对话不可用时生成可复制启动提示词并标记 `manual_laun
 - 低风险、局部修改：Root 自检，加相关测试或 artifact 检查。
 - 中风险、多文件但边界清楚：集成验证；只有存在独立判断价值时增加 Reviewer。
 - 高风险、安全、发布、跨模块迁移、客户可见交付或用户明确要求：读取 [references/delivery-review.md](references/delivery-review.md)，使用独立 reviewer 并核对当前 artifact、diff 与验证。
+
+测试与改动风险匹配；相关检查通过后，只因新改动、新失败或具体未决问题扩大或重复验证。
 
 机器 receipt、CLI profile compat、模型身份和 cold-context 证明只在 Assured 或真实 Task/Thread 证据需要时启用。普通任务不运行这些协议。
 

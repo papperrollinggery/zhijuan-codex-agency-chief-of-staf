@@ -597,8 +597,8 @@ def prepare_lifecycle_fixture(fixture: Path, setup: dict[str, str] | None) -> No
         "acceptance_criteria": ["README was read and current evidence was recorded"],
         "out_of_scope": ["Remote publication"],
         "execution_model_request": {
-            "display_request": "GPT-5.6 Sol",
-            "reasoning_request": "ultra",
+            "display_request": "GPT-6 Astra",
+            "reasoning_request": "max",
             "resolved_model_id": None,
             "resolution_status": "pending",
         },

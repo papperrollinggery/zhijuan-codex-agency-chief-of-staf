@@ -24,6 +24,9 @@ from typing import Any, Iterator
 
 
 SCHEMA_VERSION = "1.0"
+EXECUTION_MODEL_POLICY_PATH = Path(__file__).resolve().parents[1] / "assets" / "execution-model-policy.json"
+EXECUTION_MODEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._/-]{0,127}\Z")
+EXECUTION_REASONING_LEVELS = frozenset({"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"})
 TASK_ID_RE = re.compile(r"[a-z0-9][a-z0-9._-]{2,95}\Z")
 WORK_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{1,63}\Z")
 TASK_STATUSES = (
@@ -193,6 +196,53 @@ def load_json(path: Path) -> dict[str, Any]:
     return value
 
 
+def validate_execution_model_selection(model: object, effort: object) -> None:
+    """Validate request syntax only; availability requires a live host catalog."""
+    if not isinstance(model, str) or model != model.strip() or not EXECUTION_MODEL_RE.fullmatch(model):
+        raise ValueError("execution model request must be a safe display name or exact model id")
+    if not isinstance(effort, str) or effort not in EXECUTION_REASONING_LEVELS:
+        raise ValueError("execution model reasoning request is invalid")
+
+
+def load_execution_model_policy(path: Path = EXECUTION_MODEL_POLICY_PATH) -> dict[str, Any]:
+    return validate_execution_model_policy(load_json(path))
+
+
+def validate_execution_model_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    validate_execution_model_selection(policy.get("display_model"), policy.get("reasoning"))
+    if (
+        policy.get("schema_version") != "1.0"
+        or policy.get("provider") != "openai"
+        or policy.get("require_live_catalog") is not True
+        or policy.get("fallback") != "manual_user_decision"
+        or policy.get("silent_downgrade_allowed") is not False
+        or policy.get("readback_required") != [
+            "native_task_id", "provider", "actual_model_id",
+            "actual_reasoning_effort", "cwd", "status",
+        ]
+    ):
+        raise ValueError("execution model policy is invalid")
+    order = policy.get("reasoning_order")
+    if (
+        not isinstance(order, list)
+        or any(not isinstance(item, str) or item not in EXECUTION_REASONING_LEVELS for item in order)
+        or len(order) != len(set(order))
+        or policy["reasoning"] not in order
+    ):
+        raise ValueError("execution model reasoning order is invalid")
+    return policy
+
+
+def default_execution_model_request() -> dict[str, Any]:
+    policy = load_execution_model_policy()
+    return {
+        "display_request": policy["display_model"],
+        "reasoning_request": policy["reasoning"],
+        "resolved_model_id": None,
+        "resolution_status": "pending",
+    }
+
+
 def atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink() or path.parent.is_symlink():
@@ -337,15 +387,8 @@ def validate_task_plan(plan: object, *, expected_task_id: str | None = None) -> 
         result["task_id"] = expected_task_id or generate_task_id()
     result.setdefault("out_of_scope", [])
     result.setdefault("status", "plan_ready")
-    result.setdefault(
-        "execution_model_request",
-        {
-            "display_request": "GPT-5.6 Sol",
-            "reasoning_request": "ultra",
-            "resolved_model_id": None,
-            "resolution_status": "pending",
-        },
-    )
+    if "execution_model_request" not in result:
+        result["execution_model_request"] = default_execution_model_request()
     if result["schema_version"] != SCHEMA_VERSION:
         raise ValueError("unsupported task plan schema_version")
     task_id = require_task_id(result["task_id"])
@@ -391,8 +434,7 @@ def validate_task_plan(plan: object, *, expected_task_id: str | None = None) -> 
             "resolution_status",
         }:
             raise ValueError("execution_model_request fields are invalid")
-        if model["display_request"] != "GPT-5.6 Sol" or model["reasoning_request"] != "ultra":
-            raise ValueError("execution model request must default to GPT-5.6 Sol ultra")
+        validate_execution_model_selection(model["display_request"], model["reasoning_request"])
         if model["resolved_model_id"] is not None and not isinstance(
             model["resolved_model_id"], str
         ):
@@ -693,6 +735,7 @@ def render_pending_team_plan(plan: dict[str, Any]) -> str:
 
 def render_launch_request(project: Path, plan: dict[str, Any]) -> str:
     relative = task_relative_path(plan["task_id"])
+    request = plan["execution_model_request"]
     return "\n".join(
         [
             "# 执行对话启动提示",
@@ -701,12 +744,12 @@ def render_launch_request(project: Path, plan: dict[str, Any]) -> str:
             f"- 任务 ID：{plan['task_id']}",
             f"- 项目根目录：{project}",
             f"- 任务清单：{relative}/task-plan.json",
-            "- 执行模型请求：GPT-5.6 Sol",
-            "- 推理强度请求：ultra",
+            f"- 执行模型请求：{request['display_request']}",
+            f"- 推理强度请求：{request['reasoning_request']}",
             "",
             "确认进入阶段三时使用：",
             "",
-            f"> 创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行任务并更新进度。任务 ID：{plan['task_id']}。",
+            f"> 创建新对话，使用 {request['display_request']} {request['reasoning_request']} 根据任务执行清单执行任务并更新进度。任务 ID：{plan['task_id']}。",
             "",
             "该请求尚未启动执行，也不是 Execution Session Packet。阶段三会先生成团队计划、解析 Live Model Catalog，并将本文件原子替换为完整执行提示；不得把本文件存在视为已创建新对话。",
             "",

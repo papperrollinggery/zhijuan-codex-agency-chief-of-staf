@@ -23,6 +23,29 @@ class RoleModelRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.policy = load_json(ROOT / "assets" / "role-model-policy.json")
 
+    def test_host_bound_tiers_keep_scanning_implementation_validation_and_review_distinct(self) -> None:
+        catalog = {
+            "schema_version": 2,
+            "provenance": {
+                "source": "active-host-catalog", "source_id": "test-host",
+                "observed_for_requested_thread": True,
+                "requested_thread_id": "11111111-1111-1111-1111-111111111111",
+                "root_provider": "openai", "canonical_state_store_bound": True,
+                "model_provider_evidence": "root-state-inferred",
+            },
+            "models": [
+                {"id": model, "provider": "openai", "model_class": tier,
+                 "supported_reasoning": ["medium", "high", "xhigh"],
+                 "available": True, "authenticated": True,
+                 "provider_evidence": "root-state-inferred", "relative_cost_units": cost}
+                for model, tier, cost in (("gpt-5.6-luna", "efficient", 1), ("gpt-5.6-terra", "balanced", 2), ("gpt-6-astra", "judgment", 4))
+            ],
+        }
+        expected = {"codebase-researcher": "gpt-5.6-luna", "developer": "gpt-5.6-terra", "test-debugger": "gpt-5.6-terra", "reviewer": "gpt-6-astra"}
+        plan = resolve_plan(self.policy, list(expected), "low", "quality", "direct", catalog, "openai", _issue_live_catalog_attestation(catalog))
+        self.assertEqual({item["role"]: item["model"] for item in plan["delegated"]}, expected)
+        self.assertTrue(all(item["dispatch_contract"]["arguments"]["fork_turns"] == "none" for item in plan["delegated"]))
+
     def test_policy_maps_all_existing_roles_without_static_models(self) -> None:
         validate_policy(self.policy)
         self.assertEqual(

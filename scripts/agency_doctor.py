@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from agency_task import safe_project_root
+from agency_task import load_execution_model_policy, safe_project_root
 from inspect_codex_models import CodexAppServer, collect_model_items, resolve_executable
 from install_skill import (
     CANONICAL_SKILL_NAME,
@@ -134,6 +134,7 @@ def native_report(project: Path, codex_bin: str, timeout_seconds: int) -> dict[s
             "error": "codex executable not found",
         }
     try:
+        policy = load_execution_model_policy()
         executable = resolve_executable(codex_bin)
         with CodexAppServer(
             executable,
@@ -183,8 +184,9 @@ def native_report(project: Path, codex_bin: str, timeout_seconds: int) -> dict[s
                     "display_name": display,
                     "provider": provider if isinstance(provider, str) else None,
                     "supported_reasoning": _effort_fields(item),
-                    "is_requested_sol": isinstance(display, str)
-                    and _normalized_display(display) == _normalized_display("GPT-5.6 Sol"),
+                    "is_requested_model": model_id == policy["display_model"]
+                    or (isinstance(display, str)
+                    and _normalized_display(display) == _normalized_display(policy["display_model"])),
                 }
             )
         return {
@@ -194,7 +196,9 @@ def native_report(project: Path, codex_bin: str, timeout_seconds: int) -> dict[s
             "model_catalog": {
                 "status": "live-read",
                 "model_count": len(model_rows),
-                "requested_sol_matches": [row for row in model_rows if row["is_requested_sol"]],
+                "display_request": policy["display_model"],
+                "reasoning_request": policy["reasoning"],
+                "requested_model_matches": [row for row in model_rows if row["is_requested_model"]],
             },
             "error": None,
         }

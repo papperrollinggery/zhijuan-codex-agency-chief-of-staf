@@ -1,8 +1,8 @@
 # Repository discovery and release metadata
 
-> Status: release metadata target for the authorized `v0.3.0-rc.5` public update
+> Status: release metadata target for the authorized `v0.3.0-rc.6` public update
 >
-> Pre-publish release/tag and About metadata readback: 2026-08-19; post-write readback required
+> Pre-publish release/tag and About metadata readback: 2026-09-05; post-write readback required
 >
 > Read-only evidence: GitHub repository API fields `description`, `homepageUrl`, and `repositoryTopics`, plus the public Releases API for stable/prerelease tags; observed values are recorded below and may drift after this date.
 >
@@ -10,7 +10,7 @@
 
 ## Current public state
 
-At the 2026-08-19 pre-publish readback, `v0.1.7` remained the latest stable tag and `v0.2.0-rc.3` the latest prerelease tag; `v0.3.0-rc.5` is the release target represented by this commit. The repository About description and topics below are part of the same authorized public update and count as applied only after post-write API readback; the website remains unset. The target release is host-scoped and does not claim stable, unattended, or cross-host behavior.
+At the 2026-09-05 pre-publish readback, `v0.1.7` remained the latest stable tag and `v0.3.0-rc.5` the latest prerelease tag; `v0.3.0-rc.6` is the release target represented by this commit. This update publishes source and release metadata without changing repository About settings or topics. The target remains host-scoped and does not claim stable, unattended, or cross-host behavior.
 
 GitHub documents topics as a discovery mechanism for finding repositories by purpose and subject. Topic names must use lowercase letters, numbers, and hyphens, be at most 50 characters, and a repository may have at most 20. Applying repository metadata is an external write and requires maintainer authorization and working GitHub authentication.
 
@@ -50,8 +50,8 @@ The root [`llms.txt`](../llms.txt) is a concise, human-readable and machine-read
 
 1. Re-run the current release gates and independent review from the exact commit to publish.
 2. Confirm the README version table, changelog, `llms.txt`, release notes, and tagged source agree.
-3. With fresh maintainer authorization and valid GitHub authentication, apply the proposed description and topics.
-4. Read back the public About panel and topics; do not treat a successful API request alone as proof.
+3. Only when About changes are part of the request, apply the proposed description and topics with fresh maintainer authorization and valid GitHub authentication.
+4. Read back any changed public About fields and topics; do not treat a successful API request alone as proof.
 5. Publish or update the release only after the commit, tag, assets, and release notes are mutually consistent.
 
 ## Sources

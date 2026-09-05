@@ -226,7 +226,7 @@ def _mechanical_readback(
             raise ValueError("App Server did not read back the requested native task")
         if "parentThreadId" not in host or host.get("parentThreadId") is not None:
             raise ValueError("native execution root is a subagent, not a user-owned task")
-        expected_packet = execution_packet(project, plan["task_id"])
+        expected_packet = execution_packet(project, plan["task_id"], plan["execution_model_request"])
         host_prompt = match_execution_session_transport(host.get("preview"), expected_packet)
         if host_prompt is None:
             raise ValueError("App Server task preview does not match the execution packet")
@@ -356,6 +356,7 @@ def validate_bound_execution_session(
 ) -> dict[str, Any]:
     root = safe_project_root(project)
     task_id = plan["task_id"]
+    model_request = plan["execution_model_request"]
     base = f".agency/tasks/active/{task_id}"
     expected_fields = {
         "task_id": task_id,
@@ -364,8 +365,8 @@ def validate_bound_execution_session(
         "task_plan": f"{base}/task-plan.json",
         "team_plan": f"{base}/TEAM_PLAN.json",
         "progress_file": f"{base}/PROGRESS.md",
-        "display_model_request": "GPT-5.6 Sol",
-        "reasoning_request": "ultra",
+        "display_model_request": model_request["display_request"],
+        "reasoning_request": model_request["reasoning_request"],
         "model_resolution_status": "resolved",
         "session_status": "executing",
         "native_readback_attestation": MECHANICAL_ATTESTATION,
@@ -380,7 +381,10 @@ def validate_bound_execution_session(
             "expected": "executing",
             "actual": plan.get("status"),
         }
-    model_request = plan.get("execution_model_request", {})
+    if model_request.get("resolution_status") != "resolved":
+        mismatches["task_plan.model_resolution_status"] = {
+            "expected": "resolved", "actual": model_request.get("resolution_status")
+        }
     if session.get("resolved_model_id") != model_request.get("resolved_model_id"):
         mismatches["resolved_model_id"] = {
             "expected": model_request.get("resolved_model_id"),
@@ -399,7 +403,7 @@ def validate_bound_execution_session(
         "prompt_bound": True,
         "catalog_bound": True,
         "prompt_sha256": hashlib.sha256(
-            execution_packet(root, task_id).encode("utf-8")
+            execution_packet(root, task_id, model_request).encode("utf-8")
         ).hexdigest(),
     }
     for field, expected in nested_expected.items():
@@ -596,6 +600,14 @@ def bind_execution_session(
         "resolved_model_id"
     ):
         raise ValueError("execution model is not resolved")
+    request = plan["execution_model_request"]
+    if (
+        session.get("display_model_request") != request["display_request"]
+        or session.get("reasoning_request") != request["reasoning_request"]
+        or session.get("resolved_model_id") != request["resolved_model_id"]
+        or request["resolution_status"] != "resolved"
+    ):
+        raise ValueError("execution session model request no longer matches the task plan")
     observed = _mechanical_readback(
         root,
         plan,

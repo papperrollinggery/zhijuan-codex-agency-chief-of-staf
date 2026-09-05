@@ -15,20 +15,20 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 
 ## 一览
 
-| 项目 | 当前事实（2026-08-19） |
+| 项目 | 当前事实（2026-09-05） |
 | --- | --- |
 | Canonical Skill | `$agency-chief-of-staff` |
 | 兼容入口 | `$zhijuan-codex-agency-chief-of-staf`，仅显式调用 |
 | 核心模型提供方 | OpenAI / Codex；Claude/Fable 仅为默认关闭的可选 advisor 位 |
 | Python | 3.10+ |
 | 最新 stable tag | [`v0.1.7`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.1.7) |
-| 本发布版本 | [`v0.3.0-rc.5`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.3.0-rc.5)，host-scoped prerelease |
-| 发布前远端 prerelease | `v0.2.0-rc.3`；rc.5 必须以发布后 API readback 为准 |
-| 当前 checkout | `v0.3.0-rc.5` release source |
+| 本发布版本 | [`v0.3.0-rc.6`](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases/tag/v0.3.0-rc.6)，host-scoped prerelease |
+| 发布前远端 prerelease | `v0.3.0-rc.5`；rc.6 必须以发布后 API readback 为准 |
+| 当前 checkout | `v0.3.0-rc.6` release source |
 
 入口：[文档索引](docs/README.md) · [内容优先设计依据](docs/CONTENT_FIRST_DESIGN.md) · [LLM 索引](llms.txt) · [发现性与发布元数据](docs/REPOSITORY_DISCOVERY.md) · [Changelog](CHANGELOG.md) · [示例](examples) · [贡献](CONTRIBUTING.md) · [安全策略](SECURITY.md) · [行为规范](CODE_OF_CONDUCT.md) · [全部 Releases](https://github.com/papperrollinggery/zhijuan-codex-agency-chief-of-staf/releases)
 
-本 README 正文描述 `v0.3.0-rc.5` host-scoped prerelease。它不是 stable release，也不代表任一宿主已经安装、自然语言隐式唤起必然成功，或无人值守/跨宿主行为已经验证。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
+本 README 正文描述 `v0.3.0-rc.6` host-scoped prerelease。它不是 stable release，也不代表任一宿主已经安装、自然语言隐式唤起必然成功，或无人值守/跨宿主行为已经验证。已发布 tag 保留各自当时的 README 和能力，不会因为主分支文档更新而获得后续功能：
 
 | 版本线 | 能力边界 |
 | --- | --- |
@@ -39,6 +39,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 | `v0.3.0-rc.3` 本地源码候选 | 在 rc.2 上补齐 Native `create_thread` transport 解包、user-owned source 证明与已绑定当前 Packet 缺失 transport readback 字段的兼容回填；尚未发布，安装态 Model/Native 行为仍需单独 smoke |
 | `v0.3.0-rc.4` 本地源码候选 | 用真实生命周期 trace 把持久执行收敛为内容优先快路径，增加失败调用也计数的 tool-event 预算、无歧义完成证据 argv、恢复/归档边界与评测防伪；尚未发布，安装态 Native 行为仍需单独 readback |
 | `v0.3.0-rc.5` host-scoped prerelease | 汇总 rc.4 后的生命周期/安装完整性修复，增加确定性 Execution Root 标题、场景模式地图、强制 Native 降级门与角色策略一致性检查；标题请求已实现，安装态 Skill→title 端到端、自然触发、无人值守与跨宿主仍需分别验证 |
+| `v0.3.0-rc.6` host-scoped prerelease | 默认 Astra/max，支持显式其他模型与 effort、旧 Sol 兼容；计划到机械绑定传递同一请求；子代理维持 Luna/Terra/Astra 分层，三个安装入口使用源码内的紧凑描述，无本地 metadata 覆盖 |
 
 ## v0.3 迁移
 
@@ -47,7 +48,7 @@ Visualization 只在它比短文本或小表格明显更容易理解时使用，
 - v0.3 的四阶段生命周期只在项目型意图出现时启用；不要求所有任务创建 `.agency` 或 Thread。
 - Canonical 继续允许自然语言隐式调用；Legacy 只兼容旧显式 slug。
 - 专业 Profile 按当前 Team Plan 做 Selected-only 项目准备，不默认安装全部七个，也不写全局 Agent 配置。
-- Execution Root 模型政策与 Subagent 模型成本档完全分开；Root 可以请求 GPT-5.6 Sol Ultra，Subagent 继续按任务选择 Efficient/Balanced/Judgment。
+- Execution Root 模型政策与 Subagent 模型成本档完全分开；Root 默认请求 GPT-6 Astra / max，并尊重其他显式选择，Subagent 继续按任务选择 Efficient/Balanced/Judgment。
 - 每个治理动作必须解锁项目判断、协调真实并行或证明当前结果；否则跳过。复杂度本身不再自动创建持久状态、团队、可视化或审核。
 
 ## 适用场景
@@ -100,7 +101,7 @@ Discussion 可以合法停在讨论；Plan 用一次确定性调用在隐藏 sta
 - Goal 只用于明确的长期目标，不为短任务生成 Goal Ledger。
 - 项目执行阶段只准备 Team Plan 选中的项目级 Profile，不默认安装全部七个，不写用户全局 Agent 配置。
 - 真实 task/thread 只在用户要求独立执行面时使用；普通任务不强制 Thread，工具不可用时不拿同线程或 subagent 冒充新对话。
-- Execution Root 的默认模型请求独立为 GPT-5.6 Sol + `ultra`；它不进入 Subagent 的 Efficient/Balanced/Judgment 成本档。exact ID 必须来自 live catalog，spawn 后必须读回实际 provider/model/effort，禁止静默降级。
+- Execution Root 的默认模型请求独立为 GPT-6 Astra + `max`；它不进入 Subagent 的 Efficient/Balanced/Judgment 成本档。exact ID 必须来自 live catalog，spawn 后必须读回实际 provider/model/effort，禁止静默降级。
 - 只有机器审计确实需要时才输出结构化 receipt。
 - Assured 路径默认一次 cold review 加一次修复后的定向复核；普通低风险修改使用 Root 自检和相关测试，避免 review 成为固定执行税或无限 wave。
 - 声称独立审核已完成时，必须能回查非空 reviewer/task id、与该 id 绑定的唯一终态，以及 reviewer 对当前 artifact 的直接读回；空 `wait`、主线程自审、或只声明 `none` / `fork_context:false` 均不算。工具未明确回显上下文隔离时，必须披露 `COLD_CONTEXT_ISOLATION: UNVERIFIED`。
@@ -134,7 +135,7 @@ cd zhijuan-codex-agency-chief-of-staf
 python3 scripts/install_skill.py
 ```
 
-`v0.3.0-rc.5` 发布并完成 API readback 后，可固定该 tag 安装。发布前验证本候选时只从已审阅的 release-source checkout 直接运行；需要当前已公开 prerelease 时仍固定 `v0.2.0-rc.3`：
+`v0.3.0-rc.6` 发布并完成 API readback 后，可固定该 tag 安装。发布前验证本候选时只从已审阅的 release-source checkout 直接运行；需要此前已公开 prerelease 时固定 `v0.3.0-rc.5`：
 
 ```bash
 python3 scripts/install_skill.py
@@ -248,7 +249,7 @@ Packet 可从 [`examples/cli-profile-review.packet.txt`](examples/cli-profile-re
 启动独立执行对话：
 
 ```text
-创建新对话，使用 gpt-5.6 sol ultra 根据任务执行清单执行任务，并持续更新进度。
+创建新对话，使用 GPT-6 Astra max 根据任务执行清单执行任务，并持续更新进度。
 ```
 
 归档与沉淀：
@@ -271,9 +272,9 @@ Packet 可从 [`examples/cli-profile-review.packet.txt`](examples/cli-profile-re
 
 ## 当前模型能力的使用方式
 
-Execution Root 与 Subagent 分开路由。Root 读取 `assets/execution-model-policy.json`，默认请求 GPT-5.6 Sol + `ultra`，使用 `scripts/resolve_execution_model.py` 从当前 App Server catalog 解析 exact ID；目录缺少 provider 时，Runtime 显式把宿主提供的 `CODEX_THREAD_ID` 作为 `--thread-id` 传入，helper 再从同一 App Server canonical state 读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，最终以新执行 Task 的 binder readback 为准；selector 缺失或状态读回失败仍 fail closed，不从模型名猜 provider。若 Sol 不存在、Ultra 不受支持或 spawn readback 不一致，就要求用户选择或 FAIL，不静默降级。`prepare_execution_launch.py` 只产生 ready packet；宿主创建后由 `bind_execution_session.py` 内部核对真实 Task ID、Root/packet、provider、model、effort、CWD/worktree、canonical state 和 rollout turn，再事务性进入 `executing`。
+Execution Root 与 Subagent 分开路由。Root 读取 `assets/execution-model-policy.json`，默认请求 GPT-6 Astra + `max`，使用 `scripts/resolve_execution_model.py` 从当前 App Server catalog 解析 exact ID；目录缺少 provider 时，Runtime 显式把宿主提供的 `CODEX_THREAD_ID` 作为 `--thread-id` 传入，helper 再从同一 App Server canonical state 读回这个被选择 Root 的 provider。该 selector 不独立证明“当前前台 Task”，最终以新执行 Task 的 binder readback 为准；selector 缺失或状态读回失败仍 fail closed，不从模型名猜 provider。用户显式选择其他支持模型或 effort 时使用该请求，旧 Sol 请求保持兼容。若请求模型不存在、多匹配、不可用、effort 不受支持或 spawn readback 不一致，就要求用户选择或 FAIL，不静默降级。`prepare_execution_launch.py` 只产生 ready packet；宿主创建后由 `bind_execution_session.py` 内部核对真实 Task ID、Root/packet、provider、model、effort、CWD/worktree、canonical state 和 rollout turn，再事务性进入 `executing`。
 
-七个窄 Subagent Profile 继续使用 `efficient`、`balanced`、`judgment` 能力档和三种预算模式；它们不要求全部使用 Ultra。仓库不维护会过期的模型排行榜或角色硬编码 model slug。
+七个窄 Subagent Profile 继续使用 `efficient`、`balanced`、`judgment` 能力档和三种预算模式；它们不要求全部使用 Root 的 max。仓库不维护会过期的模型排行榜或角色硬编码 model slug。
 
 先读取当前 Codex App Server catalog，并从该 App Server 的规范状态库读回调用方指定线程的 root provider；调用方再显式绑定当前可见模型：
 

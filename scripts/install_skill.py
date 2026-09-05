@@ -154,8 +154,7 @@ def render_runtime_bytes(root: Path, rel: str, skill_name: str = SKILL_NAME) -> 
             elif line.startswith("description:"):
                 description = (
                     "Legacy explicit-call compatibility entry for $zhijuan-codex-agency-"
-                    "chief-of-staf. Use only when the user explicitly invokes that exact "
-                    "slug; new and implicit use must select $agency-chief-of-staff."
+                    "chief-of-staf; use $agency-chief-of-staff for new work."
                 )
                 lines[index] = "description: " + json.dumps(description)
         text = "\n".join(lines) + "\n"

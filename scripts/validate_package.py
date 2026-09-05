@@ -914,25 +914,25 @@ def main() -> None:
             f"{len(description.strip())} > {MAX_SKILL_DESCRIPTION_CHARS}"
         )
     for cue in (
-        "discuss goals and boundaries before planning",
+        "staged projects", "discuss", "plan", "launch", "progress", "verify", "archive",
+        "small tasks", "source maintenance",
+    ):
+        if cue not in description:
+            fail(f"discovery bridge description is missing activation intent: {cue}")
+    for cue in (
         "ordinary questions",
         "one-line translation",
         "a simple code edit",
         "an explicit single-file fix",
-        "a valid AGENCY_WORKER packet",
-        "thread or release readiness without work intent",
+        "a valid `AGENCY_WORKER` packet",
+        "thread or release readiness",
         "maintenance of the Agency Chief of Staff source repository",
-        "Discussion=任务已接管｜需求讨论中",
-        "Plan=任务已接管｜正在创建执行清单",
-        "Execution Launch=任务已接管｜正在启动执行对话",
-        "Execution Session/Progress=任务已接管｜团队执行中",
-        "Verify=任务已接管｜正在验证",
-        "Archive=任务已接管｜正在归档",
-        "notice only on line 2",
-        "no source-thread, history, memory, project, or Git lookup",
+        "任务已接管｜需求讨论中",
+        "Do not inspect a source task",
+        "unless the user explicitly requests current material",
     ):
-        if cue not in description:
-            fail(f"discovery bridge description is missing activation boundary: {cue}")
+        if cue not in discovery_text:
+            fail(f"discovery bridge is missing activation boundary: {cue}")
     for cue in (
         "../agency-chief-of-staff/SKILL.md",
         "Do not invoke this bridge again",
